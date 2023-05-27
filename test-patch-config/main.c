@@ -42,21 +42,20 @@ void func(void)
 
 int main(void)
 {
-	if (isInGame())
-	{
-        // Get Menu address via current map.
-        u32 Addr = GetAddress(&vaPauseMenuAddr);
-        // Insert needed ID, returns string.
-        int s = uiMsgString(0x1115); // Washington, D.C. string ID
-        // Replace "Washington, D.C." string with ours.
-        strncpy((char*)s, msg, 13);
-        // Set "CONTINUE" string ID to our ID.
-        *(u32*)Addr = 0x1115;
-        // Pointer to "CONTINUE" function
-        u32 ReturnFunction = *(u32*)(Addr + 0x8);
-        // Hook Patch Config into end of "CONTINUE" function.
-        HOOK_J((ReturnFunction + 0x54), &func);
-
-	}
-	return 0;
+  if (isInGame())
+  {
+    // Get Menu address via current map.
+    u32 Addr = GetAddress(&vaPauseMenuAddr);
+    // Insert needed ID, returns string.
+    int s = uiMsgString(0x1115); // Washington, D.C. string ID
+    // Replace "Washington, D.C." string with ours.
+    strncpy((char*)s, msg, 13);
+    // Set "CONTINUE" string ID to our ID.
+    *(u32*)Addr = 0x1115;
+    // Pointer to "CONTINUE" function
+    u32 ReturnFunction = *(u32*)(Addr + 0x8);
+    // Hook Patch Config into end of "CONTINUE" function.
+    HOOK_J((ReturnFunction + 0x54), &func);
+  }
+  return 0;
 }
