@@ -9,7 +9,7 @@ To build with docker you need to install docker, then clone these repos:
     - This repo is required due to it using the Ratchet and Clank: UYA library, `libuya`
  - Second is the actual `uya-cheats` repo itself.
 ```sh
-git clone https://github.com/Horizon-Private-Server/horizon-uya-patch
+git clone https://github.com/Horizon-Private-Server/horizon-uya-patch.git
 git clone https://github.com/Metroynome/uya-cheats.git
 ```
 ### Get PS2SDK via Docker
