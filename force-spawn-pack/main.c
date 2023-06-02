@@ -201,6 +201,7 @@ void spawnWeaponPackOnDeath(void)
 
 void Debug()
 {
+    PadButtonStatus * pad = (PadButtonStatus*)0x00225980;
     static int Active = 0;
     // DEBUG OPTIONS: L3 = Spawn Pack, R3 = Hurt Player
     if ((pad->btns & PAD_L3) == 0 && Active == 0)
@@ -226,7 +227,7 @@ void Debug()
 
 int main()
 {
-    if (IsInGame())
+    if (isInGame())
     {
         spawnWeaponPackOnDeath();
         Debug();
