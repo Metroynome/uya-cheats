@@ -1,14 +1,3 @@
-/***************************************************
- * FILENAME :		cheats.c
- * 
- * DESCRIPTION :
- * 		Contains simple cheats/game settings for UYA.
- * 
- * NOTES :
- * 
- * AUTHOR :			Daniel "Dnawrkshp" Gerendasy
- */
-
 #include <tamtypes.h>
 
 #include <libuya/string.h>
