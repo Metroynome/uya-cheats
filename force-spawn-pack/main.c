@@ -208,7 +208,8 @@ void Debug()
 	{
         Active = 1;
         // Spawn Pack (Outpost X12)
-        ((void (*)(u32))0x004F0378)(0x002F7900);
+        //((void (*)(u32))0x004F0378)(0x002F7900);
+        ((void (*)(u32, u32, u32, u32))0x004BADF0)(0, 0, 0x01C7D740, 0x10c3);
         // Heal Player
         //((void (*)(u32, u32))0x0041BE98)(0x01C78440, PlayerStruct);
         //((void (*)(int))0x004E3080)(1);
