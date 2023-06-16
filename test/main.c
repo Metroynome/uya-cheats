@@ -9,6 +9,72 @@
 #include <libuya/uya.h>
 #include <libuya/weapon.h>
 #include <libuya/interop.h>
+#include <libuya/moby.h>
+
+int GameRulesInitialized = 0;
+int HasDisabledHealthboxes = 0;
+short PlayerKills[GAME_MAX_PLAYERS];
+
+int cheatsDisableHealthboxes(void)
+{
+    int count = 0;
+    Moby* moby = mobyListGetStart();
+
+    // Iterate through mobys and disable healthboxes
+    while ((moby = mobyFindNextByOClass(moby, MOBY_ID_HEALTH_BOX_MULT)))
+    {
+        // move to 0,0,0
+        memset(moby->Position, 0, sizeof(moby->Position));
+
+        // move orb to 0,0,0
+        if (moby->PVar)
+        {
+            void * subPtr = (void*)(*(u32*)(moby->PVar));
+            if (subPtr)
+            {
+                Moby * orb = (Moby*)(*(u32*)(subPtr + 0x48));
+                if (orb)
+                {
+                    memset(orb->Position, 0, sizeof(orb->Position));
+                    ++count;
+                }
+            }
+        }
+
+        ++moby; // increment moby
+    }
+    
+    return count;
+}
+
+void grInitialize(void)
+{
+	int i;
+
+	// Initialize player kills to 0
+	for (i = 0; i < GAME_MAX_PLAYERS; ++i)
+		PlayerKills[i] = 0;
+
+	HasDisabledHealthboxes = 0;
+	GameRulesInitialized = 1;
+}
+
+void grGameStart(void)
+{
+	int i = 0;
+	// Initialize
+	if (GameRulesInitialized != 1)
+	{
+		grInitialize();
+	}
+
+	if (!HasDisabledHealthboxes)
+		HasDisabledHealthboxes = cheatsDisableHealthboxes();
+}
+
+
+
+
 
 void Debug()
 {
@@ -34,22 +100,24 @@ void Debug()
         // ((void (*)(u32, int))0x0053C2D0)((u32)PLAYER_STRUCT + 0x1a40, 0x2);
         // - Inside above address: 0x0053C398 (JAL)
 
-        // Heal Player (Via Healthbox)
-        //((void (*)(u32, u32))0x0041BE98)(0x01C78440, PlayerStruct);
-
 		// Respawn Function
 		//((void (*)(u32))0x004EF510)(PLAYER_STRUCT);
 		// Remove save health to tnw player
 		//*(u32*)0x004EF79C = 0;
 
-		// Update State?
-		((void (*)(u32, u8, u8, u8))0x005127C8)(PLAYER_STRUCT, 0x67, 0x2, 0);
+		// Player * player = (Player*)PLAYER_STRUCT;
+		// Moby * m = mobySpawn(MOBY_ID_SWINGSHOT_ORB, 0);
+		// m->Position[0] = 580;
+		// m->Position[2] = 200;
+		// m->Position[1] = 280;
+		// m->Scale = 15;
+		
 	}
     else if ((pad->btns & PAD_R3) == 0 && Active == 0)
     {
         Active = 1;
         // Hurt Player
-        // ((void (*)(u32, u16, u16))0x00502658)(0x002F7900, 1, 0);
+        playerIncHealth(PLAYER_STRUCT, 1);
     }
     if (!(pad->btns & PAD_L3) == 0 && !(pad->btns & PAD_R3) == 0)
     {
@@ -118,6 +186,7 @@ int main()
     {
         //patchResurrectWeaponOrdering();
         Debug();
+		grGameStart();
     }
     return 0;
 }
