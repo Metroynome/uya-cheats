@@ -159,72 +159,101 @@ void InfiniteHealthMoonjump(void)
     }
 }
 
-void RespawnPlayer(void)
+void setRespawnTimer(void)
 {
-	register int player asm("v1");
-	playerRespawn(player);
-}
-void AutoRespawn(void)
-{
-	VariableAddress_t vaDM_PressXToRespawn = {
+	VariableAddress_t vaRespawnTimerFunc = {
+	// Uses the start of the Respawn Timer Function
 #if UYA_PAL
 		.Lobby = 0,
-		.Bakisi = 0x004b22b0,
-		.Hoven = 0x004b43c8,
-		.OutpostX12 = 0x004a9ca0,
-		.KorgonOutpost = 0x004a7438,
-		.Metropolis = 0x004a6788,
-		.BlackwaterCity = 0x004a4020,
-		.CommandCenter = 0x004a4018,
-		.BlackwaterDocks = 0x004a6898,
-		.AquatosSewers = 0x004a5b98,
-		.MarcadiaPalace = 0x004a5518,
+		.Bakisi = 0x003f6098,
+		.Hoven = 0x003f4f20,
+		.OutpostX12 = 0x003ece18,
+		.KorgonOutpost = 0x003eccd8,
+		.Metropolis = 0x003eadb8,
+		.BlackwaterCity = 0x003e7ba0,
+		.CommandCenter = 0x003f6a88,
+		.BlackwaterDocks = 0x003f89e8,
+		.AquatosSewers = 0x003f85f0,
+		.MarcadiaPalace = 0x003f6b88,
 #else
 		.Lobby = 0,
-		.Bakisi = 0x004afd60,
-		.Hoven = 0x004b1db8,
-		.OutpostX12 = 0x004a76d0,
-		.KorgonOutpost = 0x004a4ee8,
-		.Metropolis = 0x004a4238,
-		.BlackwaterCity = 0x004a1a50,
-		.CommandCenter = 0x004a1c08,
-		.BlackwaterDocks = 0x004a4448,
-		.AquatosSewers = 0x004a3788,
-		.MarcadiaPalace = 0x004a30c8,
+		.Bakisi = 0x003f5ba8,
+		.Hoven = 0x003f49b0,
+		.OutpostX12 = 0x003ec8a8,
+		.KorgonOutpost = 0x003ec7c8,
+		.Metropolis = 0x003ea8c8,
+		.BlackwaterCity = 0x003e7650,
+		.CommandCenter = 0x003f6580,
+		.BlackwaterDocks = 0x003f84e0,
+		.AquatosSewers = 0x003f80e8,
+		.MarcadiaPalace = 0x003f6680,
 #endif
 	};
-	//GameOptions * gameOptions = (GameOptions*)0x002417C8;
-	//gameOptions->GameFlags.MultiplayerGameFlags.Nodes
-	// Siege & CTF: Press X to Respawn
-	// *(u32*)0x004A55C8 = (0x0C000000 | ((u32)(&RespawnPlayer) >> 2));
-
-	// DM: Press X To Respawn JAL
-	// Freezes in Siege and CTF due to needing to choose nodes, even if nodes are off.
-	int hook = GetAddress(&vaDM_PressXToRespawn);
-	int jal = (0x0C000000 | ((u32)(&RespawnPlayer) >> 2));
-	if (*(u32*)hook != jal)
-		*(u32*)hook = jal;
-
+#if UYA_PAL
+	int FPS = 50;
+#else
+	int FPS = 60;
+#endif
+	GameSettings * gameSettings = gameGetSettings();
+	int Seconds = 0;
+	int RespawnTime = Seconds / FPS;
+	int RespawnAddr = GetAddress(&vaRespawnTimerFunc);
+	if (gameSettings->GameType == GAMERULE_SEIGE || gameSettings->GameType == GAMERULE_CTF)
+	{
+		// Set Main Respawn timer
+		*(u16*)(RespawnAddr + 0x10) = RespawnTime;
+		// Set Default Siege/CTF Respawn Timer
+		*(u16*)(RespawnAddr + 0x78) = RespawnTime;
+		// Gatlin Turret Destroyed
+		*(u16*)(RespawnAddr + 0x80) = RespawnTime;
+		// Anti-Air Turret Destroyed
+		*(u16*)(RespawnAddr + 0x8c) = RespawnTime;
+		
+	}
+	else if (gameSettings->GameType == GAMERULE_DM)
+	{
+		// Set DM Default Respawn Timer
+		*(u16*)(RespawnAddr + 0x10) = RespawnTime;
+	}
 }
+
+void setGattlingTurretHealth(void)
+{
+    Moby * moby = mobyListGetStart();
+    // Iterate through mobys and change health
+    while ((moby = mobyFindNextByOClass(moby, MOBY_ID_GATTLING_TURRET)))
+    {
+        if (moby->PVar)
+        {
+			*(float*)((u32)moby->PVar + 0x30) = 1;
+        }
+        ++moby; // increment moby
+    }
+}
+
 
 int main()
 {
+	GameSettings * gameSettings = gameGetSettings();
+	GameOptions * gameOptions = gameGetOptions();
+	if (gameOptions || gameSettings || gameSettings->GameLoadStartTime > 0)
+	{
+
+	}
+
     if (isInGame())
     {
-		// Change Respawn Timer (0x5a = 90 / 60 = 1.5)
-		// int Seconds = 2;
-		// int RespawnTime = Seconds * 60;
-		// *(u16*)0x004a56c8 = RespawnTime;
-		// *(u16*)0x004a56ca = 0x2402;
-		// *(u32*)0x004a56cc = 0x44826000;
+		// Set 1k kills
+		*(u32*)0x004A8F6C = 0x240703E8;
+		*(u32*)0x00539258 = 0x240203E8;
+		*(u32*)0x005392D8 = 0x240203E8;
 
         //patchResurrectWeaponOrdering();
-		GameSettings * gs = gameGetSettings();
-		if (gs->GameType == GAMERULE_DM)
-			AutoRespawn();
-		
-		//InfiniteChargeboot();
-		//InfiniteHealthMoonjump();
+
+		// setRespawnTimer();
+		InfiniteChargeboot();
+		InfiniteHealthMoonjump();
+		// setGattlingTurretHealth();
         Debug();
     }
     return 0;
