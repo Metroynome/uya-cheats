@@ -16,10 +16,21 @@
 #include <libuya/uya.h>
 #include <libuya/utils.h>
 
+struct TrainingTargetMobyPVar
+{
+	VECTOR SpawnPos;
+	VECTOR Velocity;
+	int State;
+	u32 LifeTicks;
+	int TimeCreated;
+	float Jitter;
+	float StrafeSpeed;
+	float JumpSpeed;
+};
 
 typedef struct SimulatedPlayer {
 	struct PAD Pad;
-	// struct TrainingTargetMobyPVar Vars;
+	struct TrainingTargetMobyPVar Vars;
 	Player* Player;
 	u32 TicksToRespawn;
 	u32 TicksToJump;
@@ -78,18 +89,39 @@ SimulatedPlayer_t SimPlayers[];
 const int SimPlayerCount = 1;
 const int TargetTeam = 1; // Red Team
 int BotsInit = 0;
+int BotsSpawned = 0;
+
+
+void modeInitTarget(SimulatedPlayer_t * sPlayer)
+{
+	GameSettings * gs = gameGetSettings();
+
+	// init vars
+	struct TrainingTargetMobyPVar * pvar = &sPlayer->Vars;
+
+	sPlayer->Active = 1;
+
+	sprintf(gs->PlayerNames[sPlayer->Player->PlayerId], "Fake %d", sPlayer->Idx);
+}
+
 
 void SpawnBots(void)
 {
+	// Create Player 1
+	// ((void (*)(int))0x00528c30)(a0);
+
 	int i;
 	// handle game end logic
-	if (gameAmIHost())
+	if (isInGame())
 	{
 		// keep spawning
 		for (i = 0; i < SimPlayerCount; ++i)
 		{
 			if (!SimPlayers[i].Active || playerIsDead(SimPlayers[i].Player))
+			{
 				spawnTarget(&SimPlayers[i]);
+				++BotsSpawned;
+			}
 		}
 	}
 }
@@ -124,7 +156,6 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 	gameSettings->PlayerTeams[id] = TargetTeam;
 
     // local hero (Outpost x12)
-    // Breakpoint on what writes to top of player struct
 	((void (*)(int))0x00528c30)(id);
 
 	Player * newPlayer = players[id];
@@ -132,18 +163,18 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 
 	players[id] = sPlayer->Player;
 
-	// POKE_U32(0x0021DDDC + (4 * idx), 0);
+	POKE_U32(0x002412f4 + (4 * idx), 0);
 
 	sPlayer->Player->Paddata = (void*)&sPlayer->Pad;
 	sPlayer->Player->PlayerId = id;
 	sPlayer->Player->MpIndex = id;
 	sPlayer->Player->Team = TargetTeam;
 	sPlayer->Idx = idx;
-	// POKE_U32((u32)sPlayer->Player + 0x1AA0, (u32)sPlayer->Player);
+	POKE_U32(sPlayer->Player->TopOfPlayerStruct, (u32)sPlayer->Player);
 
 	// if (sPlayer->Player->PlayerMoby) {
 	// 	sPlayer->Player->PlayerMoby->NetObject = sPlayer->Player;
-	// 	*(u32*)((u32)sPlayer->Player->PlayerMoby->PVar + 0xE0) = (u32)sPlayer->Player;
+	// 	*(u32*)((u32)sPlayer->Player->PlayerMoby->PVar + 0x70) = (u32)sPlayer->Player;
 	// }
 
 	sPlayer->Active = 0;
@@ -152,8 +183,6 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 
 void spawnTarget(SimulatedPlayer_t* sPlayer)
 {
-	GameSettings* gs = gameGetSettings();
-
 	if (!sPlayer)
 		return;
 
@@ -166,21 +195,20 @@ void spawnTarget(SimulatedPlayer_t* sPlayer)
 	// 	modeOnTargetKilled(sPlayer, 0);
 
 	// playerRespawn(sPlayer->Player);
-	// modeInitTarget(sPlayer);
+	modeInitTarget(sPlayer);
 }
 
 void onSimulateHeros(void)
 {
 	int i;
 
-
 	// update local hero first
-	Player * lPlayer = (Player*)PLAYER_STRUCT;
-	if (lPlayer) {
-		PlayerVTable* pVTable = playerGetVTable(lPlayer);
+	// Player * lPlayer = (Player*)PLAYER_STRUCT;
+	// if (lPlayer) {
+	// 	PlayerVTable* pVTable = playerGetVTable(lPlayer);
 
-		pVTable->Update(lPlayer); // update hero
-	}
+	// 	pVTable->Update(lPlayer); // update hero
+	// }
 
 	// update remote clients
 	for (i = 0; i < SimPlayerCount; ++i) {
@@ -216,7 +244,8 @@ void InitBots(void)
 
 	memset(SimPlayers, 0, sizeof(SimulatedPlayer_t) * SimPlayerCount);
 
-	HOOK_JAL(0x003D29F0, onSimulateHeros);
+	// HOOK_JAL(0x003D29F0, onSimulateHeros);
+	HOOK_J(0x004E3FC0, onSimulateHeros);
 
 	for (i = 0; i < SimPlayerCount; ++i) {
 		SimPlayers[i].Idx = i;
@@ -227,9 +256,15 @@ void InitBots(void)
 
 void StartBots(void)
 {
-	if (!BotsInit)
-	{
+	if (!BotsInit && isInGame())
 		InitBots();
+	
+	if (*(u32*)0x004E3188 == 0x0c14a30c)
+	{
+		// Uncomment HOOK_JAL to only spawn needed amount
+		// Uncomment SpawnBots func to get correct names
+		// HOOK_JAL(0x004E3188, SpawnBots);
+		// SpawnBots();
 	}
 	SpawnBots();
 }

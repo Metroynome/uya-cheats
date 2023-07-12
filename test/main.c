@@ -334,11 +334,12 @@ int main()
 
 		// setRespawnTimer();
 		// patchFluxNicking();
-		StartBots();
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
         Debug();
     }
+	
+	StartBots();
 
 	uyaPostUpdate();
 
