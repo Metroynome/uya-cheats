@@ -25,11 +25,11 @@ VECTOR CameraPosition,
 
 void MovementInputs(Player * player, PadButtonStatus * pad)
 {
+	// UYA Messes up because v would always be 0.
 	VECTOR v;
+	vector_copy(v, CameraPosition);
     float CameraYaw = player->CameraYaw.Value;
     float CameraPitch = player->CameraPitch.Value;
-    if (CameraYaw == 0 || CameraPitch == 0)
-        return;
 
 	// get rotation from yaw and pitch
 	float ySin = sinf(CameraYaw);
@@ -39,16 +39,16 @@ void MovementInputs(Player * player, PadButtonStatus * pad)
 
 	// Handle Speed
 	// Default Speed
-	float MOVE_SPEED = 0.5;
+	float MOVE_SPEED = .05;
 	// L1: Fast Speed
 	if ((pad->btns & PAD_L1) == 0 && (pad->btns & PAD_R1) != 0)
 	{
-		MOVE_SPEED = 2.0;
+		MOVE_SPEED = .3;
 	}
 	// R1: Slow Speed
 	if ((pad->btns & PAD_R1) == 0 && (pad->btns & PAD_L1) != 0)
 	{
-		MOVE_SPEED = 0.12;
+		MOVE_SPEED = 0.01;
 	}
 
 	// Left Analog
@@ -62,34 +62,34 @@ void MovementInputs(Player * player, PadButtonStatus * pad)
 		float vSpeed = -LeftAnalogV * MOVE_SPEED;
 
 		// generate vertical and horizontal vectors
-		v[0] = (yCos * vSpeed) + (ySin * hSpeed);
-		v[1] = (ySin * vSpeed) + (-yCos * hSpeed);
-		v[2] = (pSin * -vSpeed);
+		v[0] += (yCos * vSpeed) + (ySin * hSpeed);
+		v[1] += (ySin * vSpeed) + (-yCos * hSpeed);
+		v[2] += (pSin * -vSpeed);
 		v[3] = 0;
 	}
 	// D-Pad Up: Forward
 	if ((pad->btns & PAD_UP) == 0)
 	{
-		v[0] = (yCos * MOVE_SPEED);
-		v[1] = (ySin * MOVE_SPEED);
+		v[0] += (yCos * MOVE_SPEED);
+		v[1] += (ySin * MOVE_SPEED);
 	}
 	// D-Pad Down: Backward
 	if ((pad->btns & PAD_DOWN) == 0)
 	{
-		v[0] = (-yCos * MOVE_SPEED);
-		v[1] = (-ySin * MOVE_SPEED);
+		v[0] += (-yCos * MOVE_SPEED);
+		v[1] += (-ySin * MOVE_SPEED);
 	}
 	// D-Pad Left: Strafe Left
 	if ((pad->btns & PAD_LEFT) == 0)
 	{
-		v[0] = (-ySin * MOVE_SPEED);
-		v[1] = (yCos * MOVE_SPEED);
+		v[0] += (-ySin * MOVE_SPEED);
+		v[1] += (yCos * MOVE_SPEED);
 	}
 	// D-Pad Right: Strafe Right
 	if ((pad->btns & PAD_RIGHT) == 0)
 	{
-		v[0] = (ySin * MOVE_SPEED);
-		v[1] = (-yCos * MOVE_SPEED);
+		v[0] += (ySin * MOVE_SPEED);
+		v[1] += (-yCos * MOVE_SPEED);
 	}
 	// L2 = Move Down
 	if ((pad->btns & PAD_L2) == 0 && (pad->btns & PAD_R2) != 0)
@@ -122,12 +122,14 @@ void MovementInputs(Player * player, PadButtonStatus * pad)
 	}
 	
 	// Add Vector to Camera Position
-	vector_add(CameraPosition, CameraPosition, v);
+	// vector_add(CameraPosition, CameraPosition, v);
+
+	vector_copy(CameraPosition, v);
 }
 
 void activate(Player * player)
 {
-	// Update stored camera position
+	// Copy Current Player Camera Position and store it.
 	vector_copy(CameraPosition, player->CameraPos);
 
 	// Copy Current Player Position and store it.
@@ -137,7 +139,7 @@ void activate(Player * player)
 	// *(u32*)0x005F40DC = 0x10000006;
 
 	// Set Respawn Timer to Zero, then negative so player can't respawn
-	player->RespawnTimer = -1;
+	// player->RespawnTimer = -1;
 
 	// deactivate hud
 	// hud->Flags.Healthbar = 0;
@@ -189,7 +191,7 @@ int main(void)
 
 	// Get Local Player
 	Player * player = (Player*)PLAYER_STRUCT;
-	PadButtonStatus * pad = (PadButtonStatus*)0x00225980;
+	PadButtonStatus * pad = (PadButtonStatus*)player->Paddata;
 	// PlayerHUDFlags * hud = hudGetPlayerFlags(0);
 
 	if (!Active)
