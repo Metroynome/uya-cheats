@@ -12,13 +12,24 @@
 #include <libuya/moby.h>
 #include <libuya/graphics.h>
 #include <libuya/gamesettings.h>
+#include <libuya/spawnpoint.h>
+#include <libuya/team.h>
+#include <libuya/ui.h>
+#include <libuya/time.h>
+
+extern VariableAddress_t vaPlayerRespawnFunc;
 
 void StartBots(void);
+
+short PlayerKills[GAME_MAX_PLAYERS];
+short PlayerDeaths[GAME_MAX_PLAYERS];
+
+VECTOR position;
+VECTOR rotation;
 
 void Debug()
 {
     static int Active = 0;
-	static int Occlusion = 2; // Default Occlusion = 2
 	Player * player = (Player*)PLAYER_STRUCT;
     PadButtonStatus * pad = (PadButtonStatus*)0x00225980;
 
@@ -49,32 +60,29 @@ void Debug()
         // ((void (*)(u32, int))0x0053C2D0)((u32)PLAYER_STRUCT + 0x1a40, 0x2);
         // - Inside above address: 0x0053C398 (JAL)
 
-		// Respawn Function
-		//((void (*)(u32))0x004EF510)(PLAYER_STRUCT);
-		// Remove save health to tnw player
-		//*(u32*)0x004EF79C = 0;
-
-		// Swap Teams (blue <-> red)
-		player->Team = !player->Team;
+		// Swap Teams
+		int SetTeam = (player->Team < 7) ? player->Team + 1 : 0;
+		playerSetTeam(player, SetTeam);
 
 	}
     else if ((pad->btns & PAD_RIGHT) == 0 && Active == 0)
     {
         Active = 1;
         // Hurt Player
-        playerDecHealth(player, 15);
+        playerDecHealth(player, 14);
     }
 	else if ((pad->btns & PAD_UP) == 0 && Active == 0)
 	{
 		Active = 1;
-		Occlusion = (Occlusion == 2) ? 0 : 2;
-		gfxOcclusion(Occlusion);
+		// static int Occlusion = (Occlusion == 2) ? 0 : 2;
+		// gfxOcclusion(Occlusion);
+		spawnPointGetRandom(player, &position, &rotation);
+		playerSetPosRot(player, NULL, NULL);
 	}
 	else if((pad->btns & PAD_DOWN) == 0 && Active == 0)
 	{
 		// Set Gattling Turret Health to 1.
-		// DEBUGsetGattlingTurretHealth();
-
+		DEBUGsetGattlingTurretHealth();
 	}
     if (!(pad->btns & PAD_LEFT) == 0 && !(pad->btns & PAD_RIGHT) == 0 && !(pad->btns & PAD_UP) == 0 && !(pad->btns & PAD_DOWN) == 0)
     {
@@ -300,15 +308,85 @@ void DEBUGsetGattlingTurretHealth(void)
 // 	((void (*)(Player *, char, int, short, char, struct tNW_GadgetEventMessage *))GetAddress(&vaHandleWeaponShotDelayedFunc))(player, a1, a2, a3, t0, message);
 // }
 
-void patchFluxNicking(void)
+void handleWeaponShots(int message, char GadgetEventType, int ActiveTime, short GadgetId, int t0, int StackPointer)
 {
-	// Bakisi (Original Value: 0x1060000D)
-	// Main Branch I beleive
-	// *(u32*)0x0040869C = 0x1000000D;
+	VariableAddress_t vaGadgetEventFunc = {
+#if UYA_PAL
+		.Lobby = 0,
+		.Bakisi = 0x00546510,
+		.Hoven = 0x005486d8,
+		.OutpostX12 = 0x0053dfb0,
+		.KorgonOutpost = 0x0053b698,
+		.Metropolis = 0x0053aa98,
+		.BlackwaterCity = 0x00538280,
+		.CommandCenter = 0x00537ad8,
+		.BlackwaterDocks = 0x0053a358,
+		.AquatosSewers = 0x00539658,
+		.MarcadiaPalace = 0x00538fd8,
+#else
+		.Lobby = 0,
+		.Bakisi = 0x00543c00,
+		.Hoven = 0x00545d08,
+		.OutpostX12 = 0x0053b620,
+		.KorgonOutpost = 0x00538d88,
+		.Metropolis = 0x00538188,
+		.BlackwaterCity = 0x005358f0,
+		.CommandCenter = 0x00535320,
+		.BlackwaterDocks = 0x00537b60,
+		.AquatosSewers = 0x00536ea0,
+		.MarcadiaPalace = 0x005367e0,
+#endif
+	};
+	Player * player = (Player*)((u32)message - 0x1a40);
+	tNW_GadgetEventMessage * msg = (tNW_GadgetEventMessage*)message;
+	if (msg && msg->GadgetEventType == 8)
+	{
+		int delta = ActiveTime - gameGetTime();
+		// Make player hold correct weapon.
+		if (player->WeaponHeldId != msg->GadgetId)
+		{
+			playerEquipWeapon(player, msg->GadgetId);
+		}
+		// Set weapon shot event time to now if its in the future
+		if (player->WeaponHeldId == msg->GadgetId && (delta > 0 || delta < -TIME_SECOND))
+		{
+			ActiveTime = gameGetTime();
+		}
+		int GEF = GetAddress(&vaGadgetEventFunc);
+		((void (*)(int, char, int, short, int, int))GEF)(message, GadgetEventType, ActiveTime, GadgetId, t0, StackPointer);
+	}
+}
 
-	// Never nik?
-	*(u32*)0x004086D8 = 0;
-	*(u32*)0x004086DC = 0;
+void patchWeaponShotLag(void)
+{
+	VariableAddress_t vaGadgetEventHook = {
+#if UYA_PAL
+		.Lobby = 0,
+		.Bakisi = 0x0054b23c,
+		.Hoven = 0x0054d404,
+		.OutpostX12 = 0x00542cdc,
+		.KorgonOutpost = 0x005403c4,
+		.Metropolis = 0x0053f7c4,
+		.BlackwaterCity = 0x0053cfac,
+		.CommandCenter = 0x0053c804,
+		.BlackwaterDocks = 0x0053f084,
+		.AquatosSewers = 0x0053e384,
+		.MarcadiaPalace = 0x0053dd04,
+#else
+		.Lobby = 0,
+		.Bakisi = 0x00548894,
+		.Hoven = 0x0054a99c,
+		.OutpostX12 = 0x005402b4,
+		.KorgonOutpost = 0x0053da1c,
+		.Metropolis = 0x0053ce1c,
+		.BlackwaterCity = 0x0053a584,
+		.CommandCenter = 0x00539fb4,
+		.BlackwaterDocks = 0x0053c7f4,
+		.AquatosSewers = 0x0053bb34,
+		.MarcadiaPalace = 0x0053b474,
+#endif
+	};
+	HOOK_JAL(GetAddress(&vaGadgetEventHook), &handleWeaponShots);
 }
 
 int main()
@@ -325,6 +403,9 @@ int main()
 
     if (isInGame())
     {
+		// Force Normal Up/Down Controls
+		*(u32*)0x001A5A70 = 0;
+
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
 		// *(u32*)0x00539258 = 0x240203E8;
@@ -334,12 +415,13 @@ int main()
 
 		// setRespawnTimer();
 		// patchFluxNicking();
+		patchWeaponShotLag();
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
         Debug();
     }
 	
-	StartBots();
+	// StartBots();
 
 	uyaPostUpdate();
 
