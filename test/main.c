@@ -24,6 +24,12 @@ void StartBots(void);
 short PlayerKills[GAME_MAX_PLAYERS];
 short PlayerDeaths[GAME_MAX_PLAYERS];
 
+int VampireHealRate[] = {
+	PLAYER_MAX_HEALTH * 0.25,
+	PLAYER_MAX_HEALTH * 0.50,
+	PLAYER_MAX_HEALTH * 1.00
+};
+
 VECTOR position;
 VECTOR rotation;
 
@@ -70,21 +76,36 @@ void Debug()
         Active = 1;
         // Hurt Player
         playerDecHealth(player, 14);
+		// playerSetHealth(player, clamp(((int)player->pNetPlayer->pNetPlayerData->hitPoints + VampireHealRate[1]), 0, PLAYER_MAX_HEALTH));
     }
 	else if ((pad->btns & PAD_UP) == 0 && Active == 0)
 	{
 		Active = 1;
 		// static int Occlusion = (Occlusion == 2) ? 0 : 2;
 		// gfxOcclusion(Occlusion);
-		spawnPointGetRandom(player, &position, &rotation);
-		playerSetPosRot(player, NULL, NULL);
+		//spawnPointGetRandom(player, &position, &rotation);
+		Player ** ps = playerGetAll();
+		Player * p = ps[1];
+		playerSetPosRot(player, &p->PlayerPosition, &p->PlayerRotation);
 	}
 	else if((pad->btns & PAD_DOWN) == 0 && Active == 0)
 	{
 		// Set Gattling Turret Health to 1.
 		DEBUGsetGattlingTurretHealth();
 	}
-    if (!(pad->btns & PAD_LEFT) == 0 && !(pad->btns & PAD_RIGHT) == 0 && !(pad->btns & PAD_UP) == 0 && !(pad->btns & PAD_DOWN) == 0)
+	else if ((pad->btns & PAD_L3) == 0 && Active == 0)
+	{
+		// Show Map
+		// This one doesn't update until select button map is updated.
+		// ((void (*)(int))0x004A3B70)(0);
+		// ((void (*)(int, int, int))0x0053FC28)(0, 1, 0x1f0);
+	}
+	else if ((pad->btns & PAD_R3) == 0 && Active == 0)
+	{
+		// Show Scoreboard
+		// ((void (*)(int))0x004A3B70)(-1);
+	}
+    if (!(pad->btns & PAD_LEFT) == 0 && !(pad->btns & PAD_RIGHT) == 0 && !(pad->btns & PAD_UP) == 0 && !(pad->btns & PAD_DOWN) == 0 && !(pad->btns & PAD_L3) == 0 && !(pad->btns & PAD_R3) == 0)
     {
         Active = 0;
     }
@@ -180,64 +201,6 @@ void InfiniteHealthMoonjump(void)
     }
 }
 
-void setRespawnTimer(void)
-{
-	VariableAddress_t vaRespawnTimerFunc = {
-	// Uses the start of the Respawn Timer Function
-#if UYA_PAL
-		.Lobby = 0,
-		.Bakisi = 0x003f6098,
-		.Hoven = 0x003f4f20,
-		.OutpostX12 = 0x003ece18,
-		.KorgonOutpost = 0x003eccd8,
-		.Metropolis = 0x003eadb8,
-		.BlackwaterCity = 0x003e7ba0,
-		.CommandCenter = 0x003f6a88,
-		.BlackwaterDocks = 0x003f89e8,
-		.AquatosSewers = 0x003f85f0,
-		.MarcadiaPalace = 0x003f6b88,
-#else
-		.Lobby = 0,
-		.Bakisi = 0x003f5ba8,
-		.Hoven = 0x003f49b0,
-		.OutpostX12 = 0x003ec8a8,
-		.KorgonOutpost = 0x003ec7c8,
-		.Metropolis = 0x003ea8c8,
-		.BlackwaterCity = 0x003e7650,
-		.CommandCenter = 0x003f6580,
-		.BlackwaterDocks = 0x003f84e0,
-		.AquatosSewers = 0x003f80e8,
-		.MarcadiaPalace = 0x003f6680,
-#endif
-	};
-#if UYA_PAL
-	int FPS = 50;
-#else
-	int FPS = 60;
-#endif
-	GameSettings * gameSettings = gameGetSettings();
-	int Seconds = 0;
-	int RespawnTime = Seconds / FPS;
-	int RespawnAddr = GetAddress(&vaRespawnTimerFunc);
-	if (gameSettings->GameType == GAMERULE_SIEGE || gameSettings->GameType == GAMERULE_CTF)
-	{
-		// Set Main Respawn timer
-		*(u16*)(RespawnAddr + 0x10) = RespawnTime;
-		// Set Default Siege/CTF Respawn Timer
-		*(u16*)(RespawnAddr + 0x78) = RespawnTime;
-		// Gatlin Turret Destroyed
-		*(u16*)(RespawnAddr + 0x80) = RespawnTime;
-		// Anti-Air Turret Destroyed
-		*(u16*)(RespawnAddr + 0x8c) = RespawnTime;
-		
-	}
-	else if (gameSettings->GameType == GAMERULE_DM)
-	{
-		// Set DM Default Respawn Timer
-		*(u16*)(RespawnAddr + 0x10) = RespawnTime;
-	}
-}
-
 void DEBUGsetGattlingTurretHealth(void)
 {
     Moby * moby = mobyListGetStart();
@@ -259,56 +222,7 @@ void DEBUGsetGattlingTurretHealth(void)
 // 	weapon[WEAPON_ID_FLUX_V2].damage2 = weapon[WEAPON_ID_FLUX_V2].damage;
 // }
 
-// void handleWeaponShotDelayed(Player * player, char a1, int a2, short a3, char t0, struct tNW_GadgetEventMessage * message)
-// {
-// 	VariableAddress_t vaHandleWeaponShotDelayedFunc = {
-// #if UYA_PAL
-// 		.Lobby = 0,
-// 		.Bakisi = 0x00546510,
-// 		.Hoven = 0x005486d8,
-// 		.OutpostX12 = 0x0053dfb0,
-// 		.KorgonOutpost = 0x0053b698,
-// 		.Metropolis = 0x0053aa98,
-// 		.BlackwaterCity = 0x00538280,
-// 		.CommandCenter = 0x00537ad8,
-// 		.BlackwaterDocks = 0x0053a358,
-// 		.AquatosSewers = 0x00539658,
-// 		.MarcadiaPalace = 0x00538fd8,
-// #else
-// 		.Lobby = 0,
-// 		.Bakisi = 0x00543c00,
-// 		.Hoven = 0x00545d08,
-// 		.OutpostX12 = 0x0053b620,
-// 		.KorgonOutpost = 0x00538d88,
-// 		.Metropolis = 0x00538188,
-// 		.BlackwaterCity = 0x005358f0,
-// 		.CommandCenter = 0x00535320,
-// 		.BlackwaterDocks = 0x00537b60,
-// 		.AquatosSewers = 0x00536ea0,
-// 		.MarcadiaPalace = 0x005367e0,
-// #endif
-// 	};
-// 	if (player && message && message->GadgetEventType == 8) {
-// 		int delta = a2 - gameGetTime();
-
-// 		// client is not holding correct weapon on our screen
-// 		// haven't determined a way to fix this yet but
-// 		if (player->Gadgets[0].id != message->GadgetId) {
-// 			//DPRINTF("remote gadgetevent %d from weapon %d but player holding %d\n", message->GadgetEventType, message->GadgetId, player->Gadgets[0].id);
-// 			playerEquipWeapon(player, message->GadgetId);
-// 		}
-
-// 		// set weapon shot event time to now if its in the future
-// 		// because the client is probably lagging behind
-// 		if (player->Gadgets[0].id == message->GadgetId && (delta > 0 || delta < -TIME_SECOND)) {
-// 			a2 = gameGetTime();
-// 		}
-// 	}
-
-// 	((void (*)(Player *, char, int, short, char, struct tNW_GadgetEventMessage *))GetAddress(&vaHandleWeaponShotDelayedFunc))(player, a1, a2, a3, t0, message);
-// }
-
-void handleWeaponShots(int message, char GadgetEventType, int ActiveTime, short GadgetId, int t0, int StackPointer)
+void handleGadgetEvents(int message, char GadgetEventType, int ActiveTime, short GadgetId, int t0, int StackPointer)
 {
 	VariableAddress_t vaGadgetEventFunc = {
 #if UYA_PAL
@@ -337,27 +251,41 @@ void handleWeaponShots(int message, char GadgetEventType, int ActiveTime, short 
 		.MarcadiaPalace = 0x005367e0,
 #endif
 	};
+	int GEF = GetAddress(&vaGadgetEventFunc);
 	Player * player = (Player*)((u32)message - 0x1a40);
 	tNW_GadgetEventMessage * msg = (tNW_GadgetEventMessage*)message;
-	if (msg && msg->GadgetEventType == 8)
+	printf("\nMessage: 0x%p", message);
+	printf("\nPlayer: 0x%p", player);
+	printf("\nGadgetEvent: 0x%x", GadgetEventType);
+	printf("\nTargetUID: 0x%x\n", msg->TargetUID);
+	// GadgetEventType 7 = Niked, or splash damage.
+	if (msg && GadgetEventType == 7)
 	{
-		int delta = ActiveTime - gameGetTime();
-		// Make player hold correct weapon.
-		if (player->WeaponHeldId != msg->GadgetId)
+		if(GadgetId == 3)
 		{
-			playerEquipWeapon(player, msg->GadgetId);
+			GadgetEventType = 8;
 		}
-		// Set weapon shot event time to now if its in the future
-		if (player->WeaponHeldId == msg->GadgetId && (delta > 0 || delta < -TIME_SECOND))
-		{
-			ActiveTime = gameGetTime();
-		}
-		int GEF = GetAddress(&vaGadgetEventFunc);
-		((void (*)(int, char, int, short, int, int))GEF)(message, GadgetEventType, ActiveTime, GadgetId, t0, StackPointer);
 	}
+	// GadgetEventType 8 = Hit Something
+	// else if (msg && msg->GadgetEventType == 8)
+	// {
+	// 	int delta = ActiveTime - gameGetTime();
+	// 	// Make player hold correct weapon.
+	// 	if (player->WeaponHeldId != msg->GadgetId)
+	// 	{
+	// 		playerEquipWeapon(player, msg->GadgetId);
+	// 	}
+	// 	// Set weapon shot event time to now if its in the future
+	// 	if (player->WeaponHeldId == msg->GadgetId && (delta > 0 || delta < -TIME_SECOND))
+	// 	{
+	// 		ActiveTime = gameGetTime();
+	// 	}
+	// }
+	// run base command
+	((void (*)(int, char, int, short, int, int))GEF)(message, GadgetEventType, ActiveTime, GadgetId, t0, StackPointer);
 }
 
-void patchWeaponShotLag(void)
+void patchGadgetEvents(void)
 {
 	VariableAddress_t vaGadgetEventHook = {
 #if UYA_PAL
@@ -386,7 +314,96 @@ void patchWeaponShotLag(void)
 		.MarcadiaPalace = 0x0053b474,
 #endif
 	};
-	HOOK_JAL(GetAddress(&vaGadgetEventHook), &handleWeaponShots);
+	HOOK_JAL(GetAddress(&vaGadgetEventHook), &handleGadgetEvents);
+}
+
+void disableDrones(void)
+{
+	Moby * a = mobyListGetStart();
+	// Remove drone cluster update function. (this is for main configuration)
+	while ((a = mobyFindNextByOClass(a, MOBY_ID_DRONE_BOT_CLUSTER_CONFIG))) {
+		a->PUpdate = 0;
+		++a;
+	}
+	Moby * moby = mobyListGetStart();
+	// Remove drone update function. (This is for the player activator)
+	// Just moving the drones to zero isn't enough.
+	while ((moby = mobyFindNextByOClass(moby, MOBY_ID_DRONE_BOT_CLUSTER_UPDATER))) {
+		moby->PUpdate = 0;
+		++moby;
+	}
+	Moby * b = mobyListGetStart();
+	// move drones to zero and delete pvar pointer.
+	while ((b = mobyFindNextByOClass(b, MOBY_ID_DRONE_BOT))) {
+		b->PVar = 0;
+		memset(b->Position, 0, sizeof(b->Position));
+		++b;
+	}
+}
+
+void vampireLogic(float healRate)
+{
+	int i;
+	Player ** playerObjects = playerGetAll();
+	Player * player;
+	GameData * gameData = gameGetData();
+
+	for (i = 0; i < GAME_MAX_PLAYERS; ++i)
+	{
+		// Check if player has killed someone
+		if (gameData->PlayerStats[i].Kills > PlayerKills[i])
+		{
+			// Try to heal if player exists
+			player = playerObjects[i];
+			if (player)
+                playerSetHealth(player, clamp(player->pNetPlayer->pNetPlayerData->hitPoints + healRate, 0, PLAYER_MAX_HEALTH));
+                
+			// Update our cached kills count
+			PlayerKills[i] = gameData->PlayerStats[i].Kills;
+		}
+	}
+}
+
+void mapAndScoreboard_hook(int a0, int a1, int a2)
+{
+	static int ToggleScoreboard = 0;
+	static int ToggleMap = 0;
+	static int Active = 0;
+	Player * player = (Player*)PLAYER_STRUCT;
+	PadButtonStatus * pad = (PadButtonStatus*)player->Paddata;
+	if ((pad->btns & PAD_L3) == 0 && Active == 0)
+	{
+		Active = 1;
+		ToggleMap = !ToggleMap;
+		ToggleScoreboard = 0;
+		((void (*)(int, int, int))0x004A3B70)(a0, a1, a2);
+	}
+	else if ((pad->btns & PAD_SELECT) == 0 && Active == 0)
+	{
+		Active = 1;
+		ToggleScoreboard = !ToggleScoreboard;
+		ToggleMap = 0;
+		((void (*)(int, int, int))0x004A6AC8)(a0, a1, a2);
+	}
+	else if (!(pad->btns & PAD_L3) == 0 && !(pad->btns & PAD_SELECT) == 0)
+	{
+		Active = 0;
+	}
+}
+
+void mapAndScoreboardBtns(void)
+{
+	// Patch Needing to press Select to run function
+	// *(u32*)0x0053D26C = 0x1000000C;
+	// Override to always load Siege map in DM.
+	// *(u32*)0x0053FC44 = 0x10000005;
+	// *(u32*)0x004A3DD8 = 0x10000007;
+	// hook into siege/ctf map
+	// HOOK_JAL(0x004A3E14, &mapAndScoreboard_hook);
+	HOOK_JAL(0x0053FC5C, &mapAndScoreboard_hook);
+	// hook into dm scoreboard
+	// HOOK_JAL(0x004A3E24, &mapAndScoreboard_hook);
+	HOOK_JAL(0x0053FC4C, &mapAndScoreboard_hook);
 }
 
 int main()
@@ -398,13 +415,19 @@ int main()
 	GameOptions * gameOptions = gameGetOptions();
 	if (gameOptions || gameSettings || gameSettings->GameLoadStartTime > 0)
 	{
-		
+
 	}
 
     if (isInGame())
     {
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
+
+		// Override to always load Siege map in DM.
+		// Disable check to see if to load map or scoreboard.
+		// *(u32*)0x0053FC44 = 0x10000005;
+		// It not activated, map/scoreboard will not show.
+		// *(u32*)0x004A3DD8 = 0x10000007;
 
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
@@ -413,10 +436,12 @@ int main()
 
         //patchResurrectWeaponOrdering();
 
-		// setRespawnTimer();
 		// patchFluxNicking();
-		patchWeaponShotLag();
-		InfiniteChargeboot();
+		// patchGadgetEvents();
+		// disableDrones();
+		// vampireLogic(VampireHealRate[0]);
+		mapAndScoreboardBtns();
+		// InfiniteChargeboot();
 		InfiniteHealthMoonjump();
         Debug();
     }
