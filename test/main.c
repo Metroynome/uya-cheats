@@ -97,8 +97,8 @@ void Debug()
 	{
 		// Show Map
 		// This one doesn't update until select button map is updated.
-		// ((void (*)(int))0x004A3B70)(0);
-		// ((void (*)(int, int, int))0x0053FC28)(0, 1, 0x1f0);
+		// ((void (*)(u32, u32, int, u32))0x004A3B70)(-1, 0x00248B38, 0x1f0, 0x00248A38);
+		// ((void (*)(int, int, int))0x0053FC28)(0, 10, 0x1f0);
 	}
 	else if ((pad->btns & PAD_R3) == 0 && Active == 0)
 	{
@@ -364,30 +364,38 @@ void vampireLogic(float healRate)
 	}
 }
 
-void mapAndScoreboard_hook(int a0, int a1, int a2)
+int mapAndScoreboard_hook(int a0, int a1)
 {
-	static int ToggleScoreboard = 0;
-	static int ToggleMap = 0;
-	static int Active = 0;
+	static int ToggleMapScoreboard = 0;
+	int SecondPass = a1 == 0xA;
+	// a1 equals 0xA second time through.
+	if (SecondPass)
+	{
+		// Patch DM Func: Scoreboard or Map Check:
+		*(u32*)0x004A3DD8 = 0x10000007;
+		// Patch Seige/CTF Func: Scoreboard or Map Check:
+		*(u32*)0x004A6B08 = 0x10000007;
+	}
+
+	if (SecondPass)
+	{
+		return ToggleMapScoreboard;
+	}
+
 	Player * player = (Player*)PLAYER_STRUCT;
-	PadButtonStatus * pad = (PadButtonStatus*)player->Paddata;
-	if ((pad->btns & PAD_L3) == 0 && Active == 0)
+	if (playerPadGetButtonDown(player, PAD_R3) > 0)
 	{
-		Active = 1;
-		ToggleMap = !ToggleMap;
-		ToggleScoreboard = 0;
-		((void (*)(int, int, int))0x004A3B70)(a0, a1, a2);
+		ToggleMapScoreboard = 0;
+		return 1;
 	}
-	else if ((pad->btns & PAD_SELECT) == 0 && Active == 0)
+	else if (playerPadGetButtonDown(player, PAD_SELECT) > 0)
 	{
-		Active = 1;
-		ToggleScoreboard = !ToggleScoreboard;
-		ToggleMap = 0;
-		((void (*)(int, int, int))0x004A6AC8)(a0, a1, a2);
+		ToggleMapScoreboard = 1;
+		return 1;
 	}
-	else if (!(pad->btns & PAD_L3) == 0 && !(pad->btns & PAD_SELECT) == 0)
+	else
 	{
-		Active = 0;
+		return 2;
 	}
 }
 
@@ -398,12 +406,17 @@ void mapAndScoreboardBtns(void)
 	// Override to always load Siege map in DM.
 	// *(u32*)0x0053FC44 = 0x10000005;
 	// *(u32*)0x004A3DD8 = 0x10000007;
+
+	// hook into loading of the select button if pressed
+	HOOK_JAL(0x0053D224, &mapAndScoreboard_hook);
+	//HOOK_JAL(0x0053D1F4, &mapAndScoreboard_hook);
+	// *(u32*)0x0053D1FC = 0x10400019;
+	// hook into Map/Gamemode Check
+	HOOK_JAL(0x0053FC3C, &mapAndScoreboard_hook);
 	// hook into siege/ctf map
-	// HOOK_JAL(0x004A3E14, &mapAndScoreboard_hook);
-	HOOK_JAL(0x0053FC5C, &mapAndScoreboard_hook);
+	// HOOK_JAL(0x0053FC5C, &mapAndScoreboard_hook);
 	// hook into dm scoreboard
-	// HOOK_JAL(0x004A3E24, &mapAndScoreboard_hook);
-	HOOK_JAL(0x0053FC4C, &mapAndScoreboard_hook);
+	// HOOK_JAL(0x0053FC4C, &mapAndScoreboard_hook);
 }
 
 int main()
@@ -422,12 +435,6 @@ int main()
     {
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
-
-		// Override to always load Siege map in DM.
-		// Disable check to see if to load map or scoreboard.
-		// *(u32*)0x0053FC44 = 0x10000005;
-		// It not activated, map/scoreboard will not show.
-		// *(u32*)0x004A3DD8 = 0x10000007;
 
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
