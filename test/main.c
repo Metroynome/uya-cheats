@@ -319,25 +319,38 @@ void patchGadgetEvents(void)
 
 void disableDrones(void)
 {
-	Moby * a = mobyListGetStart();
-	// Remove drone cluster update function. (this is for main configuration)
-	while ((a = mobyFindNextByOClass(a, MOBY_ID_DRONE_BOT_CLUSTER_CONFIG))) {
-		a->PUpdate = 0;
-		++a;
-	}
-	Moby * moby = mobyListGetStart();
-	// Remove drone update function. (This is for the player activator)
-	// Just moving the drones to zero isn't enough.
-	while ((moby = mobyFindNextByOClass(moby, MOBY_ID_DRONE_BOT_CLUSTER_UPDATER))) {
-		moby->PUpdate = 0;
-		++moby;
-	}
-	Moby * b = mobyListGetStart();
+	// static int Moby_A, Moby_B, Moby_C = 0;
+	// if (!Moby_A)
+	// {
+	// 	Moby * a = mobyListGetStart();
+	// 	// Remove drone cluster update function. (this is for main configuration)
+	// 	while ((a = mobyFindNextByOClass(a, MOBY_ID_DRONE_BOT_CLUSTER_CONFIG))) {
+	// 		a->PUpdate = 0;
+	// 		mobyDestroy(a);
+	// 		++a;
+	// 	}
+	// 	Moby_A = 1;
+	// }
+	// if (!Moby_B)
+	// {
+	// 	Moby * b = mobyListGetStart();
+	// 	// Remove drone update function. (This is for the player activator)
+	// 	// Just moving the drones to zero isn't enough.
+	// 	while ((b = mobyFindNextByOClass(b, MOBY_ID_DRONE_BOT_CLUSTER_UPDATER))) {
+	// 		b->PUpdate = 0;
+	// 		mobyDestroy(b);
+	// 		++b;
+	// 	}
+	// 	Moby_B = 1;
+	// }
+
+	Moby * c = mobyListGetStart();
 	// move drones to zero and delete pvar pointer.
-	while ((b = mobyFindNextByOClass(b, MOBY_ID_DRONE_BOT))) {
-		b->PVar = 0;
-		memset(b->Position, 0, sizeof(b->Position));
-		++b;
+	while ((c = mobyFindNextByOClass(c, MOBY_ID_DRONE_BOT))) {
+		c->PVar = 0;
+		mobyDestroy(c);
+		//memset(b->Position, 0, sizeof(b->Position));
+		++c;
 	}
 }
 
@@ -364,60 +377,6 @@ void vampireLogic(float healRate)
 	}
 }
 
-int mapAndScoreboard_hook(int a0, int a1)
-{
-	static int ToggleMapScoreboard = 0;
-	int SecondPass = a1 == 0xA;
-	// a1 equals 0xA second time through.
-	if (SecondPass)
-	{
-		// Patch DM Func: Scoreboard or Map Check:
-		*(u32*)0x004A3DD8 = 0x10000007;
-		// Patch Seige/CTF Func: Scoreboard or Map Check:
-		*(u32*)0x004A6B08 = 0x10000007;
-	}
-
-	if (SecondPass)
-	{
-		return ToggleMapScoreboard;
-	}
-
-	Player * player = (Player*)PLAYER_STRUCT;
-	if (playerPadGetButtonDown(player, PAD_R3) > 0)
-	{
-		ToggleMapScoreboard = 0;
-		return 1;
-	}
-	else if (playerPadGetButtonDown(player, PAD_SELECT) > 0)
-	{
-		ToggleMapScoreboard = 1;
-		return 1;
-	}
-	else
-	{
-		return 2;
-	}
-}
-
-void mapAndScoreboardBtns(void)
-{
-	// Patch Needing to press Select to run function
-	// *(u32*)0x0053D26C = 0x1000000C;
-	// Override to always load Siege map in DM.
-	// *(u32*)0x0053FC44 = 0x10000005;
-	// *(u32*)0x004A3DD8 = 0x10000007;
-
-	// hook into loading of the select button if pressed
-	HOOK_JAL(0x0053D224, &mapAndScoreboard_hook);
-	//HOOK_JAL(0x0053D1F4, &mapAndScoreboard_hook);
-	// *(u32*)0x0053D1FC = 0x10400019;
-	// hook into Map/Gamemode Check
-	HOOK_JAL(0x0053FC3C, &mapAndScoreboard_hook);
-	// hook into siege/ctf map
-	// HOOK_JAL(0x0053FC5C, &mapAndScoreboard_hook);
-	// hook into dm scoreboard
-	// HOOK_JAL(0x0053FC4C, &mapAndScoreboard_hook);
-}
 
 int main()
 {
@@ -445,9 +404,8 @@ int main()
 
 		// patchFluxNicking();
 		// patchGadgetEvents();
-		// disableDrones();
+		disableDrones();
 		// vampireLogic(VampireHealRate[0]);
-		mapAndScoreboardBtns();
 		// InfiniteChargeboot();
 		InfiniteHealthMoonjump();
         Debug();
