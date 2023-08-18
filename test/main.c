@@ -84,9 +84,9 @@ void Debug()
 		// static int Occlusion = (Occlusion == 2) ? 0 : 2;
 		// gfxOcclusion(Occlusion);
 		//spawnPointGetRandom(player, &position, &rotation);
-		Player ** ps = playerGetAll();
-		Player * p = ps[1];
-		playerSetPosRot(player, &p->PlayerPosition, &p->PlayerRotation);
+		// Player ** ps = playerGetAll();
+		// Player * p = ps[1];
+		// playerSetPosRot(player, &p->PlayerPosition, &p->PlayerRotation);
 	}
 	else if((pad->btns & PAD_DOWN) == 0 && Active == 0)
 	{
@@ -209,7 +209,7 @@ void DEBUGsetGattlingTurretHealth(void)
     {
         if (moby->PVar)
         {
-			*(float*)((u32)moby->PVar + 0x30) = 1;
+			*(float*)((u32)moby->PVar + 0x30) = 0;
         }
         ++moby; // increment moby
     }
@@ -317,42 +317,6 @@ void patchGadgetEvents(void)
 	HOOK_JAL(GetAddress(&vaGadgetEventHook), &handleGadgetEvents);
 }
 
-void disableDrones(void)
-{
-	// static int Moby_A, Moby_B, Moby_C = 0;
-	// if (!Moby_A)
-	// {
-	// 	Moby * a = mobyListGetStart();
-	// 	// Remove drone cluster update function. (this is for main configuration)
-	// 	while ((a = mobyFindNextByOClass(a, MOBY_ID_DRONE_BOT_CLUSTER_CONFIG))) {
-	// 		a->PUpdate = 0;
-	// 		mobyDestroy(a);
-	// 		++a;
-	// 	}
-	// 	Moby_A = 1;
-	// }
-	// if (!Moby_B)
-	// {
-	// 	Moby * b = mobyListGetStart();
-	// 	// Remove drone update function. (This is for the player activator)
-	// 	// Just moving the drones to zero isn't enough.
-	// 	while ((b = mobyFindNextByOClass(b, MOBY_ID_DRONE_BOT_CLUSTER_UPDATER))) {
-	// 		b->PUpdate = 0;
-	// 		mobyDestroy(b);
-	// 		++b;
-	// 	}
-	// 	Moby_B = 1;
-	// }
-
-	Moby * c = mobyListGetStart();
-	// move drones to zero and delete pvar pointer.
-	while ((c = mobyFindNextByOClass(c, MOBY_ID_DRONE_BOT))) {
-		c->PVar = 0;
-		mobyDestroy(c);
-		//memset(b->Position, 0, sizeof(b->Position));
-		++c;
-	}
-}
 
 void vampireLogic(float healRate)
 {
@@ -360,27 +324,89 @@ void vampireLogic(float healRate)
 	Player ** playerObjects = playerGetAll();
 	Player * player;
 	GameData * gameData = gameGetData();
-
 	for (i = 0; i < GAME_MAX_PLAYERS; ++i)
 	{
+		player = playerObjects[i];
+		if (!player)
+			return;
+
 		// Check if player has killed someone
 		if (gameData->PlayerStats[i].Kills > PlayerKills[i])
 		{
-			// Try to heal if player exists
-			player = playerObjects[i];
-			if (player)
-                playerSetHealth(player, clamp(player->pNetPlayer->pNetPlayerData->hitPoints + healRate, 0, PLAYER_MAX_HEALTH));
-                
+			// Heal player
+            playerSetHealth(player, clamp(player->pNetPlayer->pNetPlayerData->hitPoints + healRate, 0, PLAYER_MAX_HEALTH));
 			// Update our cached kills count
 			PlayerKills[i] = gameData->PlayerStats[i].Kills;
 		}
 	}
 }
 
+void disableDrones(void)
+{
+	// Moby * a = mobyListGetStart();
+	// // Remove drone cluster update function. (this is for main configuration)
+	// while ((a = mobyFindNextByOClass(a, MOBY_ID_DRONE_BOT_CLUSTER_CONFIG))) {
+	// 	a->PUpdate = 0;
+	// 	mobyDestroy(a);
+	// 	++a;
+	// }
+	// Moby * b = mobyListGetStart();
+	// // Remove drone update function. (This is for the player activator)
+	// while ((b = mobyFindNextByOClass(b, MOBY_ID_DRONE_BOT_CLUSTER_UPDATER))) {
+	// 	b->PUpdate = 0;
+	// 	mobyDestroy(b);
+	// 	++b;
+	// }
+	Moby * c = mobyListGetStart();
+	// move drones to zero and delete pvar pointer.
+	while ((c = mobyFindNextByOClass(c, MOBY_ID_DRONE_BOT))) {
+		c->PVar = 0;
+		c->PUpdate = 0;
+		c->Scale = 0;
+		// mobyDestroy(c);
+		memset(c->BSphere, 0, sizeof(c->BSphere));
+		//memset(c->Position, 0, sizeof(c->Position));
+		++c;
+	}
+}
+
+void hideRadarBlips(void)
+{
+
+}
+
+void healthConversion(void)
+{
+	// LOCATION AT BAKISI: 0x004a771c
+	// Outpost x12 rand data: 0x003b74a0
+	// Bakisi rand data - Health: 0x003bff61
+
+	int StackAddr = 0x000f4fe0;
+	u32 XORAddr = *(u32*)(StackAddr);
+	float XORHealth = *(u32*)(StackAddr + 0x4);
+	float Health;
+	int Rand_Health_Data = 0x003bff61;
+	Player * player = (Player*)PLAYER_STRUCT;
+	int PlayerHealth_Value = player->Health;
+	int PlayerHealth_Addr = &player->Health; // v1 (Original data: (&DAT_00002476)[iVar2])
+	int n = 0; // t3
+	u32 Offset;
+	do {
+		Offset = (((u32)PlayerHealth_Addr - (u32)PlayerHealth_Value) & 7) + n; // a3
+		n = n + 5;
+		*(u8*)StackAddr = *(u8*)((u32)Rand_Health_Data + ((u32)PlayerHealth_Value + (Offset & 7) * 0xff));
+		// *(u8*)StackAddr = (&DAT_003bff61)[(uint)PlayerHealth_Value + (uVar5 & 7) * 0xff];
+		StackAddr = (int)StackAddr + 1;
+		// StackAddr = (uint *)((int)StackAddr + 1); // a2
+	} while (n < 0x28);
+	XORAddr = (u32)(XORAddr) ^ (u32)PlayerHealth_Addr;
+	Health = (float)((u32)XORHealth ^ (u32)XORAddr);
+
+	*(u32*)(StackAddr) = Health;
+}
 
 int main()
 {
-
 	uyaPreUpdate();
 
 	GameSettings * gameSettings = gameGetSettings();
@@ -400,13 +426,15 @@ int main()
 		// *(u32*)0x00539258 = 0x240203E8;
 		// *(u32*)0x005392D8 = 0x240203E8;
 
-        //patchResurrectWeaponOrdering();
+        // patchResurrectWeaponOrdering();
 
 		// patchFluxNicking();
 		// patchGadgetEvents();
-		disableDrones();
+		// disableDrones();
 		// vampireLogic(VampireHealRate[0]);
-		// InfiniteChargeboot();
+		// hideRadarBlips();
+		healthConversion();
+		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
         Debug();
     }
@@ -414,6 +442,5 @@ int main()
 	// StartBots();
 
 	uyaPostUpdate();
-
     return 0;
 }
