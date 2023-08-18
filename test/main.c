@@ -19,6 +19,14 @@
 
 extern VariableAddress_t vaPlayerRespawnFunc;
 
+struct PlayerDeObfuscate
+{
+	u32 XORAddr;
+	u32 XORValue;
+	float health;
+	int state;
+};
+
 void StartBots(void);
 
 short PlayerKills[GAME_MAX_PLAYERS];
@@ -381,28 +389,44 @@ void healthConversion(void)
 	// Outpost x12 rand data: 0x003b74a0
 	// Bakisi rand data - Health: 0x003bff61
 
-	int StackAddr = 0x000f4fe0;
-	u32 XORAddr = *(u32*)(StackAddr);
-	float XORHealth = *(u32*)(StackAddr + 0x4);
-	float Health;
-	int Rand_Health_Data = 0x003bff61;
-	Player * player = (Player*)PLAYER_STRUCT;
-	int PlayerHealth_Value = player->Health;
-	int PlayerHealth_Addr = &player->Health; // v1 (Original data: (&DAT_00002476)[iVar2])
-	int n = 0; // t3
-	u32 Offset;
-	do {
-		Offset = (((u32)PlayerHealth_Addr - (u32)PlayerHealth_Value) & 7) + n; // a3
-		n = n + 5;
-		*(u8*)StackAddr = *(u8*)((u32)Rand_Health_Data + ((u32)PlayerHealth_Value + (Offset & 7) * 0xff));
-		// *(u8*)StackAddr = (&DAT_003bff61)[(uint)PlayerHealth_Value + (uVar5 & 7) * 0xff];
-		StackAddr = (int)StackAddr + 1;
-		// StackAddr = (uint *)((int)StackAddr + 1); // a2
-	} while (n < 0x28);
-	XORAddr = (u32)(XORAddr) ^ (u32)PlayerHealth_Addr;
-	Health = (float)((u32)XORHealth ^ (u32)XORAddr);
+	// static int StackAddr;
+	// int Rand_Health_Data = 0x003bff61;
+	// Player * player = (Player*)PLAYER_STRUCT;
+	// int PlayerHealth_Value = player->Health;
+	// int PlayerHealth_Addr = &player->Health;
+	// int n = 0; // for loop
+	// int m = 0; // for Stack
+	// u32 Offset;
+	// do {
+	// 	Offset = (u32)((int)PlayerHealth_Addr - (u32)PlayerHealth_Value & 7) + n; // a3
+	// 	n = n + 5;
+	// 	*(u8*)((u32)StackAddr + m) = *(u8*)((u32)Rand_Health_Data + ((u32)PlayerHealth_Value + (Offset & 7) * 0xff));
+	// 	++m;
+	// } while (n < 0x28);
+	// u32 XORAddr = (*(u32*)StackAddr) ^ (u32)PlayerHealth_Addr;
+	// float XORHealth = (float)(int)(*(u32*)(StackAddr + 0x4) ^ XORAddr);
+	// return (int)XORHealth;
 
-	*(u32*)(StackAddr) = Health;
+	struct PlayerDeObfuscate p;
+    static int StackAddr[3]; // = 0x000f4fe0;
+    int Rand_Health_Data = 0x003bff61;
+    Player * player = (Player*)PLAYER_STRUCT;
+    int PlayerHealth_Value = player->Health;
+    int PlayerHealth_Addr = &player->Health;
+    int n = 0;
+	int rawr = 0;
+	do {
+		u32 Offset = (u32)((int)PlayerHealth_Addr - (u32)PlayerHealth_Value & 7) + n; // a3
+		n = n + 5;
+		*(u8*)((int)StackAddr + rawr) = *(u8*)((u32)Rand_Health_Data + ((u32)PlayerHealth_Value + (Offset & 7) * 0xff));
+		++rawr;
+	} while (n < 0x28);
+	u32 XORAddr = (u32)(StackAddr[0]) ^ (u32)PlayerHealth_Addr;
+	float XORValue = (float)((u32)StackAddr[1] ^ XORAddr);
+	StackAddr[2] = XORValue;
+	p.XORAddr = XORAddr;
+    p.XORValue = XORValue;
+	p.health = XORValue;
 }
 
 int main()
