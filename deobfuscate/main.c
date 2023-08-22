@@ -17,6 +17,8 @@
 #include <libuya/ui.h>
 #include <libuya/time.h>
 
+int state;
+
 void InfiniteChargeboot(void)
 {
 	Player * player = (Player*)PLAYER_STRUCT;
@@ -144,9 +146,9 @@ VariableAddress_t vaPlayerObfuscateAddr = {
 #endif
 };
 
-int playerDeobfuscate(u32 src)
+u32 playerDeobfuscate(u32 src)
 {
-    static int StackAddr[3];
+    static int StackAddr[1];
     int RandDataAddr = GetAddress(&vaPlayerObfuscateAddr);
 	u32 Player_Addr = src;
     u32 Player_Value = *(u8*)src;
@@ -158,10 +160,12 @@ int playerDeobfuscate(u32 src)
 		*(u8*)((int)StackAddr + rawr) = *(u8*)((u32)RandDataAddr + (Player_Value + (Offset & 7) * 0xff));
 		++rawr;
 	} while (n < 0x28);
-	u32 XORAddr = (u32)(StackAddr[0]) ^ (u32)Player_Addr;
-	u32 XORValue = (u32)((u32)StackAddr[1] ^ XORAddr);
-	StackAddr[2] = XORValue;
-	return XORValue;
+	// XORAddr (first 4 bytes of StackAddr)
+	StackAddr[0] = (u32)(StackAddr[0]) ^ (u32)Player_Addr;
+	// XORValue (second 4 bytes of StackAddr)
+	StackAddr[1] = (u32)((u32)StackAddr[1] ^ StackAddr[0]);
+	u32 Converted = StackAddr[1];
+	return Converted;
 }
 
 
@@ -191,8 +195,7 @@ int main()
 		// *(u32*)0x00539258 = 0x240203E8;
 		// *(u32*)0x005392D8 = 0x240203E8;
 		Player * player = (Player*)PLAYER_STRUCT;
-		int state = playerDeobfuscate(&player->State);
-		*(u8*)0x000f4fe0 = (u8)state;
+		state = playerDeobfuscate(&player->State);
 
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();

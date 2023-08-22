@@ -19,6 +19,13 @@
 
 extern VariableAddress_t vaPlayerRespawnFunc;
 
+int enableFpsCounter = 1;
+float lastFps = 0;
+int renderTimeMs = 0;
+float averageRenderTimeMs = 0;
+int updateTimeMs = 0;
+float averageUpdateTimeMs = 0;
+
 struct PlayerDeObfuscate
 {
 	u32 XORAddr;
@@ -107,6 +114,9 @@ void Debug()
 		// This one doesn't update until select button map is updated.
 		// ((void (*)(u32, u32, int, u32))0x004A3B70)(-1, 0x00248B38, 0x1f0, 0x00248A38);
 		// ((void (*)(int, int, int))0x0053FC28)(0, 10, 0x1f0);
+
+		// ((int (*)(int, int, int, char *, int))0x00460a70)(1, 1, 0x80ffffff, "TESTING", -1);
+
 	}
 	else if ((pad->btns & PAD_R3) == 0 && Active == 0)
 	{
@@ -383,54 +393,52 @@ void hideRadarBlips(void)
 
 }
 
-void healthConversion(void)
-{
-	// LOCATION AT BAKISI: 0x004a771c
-	// Outpost x12 rand data: 0x003b74a0
-	// Bakisi rand data - Health: 0x003bff61
+// void runFpsCounter(void)
+// {
+// 	char * buf[64];
+// 	static int lastGameTime = 0;
+// 	static int tickCounter = 0;
+// #if UYA_PAL
+// 	static int FPS = 50;
+// #else
+// 	static int FPS = 60;
+// #endif
 
-	// static int StackAddr;
-	// int Rand_Health_Data = 0x003bff61;
-	// Player * player = (Player*)PLAYER_STRUCT;
-	// int PlayerHealth_Value = player->Health;
-	// int PlayerHealth_Addr = &player->Health;
-	// int n = 0; // for loop
-	// int m = 0; // for Stack
-	// u32 Offset;
-	// do {
-	// 	Offset = (u32)((int)PlayerHealth_Addr - (u32)PlayerHealth_Value & 7) + n; // a3
-	// 	n = n + 5;
-	// 	*(u8*)((u32)StackAddr + m) = *(u8*)((u32)Rand_Health_Data + ((u32)PlayerHealth_Value + (Offset & 7) * 0xff));
-	// 	++m;
-	// } while (n < 0x28);
-	// u32 XORAddr = (*(u32*)StackAddr) ^ (u32)PlayerHealth_Addr;
-	// float XORHealth = (float)(int)(*(u32*)(StackAddr + 0x4) ^ XORAddr);
-	// return (int)XORHealth;
+// 	if (!isInGame())
+// 		return;
 
-	struct PlayerDeObfuscate p;
-    static int StackAddr[3]; // = 0x000f4fe0;
-    int Rand_Health_Data = 0x003bff61;
-    Player * player = (Player*)PLAYER_STRUCT;
-    int PlayerHealth_Value = player->Health;
-    int PlayerHealth_Addr = &player->Health;
-    int n = 0;
-	int rawr = 0;
-	do {
-		u32 Offset = (u32)((int)PlayerHealth_Addr - (u32)PlayerHealth_Value & 7) + n; // a3
-		n = n + 5;
-		*(u8*)((int)StackAddr + rawr) = *(u8*)((u32)Rand_Health_Data + ((u32)PlayerHealth_Value + (Offset & 7) * 0xff));
-		++rawr;
-	} while (n < 0x28);
-	u32 XORAddr = (u32)(StackAddr[0]) ^ (u32)PlayerHealth_Addr;
-	float XORValue = (float)((u32)StackAddr[1] ^ XORAddr);
-	StackAddr[2] = XORValue;
-	p.XORAddr = XORAddr;
-    p.XORValue = XORValue;
-	p.health = XORValue;
-}
+// 	// initialize time
+// 	if (tickCounter == 0 && lastGameTime == 0)
+// 		lastGameTime = gameGetTime();
+	
+// 	// update fps every FPS frames
+// 	++tickCounter;
+// 	if (tickCounter >= 60)
+// 	{
+// 		int currentTime = gameGetTime();
+// 		lastFps = tickCounter / ((currentTime - lastGameTime) / (float)TIME_SECOND);
+// 		lastGameTime = currentTime;
+// 		tickCounter = 0;
+// 	}
+
+// 	// render if enabled
+// 	if (enableFpsCounter)
+// 	{
+// 		if (averageRenderTimeMs > 0) {
+// 			snprintf(*buf, 64, "EE: %.1fms GS: %.1fms FPS: %.2f", averageUpdateTimeMs, averageRenderTimeMs, lastFps);
+// 		} else {
+// 			snprintf(*buf, 64, "FPS: %.2f", lastFps);
+// 		}
+		
+// 		gfxScreenSpaceText(SCREEN_WIDTH - 5, 5, 0.75, 0.75, 0x80FFFFFF, buf, -1, 2);
+// 	}
+// }
 
 int main()
 {
+	// run normal hook
+	((void (*)(void))0x00126780)();
+
 	uyaPreUpdate();
 
 	GameSettings * gameSettings = gameGetSettings();
@@ -457,7 +465,12 @@ int main()
 		// disableDrones();
 		// vampireLogic(VampireHealRate[0]);
 		// hideRadarBlips();
-		healthConversion();
+		// runFpsCounter();
+
+		float x = SCREEN_WIDTH * 0.3;
+		float y = SCREEN_HEIGHT * 0.85;
+		gfxScreenSpaceText(x, y, 2, 2, 0x80FFFFFF, "\x10 Open Config Menu", -1, 4);
+
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
         Debug();
