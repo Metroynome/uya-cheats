@@ -144,8 +144,8 @@ void Debug()
 u32 playerDeobfuscateWeapon(u32 src)
 {
     static int Stack[2];
-    int RandDataAddr = 0x003aa181;
-    u32 Player_Addr = src + 0x1;
+    int RandDataAddr = GetAddress(&vaPlayerObfuscateWeaponAddr);
+    u32 Player_Addr = src;
     u32 Player_Value = *(u8*)Player_Addr;
     int rawr = 0;
     int n = 0;
@@ -159,7 +159,8 @@ u32 playerDeobfuscateWeapon(u32 src)
     Stack[2] = ((u32)Stack[1] ^ (u32)Stack[0]) >> 0x10;
     n = (u32)((u32)Stack[1] ^ (u32)Stack[0] ^ (u32)Stack[2]) * 0x10000 + 1;
     Stack[1] = (u32)Stack[2] / n;
-    u64 hi = (u64)((u32)Stack[2] % n);
+	// u64 hi is used later on in the UYA code, keeping just in case
+    // u64 hi = (u64)((u32)Stack[2] % n);
     Stack[2] = (u32)Stack[2] & 0xff;
     return (u8)Stack[2];
 }
