@@ -17,6 +17,8 @@
 #include <libuya/ui.h>
 #include <libuya/time.h>
 
+void StartBots(void);
+
 extern VariableAddress_t vaPlayerRespawnFunc;
 
 int enableFpsCounter = 1;
@@ -26,15 +28,8 @@ float averageRenderTimeMs = 0;
 int updateTimeMs = 0;
 float averageUpdateTimeMs = 0;
 
-struct PlayerDeObfuscate
-{
-	u32 XORAddr;
-	u32 XORValue;
-	float health;
-	int state;
-};
-
-void StartBots(void);
+char weaponOrderBackup[2][3] = { {0,0,0}, {0,0,0} };
+char weapons[3];
 
 short PlayerKills[GAME_MAX_PLAYERS];
 short PlayerDeaths[GAME_MAX_PLAYERS];
@@ -132,11 +127,14 @@ void Debug()
 void patchResurrectWeaponOrdering_HookWeaponStripMe(Player * player)
 {
 	// backup currently equipped weapons
-	// if (player->IsLocal) {
-	// 	weaponOrderBackup[player->LocalPlayerIndex][0] = playerGetLocalEquipslot(player->LocalPlayerIndex, 0);
-	// 	weaponOrderBackup[player->LocalPlayerIndex][1] = playerGetLocalEquipslot(player->LocalPlayerIndex, 1);
-	// 	weaponOrderBackup[player->LocalPlayerIndex][2] = playerGetLocalEquipslot(player->LocalPlayerIndex, 2);
-	// }
+	if (player->IsLocal) {
+		weaponOrderBackup[player->LocalPlayerIndex][0] = playerDeobfuscate(&player->QuickSelect.Slot[0]);
+		weaponOrderBackup[player->LocalPlayerIndex][1] = playerDeobfuscate(&player->QuickSelect.Slot[1]);
+		weaponOrderBackup[player->LocalPlayerIndex][2] = playerDeobfuscate(&player->QuickSelect.Slot[2]);
+		sce_printf("\nBackup 0: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[0]), weaponOrderBackup[player->LocalPlayerIndex][0]);
+		sce_printf("\nBackup 1: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[1]), weaponOrderBackup[player->LocalPlayerIndex][1]);
+		sce_printf("\nBackup 2: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[2]), weaponOrderBackup[player->LocalPlayerIndex][2]);
+	}
 
 	// call hooked WeaponStripMe function after backup
 	playerStripWeapons(player);
@@ -144,35 +142,39 @@ void patchResurrectWeaponOrdering_HookWeaponStripMe(Player * player)
 
 void patchResurrectWeaponOrdering_HookGiveMeRandomWeapons(Player* player, int weaponCount)
 {
-	// int i, j, matchCount = 0;
+	int i, j, matchCount = 0;
 
 	// call hooked GiveMeRandomWeapons function first
-	((void (*)(Player*, int))0x005f7510)(player, weaponCount);
+	playerGiveRandomWeapons(player, weaponCount);
 
 	// then try and overwrite given weapon order if weapons match equipped weapons before death
-	// if (player->IsLocal) {
+	if (player->IsLocal) {
+		// restore backup if they match (regardless of order) newly assigned weapons
+		for (i = 0; i < 3; i++) {
+			u8 backedUpSlotValue = weaponOrderBackup[player->LocalPlayerIndex][i];
+			for(j = 0; j < 3; j++) {
+				if (backedUpSlotValue == playerDeobfuscate(&player->QuickSelect.Slot[j])) {
+					sce_printf("\nMatched %d: %d - %d", j, playerDeobfuscate(&player->QuickSelect.Slot[j]), backedUpSlotValue);
+					matchCount++;
+				}
+			}
+		}
 
-	// 	// restore backup if they match (regardless of order) newly assigned weapons
-	// 	for (i = 0; i < 3; ++i) {
-	// 		int backedUpSlotValue = weaponOrderBackup[player->LocalPlayerIndex][i];
-	// 		for (j = 0; j < 3; ++j) {
-	// 			if (backedUpSlotValue == playerGetLocalEquipslot(player->LocalPlayerIndex, j)) {
-	// 				matchCount++;
-	// 			}
-	// 		}
-	// 	}
+		// if we found a match, set
+		if (matchCount == 3) {
+			// set equipped weapon in order
+			for (i = 3; i > 0; --i) {
+				sce_printf("\nGive Weapon %d: %d - %d", i, playerDeobfuscate(&player->QuickSelect.Slot[i]), weaponOrderBackup[player->LocalPlayerIndex][i]);
+				playerGiveWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][i]);
+				playerEquipWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][0]);
 
-	// 	// if we found a match, set
-	// 	if (matchCount == 3) {
-	// 		// set equipped weapon in order
-	// 		for (i = 0; i < 3; ++i) {
-	// 			playerSetLocalEquipslot(player->LocalPlayerIndex, i, weaponOrderBackup[player->LocalPlayerIndex][i]);
-	// 		}
+			}
 
-	// 		// equip first slot weapon
-	// 		playerEquipWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][0]);
-	// 	}
-	// }
+			// equip first slot weapon
+			// sce_printf("\nEquiped 0: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[0]), weaponOrderBackup[player->LocalPlayerIndex][0]);
+			// playerEquipWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][0]);
+		}
+	}
 }
 
 void patchResurrectWeaponOrdering(void)
@@ -393,46 +395,149 @@ void hideRadarBlips(void)
 
 }
 
-// void runFpsCounter(void)
-// {
-// 	char * buf[64];
-// 	static int lastGameTime = 0;
-// 	static int tickCounter = 0;
-// #if UYA_PAL
-// 	static int FPS = 50;
-// #else
-// 	static int FPS = 60;
-// #endif
+void runFpsCounter(void)
+{
+	char buf[64];
+	static int lastGameTime = 0;
+	static int tickCounter = 0;
 
-// 	if (!isInGame())
-// 		return;
+	if (!isInGame())
+		return;
 
-// 	// initialize time
-// 	if (tickCounter == 0 && lastGameTime == 0)
-// 		lastGameTime = gameGetTime();
+	// initialize time
+	if (tickCounter == 0 && lastGameTime == 0)
+		lastGameTime = gameGetTime();
 	
-// 	// update fps every FPS frames
-// 	++tickCounter;
-// 	if (tickCounter >= 60)
-// 	{
-// 		int currentTime = gameGetTime();
-// 		lastFps = tickCounter / ((currentTime - lastGameTime) / (float)TIME_SECOND);
-// 		lastGameTime = currentTime;
-// 		tickCounter = 0;
-// 	}
+	// update fps every FPS frames
+	++tickCounter;
+	if (tickCounter >= GAME_FPS)
+	{
+		int currentTime = gameGetTime();
+		lastFps = tickCounter / ((currentTime - lastGameTime) / (float)TIME_SECOND);
+		lastGameTime = currentTime;
+		tickCounter = 0;
+	}
 
-// 	// render if enabled
-// 	if (enableFpsCounter)
-// 	{
-// 		if (averageRenderTimeMs > 0) {
-// 			snprintf(*buf, 64, "EE: %.1fms GS: %.1fms FPS: %.2f", averageUpdateTimeMs, averageRenderTimeMs, lastFps);
-// 		} else {
-// 			snprintf(*buf, 64, "FPS: %.2f", lastFps);
-// 		}
-		
-// 		gfxScreenSpaceText(SCREEN_WIDTH - 5, 5, 0.75, 0.75, 0x80FFFFFF, buf, -1, 2);
-// 	}
-// }
+	// render if enabled
+	if (enableFpsCounter)
+	{
+		if (averageRenderTimeMs > 0) {
+			snprintf(buf, 64, "EE: %.1fms GS: %.1fms FPS: %.2f", &averageUpdateTimeMs, &averageRenderTimeMs, &lastFps);
+		} else {
+			snprintf(buf, 64, "FPS: %.2f", &lastFps);
+		}
+
+		gfxScreenSpaceText(SCREEN_WIDTH - 5, 5, 0.75, 0.75, 0x80FFFFFF, buf, -1, 2);
+	}
+}
+
+
+void drawHook(void)
+{
+	static int renderTimeCounterMs = 0;
+	static int frames = 0;
+	static long ticksIntervalStarted = 0;
+
+	long t0 = timerGetSystemTime();
+	((void (*)(void))0x004552B8)();
+	long t1 = timerGetSystemTime();
+
+	int difference = t1 - t0;
+	renderTimeMs = difference / SYSTEM_TIME_TICKS_PER_MS;
+
+	renderTimeCounterMs += renderTimeMs;
+	++frames;
+
+	// update every 500 ms
+	if ((t1 - ticksIntervalStarted) > (SYSTEM_TIME_TICKS_PER_MS * 500))
+	{
+		averageRenderTimeMs = renderTimeCounterMs / (float)frames;
+		renderTimeCounterMs = 0;
+		frames = 0;
+		ticksIntervalStarted = t1;
+	}
+}
+
+void updateHook(void)
+{
+	static int updateTimeCounterMs = 0;
+	static int frames = 0;
+	static long ticksIntervalStarted = 0;
+
+	long t0 = timerGetSystemTime();
+	((void (*)(void))0x005986b0)();
+	long t1 = timerGetSystemTime();
+
+	updateTimeMs = (t1-t0) / SYSTEM_TIME_TICKS_PER_MS;
+
+	updateTimeCounterMs += updateTimeMs;
+	frames++;
+
+	// update every 500 ms
+	if ((t1 - ticksIntervalStarted) > (SYSTEM_TIME_TICKS_PER_MS * 500))
+	{
+		averageUpdateTimeMs = updateTimeCounterMs / (float)frames;
+		updateTimeCounterMs = 0;
+		frames = 0;
+		ticksIntervalStarted = t1;
+	}
+}
+
+
+extern float _lodScale;
+extern void* _correctTieLod;
+int lastLodLevel = 2;
+
+VariableAddress_t vaLevelOfDetailHook = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0x004c9018,
+	.Hoven = 0x004cb130,
+	.OutpostX12 = 0x004c0a08,
+    .KorgonOutpost = 0x004be1a0,
+	.Metropolis = 0x004bd4f0,
+	.BlackwaterCity = 0x004bad88,
+	.CommandCenter = 0x004bad80,
+    .BlackwaterDocks = 0x004bd600,
+    .AquatosSewers = 0x004bc900,
+    .MarcadiaPalace = 0x004bc280,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x004c68d8,
+	.Hoven = 0x004c8930,
+	.OutpostX12 = 0x004be248,
+    .KorgonOutpost = 0x004bba60,
+	.Metropolis = 0x004badb0,
+	.BlackwaterCity = 0x004b85c8,
+	.CommandCenter = 0x004b8780,
+    .BlackwaterDocks = 0x004bafc0,
+    .AquatosSewers = 0x004ba300,
+    .MarcadiaPalace = 0x004b9c40,
+#endif
+};
+void patchLevelOfDetail(void)
+{
+	if (!isInGame()) {
+		lastLodLevel = -1;
+		return;
+	}
+
+	if (*(u32*)GetAddress(&vaLevelOfDetailHook) == 0x02C3B020) {
+		HOOK_J(GetAddress(&vaLevelOfDetailHook), &_correctTieLod);
+		// patch jump instruction in correctTieLod to jump back to needed address.
+		u32 val = ((u32)GetAddress(&vaLevelOfDetailHook) + 0x8);
+		*(u32*)(&_correctTieLod + 4) = 0x08000000 | (val / 4);
+	}
+
+	int lod = 0;
+	int lodChanged = lod != lastLodLevel;
+	switch (lod) {
+		case 0: _lodScale = 0.2; break;
+		case 1: _lodScale = 0.4; break;
+		case 2: _lodScale = 1.0; break;
+		case 3: _lodScale = 5.0; break;
+	}
+}
 
 int main()
 {
@@ -443,15 +548,21 @@ int main()
 
 	GameSettings * gameSettings = gameGetSettings();
 	GameOptions * gameOptions = gameGetOptions();
+	Player * p = (Player*)PLAYER_STRUCT;
 	if (gameOptions || gameSettings || gameSettings->GameLoadStartTime > 0)
 	{
 
 	}
 
+	patchLevelOfDetail();
+
     if (isInGame())
     {
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
+
+		// sce_printf("\nfunc: %x", &_correctTieLod);
+		// sce_printf("\njump: %x", (u32)(&_correctTieLod + 4));
 
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
@@ -465,15 +576,17 @@ int main()
 		// disableDrones();
 		// vampireLogic(VampireHealRate[0]);
 		// hideRadarBlips();
+
+		// HOOK_JAL(0x004A84B0, &updateHook);
+		// HOOK_JAL(0x00441CE8, &drawHook);
 		// runFpsCounter();
 
-		float x = SCREEN_WIDTH * 0.3;
-		float y = SCREEN_HEIGHT * 0.85;
-		gfxScreenSpaceText(x, y, 2, 2, 0x80FFFFFF, "\x10 Open Config Menu", -1, 4);
-
+		// float x = SCREEN_WIDTH * 0.3;
+		// float y = SCREEN_HEIGHT * 0.85;
+		// gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, 4);
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
-        Debug();
+    	Debug();
     }
 	
 	// StartBots();
