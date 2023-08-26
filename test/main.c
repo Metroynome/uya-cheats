@@ -486,9 +486,10 @@ void updateHook(void)
 
 extern float _lodScale;
 extern void* _correctTieLod;
+extern int _correctTieLod_Jump;
 int lastLodLevel = 2;
 
-VariableAddress_t vaLevelOfDetailHook = {
+VariableAddress_t vaLevelOfDetail_Hook = {
 #if UYA_PAL
 	.Lobby = 0,
 	.Bakisi = 0x004c9018,
@@ -515,6 +516,91 @@ VariableAddress_t vaLevelOfDetailHook = {
     .MarcadiaPalace = 0x004b9c40,
 #endif
 };
+
+VariableAddress_t vaLevelOfDetail_Shrubs = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0x00248e18,
+	.Hoven = 0x00249018,
+	.OutpostX12 = 0x00248f08,
+    .KorgonOutpost = 0x00248d88,
+	.Metropolis = 0x00248e08,
+	.BlackwaterCity = 0x00248d88,
+	.CommandCenter = 0x00248988,
+    .BlackwaterDocks = 0x00248a88,
+    .AquatosSewers = 0x00248a88,
+    .MarcadiaPalace = 0x00248a88,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x00248f98,
+	.Hoven = 0x00249198,
+	.OutpostX12 = 0x00249088,
+    .KorgonOutpost = 0x00248f08,
+	.Metropolis = 0x00248f88,
+	.BlackwaterCity = 0x00248f08,
+	.CommandCenter = 0x00248b08,
+    .BlackwaterDocks = 0x00248c08,
+    .AquatosSewers = 0x00248c08,
+    .MarcadiaPalace = 0x00248c08,
+#endif
+};
+
+VariableAddress_t vaLevelOfDetail_Terrain = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0x00248ee0,
+	.Hoven = 0x002490e0,
+	.OutpostX12 = 0x00248fd0,
+    .KorgonOutpost = 0x00248e50,
+	.Metropolis = 0x00248ed0,
+	.BlackwaterCity = 0x00248e50,
+	.CommandCenter = 0x00248a50,
+    .BlackwaterDocks = 0x00248b50,
+    .AquatosSewers = 0x00248b50,
+    .MarcadiaPalace = 0x00248b50,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x00249060,
+	.Hoven = 0x00249260,
+	.OutpostX12 = 0x00249150,
+    .KorgonOutpost = 0x00248fd0,
+	.Metropolis = 0x00249050,
+	.BlackwaterCity = 0x00248fd0,
+	.CommandCenter = 0x00248bd0,
+    .BlackwaterDocks = 0x00248cd0,
+    .AquatosSewers = 0x00248cd0,
+    .MarcadiaPalace = 0x00248cd0,
+#endif
+};
+
+VariableAddress_t vaLevelOfDetail_Ties = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0x00248f44,
+	.Hoven = 0x00249144,
+	.OutpostX12 = 0x00249034,
+    .KorgonOutpost = 0x00248eb4,
+	.Metropolis = 0x00248f34,
+	.BlackwaterCity = 0x00248eb4,
+	.CommandCenter = 0x00248ab4,
+    .BlackwaterDocks = 0x00248bb4,
+    .AquatosSewers = 0x00248bb4,
+    .MarcadiaPalace = 0x00248bb4,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x002490c4,
+	.Hoven = 0x002492c4,
+	.OutpostX12 = 0x002491b4,
+    .KorgonOutpost = 0x00249034,
+	.Metropolis = 0x002490b4,
+	.BlackwaterCity = 0x00249034,
+	.CommandCenter = 0x00248c34,
+    .BlackwaterDocks = 0x00248d34,
+    .AquatosSewers = 0x00248d34,
+    .MarcadiaPalace = 0x00248d34,
+#endif
+};
+
 void patchLevelOfDetail(void)
 {
 	if (!isInGame()) {
@@ -522,21 +608,54 @@ void patchLevelOfDetail(void)
 		return;
 	}
 
-	if (*(u32*)GetAddress(&vaLevelOfDetailHook) == 0x02C3B020) {
-		HOOK_J(GetAddress(&vaLevelOfDetailHook), &_correctTieLod);
+	if (*(u32*)GetAddress(&vaLevelOfDetail_Hook) == 0x02C3B020) {
+		HOOK_J(GetAddress(&vaLevelOfDetail_Hook), &_correctTieLod);
 		// patch jump instruction in correctTieLod to jump back to needed address.
-		u32 val = ((u32)GetAddress(&vaLevelOfDetailHook) + 0x8);
-		*(u32*)(&_correctTieLod + 4) = 0x08000000 | (val / 4);
+		u32 val = ((u32)GetAddress(&vaLevelOfDetail_Hook) + 0x8);
+		*(u32*)(&_correctTieLod_Jump) = 0x08000000 | (val / 4);
 	}
 
 	int lod = 0;
 	int lodChanged = lod != lastLodLevel;
+	int TerrainTiesDistance;
+	int ShrubDistance;
 	switch (lod) {
-		case 0: _lodScale = 0.2; break;
-		case 1: _lodScale = 0.4; break;
-		case 2: _lodScale = 1.0; break;
-		case 3: _lodScale = 5.0; break;
+		case 0: // Potato
+		{
+			_lodScale = 0.2;
+			TerrainTiesDistance = 120;
+			ShrubDistance = 50;
+			break;
+		}
+		case 1: // Low
+				{
+			_lodScale = 0.4;
+			TerrainTiesDistance = 480;
+			ShrubDistance = 250;
+			break;
+		}
+		case 2: // Normal
+		{
+			_lodScale = 1.0;
+			TerrainTiesDistance = 960;
+			ShrubDistance = 500;
+			break;
+		}
+		case 3: // High
+		{
+			_lodScale = 5.0;
+			TerrainTiesDistance = 4800;
+			ShrubDistance = 2500;
+			break;
+		}
 	}
+	if (lodChanged) {
+		*(float*)GetAddress(&vaLevelOfDetail_Shrubs) = ShrubDistance;
+		*(u32*)GetAddress(&vaLevelOfDetail_Ties) = TerrainTiesDistance;
+		*(float*)GetAddress(&vaLevelOfDetail_Terrain) = TerrainTiesDistance * 1024;
+	}
+	// backup lod
+	lastLodLevel = lod;
 }
 
 int main()
