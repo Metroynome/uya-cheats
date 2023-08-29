@@ -131,9 +131,9 @@ void patchResurrectWeaponOrdering_HookWeaponStripMe(Player * player)
 		weaponOrderBackup[player->LocalPlayerIndex][0] = playerDeobfuscate(&player->QuickSelect.Slot[0]);
 		weaponOrderBackup[player->LocalPlayerIndex][1] = playerDeobfuscate(&player->QuickSelect.Slot[1]);
 		weaponOrderBackup[player->LocalPlayerIndex][2] = playerDeobfuscate(&player->QuickSelect.Slot[2]);
-		sce_printf("\nBackup 0: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[0]), weaponOrderBackup[player->LocalPlayerIndex][0]);
-		sce_printf("\nBackup 1: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[1]), weaponOrderBackup[player->LocalPlayerIndex][1]);
-		sce_printf("\nBackup 2: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[2]), weaponOrderBackup[player->LocalPlayerIndex][2]);
+		DPRINTF("\nBackup 0: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[0]), weaponOrderBackup[player->LocalPlayerIndex][0]);
+		DPRINTF("\nBackup 1: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[1]), weaponOrderBackup[player->LocalPlayerIndex][1]);
+		DPRINTF("\nBackup 2: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[2]), weaponOrderBackup[player->LocalPlayerIndex][2]);
 	}
 
 	// call hooked WeaponStripMe function after backup
@@ -154,36 +154,35 @@ void patchResurrectWeaponOrdering_HookGiveMeRandomWeapons(Player* player, int we
 			u8 backedUpSlotValue = weaponOrderBackup[player->LocalPlayerIndex][i];
 			for(j = 0; j < 3; j++) {
 				if (backedUpSlotValue == playerDeobfuscate(&player->QuickSelect.Slot[j])) {
-					sce_printf("\nMatched %d: %d - %d", j, playerDeobfuscate(&player->QuickSelect.Slot[j]), backedUpSlotValue);
+					DPRINTF("\nMatched %d: %d - %d", j, playerDeobfuscate(&player->QuickSelect.Slot[j]), backedUpSlotValue);
 					matchCount++;
 				}
 			}
 		}
-
 		// if we found a match, set
 		if (matchCount == 3) {
 			// set equipped weapon in order
-			for (i = 3; i > 0; --i) {
-				sce_printf("\nGive Weapon %d: %d - %d", i, playerDeobfuscate(&player->QuickSelect.Slot[i]), weaponOrderBackup[player->LocalPlayerIndex][i]);
+			for (i = 0; i < 3; ++i) {
+				DPRINTF("\nGive Weapon %d: %d - %d", i, playerDeobfuscate(&player->QuickSelect.Slot[i]), weaponOrderBackup[player->LocalPlayerIndex][i]);
 				playerGiveWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][i]);
-				playerEquipWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][0]);
-
 			}
 
-			// equip first slot weapon
-			// sce_printf("\nEquiped 0: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[0]), weaponOrderBackup[player->LocalPlayerIndex][0]);
-			// playerEquipWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][0]);
+			// equip each weapon from last slot to first slot to keep correct order.
+			playerEquipWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][2]);
+			playerEquipWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][1]);
+			playerEquipWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][0]);
 		}
 	}
 }
-
 void patchResurrectWeaponOrdering(void)
 {
 	if (!isInGame())
 		return;
-
-	HOOK_JAL(0x004EF550, &patchResurrectWeaponOrdering_HookWeaponStripMe);
-	HOOK_JAL(0x004EF56C, &patchResurrectWeaponOrdering_HookGiveMeRandomWeapons);
+	
+	u32 hook_StripMe = (GetAddress(&vaPlayerRespawnFunc) + 0x40);
+	u32 hook_RandomWeapons = hook_StripMe + 0x1c;
+	HOOK_JAL(hook_StripMe, &patchResurrectWeaponOrdering_HookWeaponStripMe);
+	HOOK_JAL(hook_RandomWeapons, &patchResurrectWeaponOrdering_HookGiveMeRandomWeapons);
 }
 
 void InfiniteChargeboot(void)
@@ -416,7 +415,7 @@ int main()
 		// *(u32*)0x00539258 = 0x240203E8;
 		// *(u32*)0x005392D8 = 0x240203E8;
 
-        // patchResurrectWeaponOrdering();
+        patchResurrectWeaponOrdering();
 		// disableDrones();
 		// vampireLogic(VampireHealRate[0]);
 		// hideRadarBlips();
@@ -424,6 +423,11 @@ int main()
 		// HOOK_JAL(0x004A84B0, &updateHook);
 		// HOOK_JAL(0x00441CE8, &drawHook);
 		// runFpsCounter();
+
+		// cooldown?
+		// *(u32*)0x002FFBd0 = 0;
+		// *(u32*)0x002FFBd4 = 0;
+		// *(u32*)0x002FFBd8 = 0;
 
 		// float x = SCREEN_WIDTH * 0.3;
 		// float y = SCREEN_HEIGHT * 0.85;
