@@ -43,7 +43,7 @@ int VampireHealRate[] = {
 VECTOR position;
 VECTOR rotation;
 
-void Debug()
+void DebugInGame()
 {
     static int Active = 0;
 	Player * player = (Player*)PLAYER_STRUCT;
@@ -77,7 +77,7 @@ void Debug()
         // - Inside above address: 0x0053C398 (JAL)
 
 		// Swap Teams
-		int SetTeam = (player->Team < 7) ? player->Team + 1 : 0;
+		int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
 		playerSetTeam(player, SetTeam);
 
 	}
@@ -124,65 +124,48 @@ void Debug()
     }
 }
 
-void patchResurrectWeaponOrdering_HookWeaponStripMe(Player * player)
+void DebugInMenus(void)
 {
-	// backup currently equipped weapons
-	if (player->IsLocal) {
-		weaponOrderBackup[player->LocalPlayerIndex][0] = playerDeobfuscate(&player->QuickSelect.Slot[0]);
-		weaponOrderBackup[player->LocalPlayerIndex][1] = playerDeobfuscate(&player->QuickSelect.Slot[1]);
-		weaponOrderBackup[player->LocalPlayerIndex][2] = playerDeobfuscate(&player->QuickSelect.Slot[2]);
-		DPRINTF("\nBackup 0: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[0]), weaponOrderBackup[player->LocalPlayerIndex][0]);
-		DPRINTF("\nBackup 1: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[1]), weaponOrderBackup[player->LocalPlayerIndex][1]);
-		DPRINTF("\nBackup 2: %d - %d", playerDeobfuscate(&player->QuickSelect.Slot[2]), weaponOrderBackup[player->LocalPlayerIndex][2]);
+	static int Active = 0;
+	Player * player = (Player*)PLAYER_STRUCT;
+    PadButtonStatus * pad = (PadButtonStatus*)0x00225980;
+    /*
+		DEBUG_InMenus OPTIONS:
+	*/
+    if ((pad->btns & PAD_LEFT) == 0 && Active == 0)
+	{
+        Active = 1;
+		((int (*)(int, int, int))0x00685798)(0x21, 0, 0);
 	}
-
-	// call hooked WeaponStripMe function after backup
-	playerStripWeapons(player);
-}
-
-void patchResurrectWeaponOrdering_HookGiveMeRandomWeapons(Player* player, int weaponCount)
-{
-	int i, j, matchCount = 0;
-
-	// call hooked GiveMeRandomWeapons function first
-	playerGiveRandomWeapons(player, weaponCount);
-
-	// then try and overwrite given weapon order if weapons match equipped weapons before death
-	if (player->IsLocal) {
-		// restore backup if they match (regardless of order) newly assigned weapons
-		for (i = 0; i < 3; i++) {
-			u8 backedUpSlotValue = weaponOrderBackup[player->LocalPlayerIndex][i];
-			for(j = 0; j < 3; j++) {
-				if (backedUpSlotValue == playerDeobfuscate(&player->QuickSelect.Slot[j])) {
-					DPRINTF("\nMatched %d: %d - %d", j, playerDeobfuscate(&player->QuickSelect.Slot[j]), backedUpSlotValue);
-					matchCount++;
-				}
-			}
-		}
-		// if we found a match, set
-		if (matchCount == 3) {
-			// set equipped weapon in order
-			for (i = 0; i < 3; ++i) {
-				DPRINTF("\nGive Weapon %d: %d - %d", i, playerDeobfuscate(&player->QuickSelect.Slot[i]), weaponOrderBackup[player->LocalPlayerIndex][i]);
-				playerGiveWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][i]);
-			}
-
-			// equip each weapon from last slot to first slot to keep correct order.
-			playerEquipWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][2]);
-			playerEquipWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][1]);
-			playerEquipWeapon(player, weaponOrderBackup[player->LocalPlayerIndex][0]);
-		}
+    else if ((pad->btns & PAD_RIGHT) == 0 && Active == 0)
+    {
+        Active = 1;
+    }
+	else if ((pad->btns & PAD_UP) == 0 && Active == 0)
+	{
+		Active = 1;
+		// kick
+		// 6bec18 jal v0
+		// ((int (*)(int, int, int, int))0x006c0c60)(, 1, 0, 0x1600);
+		// leave game
+		// ((int (*)(int, int, int, int))0x006c0c60)(, 0, 1, -1);
 	}
-}
-void patchResurrectWeaponOrdering(void)
-{
-	if (!isInGame())
-		return;
-	
-	u32 hook_StripMe = (GetAddress(&vaPlayerRespawnFunc) + 0x40);
-	u32 hook_RandomWeapons = hook_StripMe + 0x1c;
-	HOOK_JAL(hook_StripMe, &patchResurrectWeaponOrdering_HookWeaponStripMe);
-	HOOK_JAL(hook_RandomWeapons, &patchResurrectWeaponOrdering_HookGiveMeRandomWeapons);
+	else if((pad->btns & PAD_DOWN) == 0 && Active == 0)
+	{
+		Active = 1;
+	}
+	else if ((pad->btns & PAD_L3) == 0 && Active == 0)
+	{
+		Active = 1;
+	}
+	else if ((pad->btns & PAD_R3) == 0 && Active == 0)
+	{
+		Active = 1;
+	}
+    if (!(pad->btns & PAD_LEFT) == 0 && !(pad->btns & PAD_RIGHT) == 0 && !(pad->btns & PAD_UP) == 0 && !(pad->btns & PAD_DOWN) == 0 && !(pad->btns & PAD_L3) == 0 && !(pad->btns & PAD_R3) == 0)
+    {
+        Active = 0;
+    }
 }
 
 void InfiniteChargeboot(void)
@@ -195,8 +178,8 @@ void InfiniteChargeboot(void)
 		if (!player)
 			continue;
 
-		if (player->IsChargebooting == 1 && playerPadGetButton(player, PAD_R2) > 0 && player->StateTimer > 55)
-			player->StateTimer = 55;
+		if (player->timers.IsChargebooting == 1 && playerPadGetButton(player, PAD_R2) > 0 && player->timers.state > 55)
+			player->timers.state = 55;
 	}
 }
 
@@ -387,6 +370,28 @@ void updateHook(void)
 	}
 }
 
+int patchUnkick_Logic(u32 a0, int a1)
+{
+	int i;
+	GameSettings * gs = gameGetSettings();
+	if (!gs) {
+		int clientId = gameGetMyClientId();
+		int popup = uiGetActiveSubPointer(UIP_UNK_POPUP);
+		for (i = 1; i < GAME_MAX_PLAYERS; ++i) {
+			if (gs->PlayerClients[i] == clientId && gs->PlayerStates[i] == 5) {
+				return ((int (*)(u32, int, int, int))0x006c0c60)(a0, 1, 0, 0x1600);
+				// if (popup != 0 && *(u32*)((u32)popup + 0x32c) != 0x64656B63) {
+			}
+		}
+	}
+	return ((int (*)(u32, int))0x006bec18)(a0, a1);
+}
+
+void patchUnkick(void)
+{
+	HOOK_JAL(0x00683a10, &patchUnkick_Logic);
+}
+
 int main()
 {
 	// run normal hook
@@ -407,15 +412,11 @@ int main()
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 
-		// sce_printf("\nfunc: %x", &_correctTieLod);
-		// sce_printf("\njump: %x", (u32)(&_correctTieLod + 4));
-
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
 		// *(u32*)0x00539258 = 0x240203E8;
 		// *(u32*)0x005392D8 = 0x240203E8;
 
-        patchResurrectWeaponOrdering();
 		// disableDrones();
 		// vampireLogic(VampireHealRate[0]);
 		// hideRadarBlips();
@@ -424,18 +425,18 @@ int main()
 		// HOOK_JAL(0x00441CE8, &drawHook);
 		// runFpsCounter();
 
-		// cooldown?
-		// *(u32*)0x002FFBd0 = 0;
-		// *(u32*)0x002FFBd4 = 0;
-		// *(u32*)0x002FFBd8 = 0;
-
+		// printf("\nstickRawAngle: %x", (u32)((u32)&p->stickRawAngle - (u32)PLAYER_STRUCT));
+		printf("\npnetplayer: %x", (u32)((u32)&p->pNetPlayer - (u32)PLAYER_STRUCT));
 		// float x = SCREEN_WIDTH * 0.3;
 		// float y = SCREEN_HEIGHT * 0.85;
 		// gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, 4);
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
-    	Debug();
-    }
+    	DebugInGame();
+    } else if (isInMenus()) {
+		patchUnkick();
+		DebugInMenus();
+	}
 	
 	// StartBots();
 

@@ -184,7 +184,7 @@ void modeInitTarget(SimulatedPlayer_t * sPlayer)
 
 	sPlayer->Active = 1;
 
-	sprintf(gs->PlayerNames[sPlayer->Player->PlayerId], "Fake %d", sPlayer->Idx);
+	sprintf(gs->PlayerNames[sPlayer->Player->fps.Vars.cam_slot], "Fake %d", sPlayer->Idx);
 }
 
 void SpawnBots(void)
@@ -242,11 +242,11 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 	POKE_U32(0x002412f4 + (4 * id), 0);
 
 	sPlayer->Player->Paddata = (void*)&sPlayer->Pad;
-	sPlayer->Player->PlayerId = id;
-	sPlayer->Player->MpIndex = id;
-	sPlayer->Player->Team = TargetTeam;
+	sPlayer->Player->fps.Vars.cam_slot = id;
+	sPlayer->Player->mpIndex = id;
+	sPlayer->Player->mpTeam = TargetTeam;
 	sPlayer->Idx = idx;
-	POKE_U32(sPlayer->Player->TopOfPlayerStruct, (u32)sPlayer->Player);
+	POKE_U32(sPlayer->Player->fps.Vars.pHero, (u32)sPlayer->Player);
 
 	// if (sPlayer->Player->PlayerMoby) {
 	// 	sPlayer->Player->PlayerMoby->NetObject = sPlayer->Player;
