@@ -282,7 +282,7 @@ void hideRadarBlips(void)
 
 }
 
-void runFpsCounter(void)
+void runFpsCounter_Logic(void)
 {
 	char buf[64];
 	static int lastGameTime = 0;
@@ -309,9 +309,9 @@ void runFpsCounter(void)
 	if (enableFpsCounter)
 	{
 		if (averageRenderTimeMs > 0) {
-			snprintf(buf, 64, "EE: %.1fms GS: %.1fms FPS: %.2f", &averageUpdateTimeMs, &averageRenderTimeMs, &lastFps);
+			snprintf(buf, 64, "EE: %.1fms GS: %.1fms FPS: %.2f", averageUpdateTimeMs, averageRenderTimeMs, lastFps);
 		} else {
-			snprintf(buf, 64, "FPS: %.2f", &lastFps);
+			snprintf(buf, 64, "FPS: %.2f", lastFps);
 		}
 
 		gfxScreenSpaceText(SCREEN_WIDTH - 5, 5, 0.75, 0.75, 0x80FFFFFF, buf, -1, 2);
@@ -329,8 +329,7 @@ void drawHook(void)
 	((void (*)(void))0x004552B8)();
 	long t1 = timerGetSystemTime();
 
-	int difference = t1 - t0;
-	renderTimeMs = difference / SYSTEM_TIME_TICKS_PER_MS;
+	renderTimeMs = (t1 - t0) / SYSTEM_TIME_TICKS_PER_MS;
 
 	renderTimeCounterMs += renderTimeMs;
 	++frames;
@@ -352,10 +351,10 @@ void updateHook(void)
 	static long ticksIntervalStarted = 0;
 
 	long t0 = timerGetSystemTime();
-	((void (*)(void))0x005986b0)();
+	((void (*)(void))0x004cbf20)();
 	long t1 = timerGetSystemTime();
 
-	updateTimeMs = (t1-t0) / SYSTEM_TIME_TICKS_PER_MS;
+	updateTimeMs = (t1 - t0) / SYSTEM_TIME_TICKS_PER_MS;
 
 	updateTimeCounterMs += updateTimeMs;
 	frames++;
@@ -392,6 +391,13 @@ void patchUnkick(void)
 	HOOK_JAL(0x00683a10, &patchUnkick_Logic);
 }
 
+void runFpsCounter(void)
+{
+	HOOK_JAL(0x00441c88, &updateHook);
+	HOOK_JAL(0x00441ce8, &drawHook);
+	runFpsCounter_Logic();
+}
+
 int main()
 {
 	// run normal hook
@@ -404,9 +410,9 @@ int main()
 	Player * p = (Player*)PLAYER_STRUCT;
 	if (gameOptions || gameSettings || gameSettings->GameLoadStartTime > 0)
 	{
-
+		// gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 0;
 	}
-
+	
     if (isInGame())
     {
 		// Force Normal Up/Down Controls
@@ -421,12 +427,11 @@ int main()
 		// vampireLogic(VampireHealRate[0]);
 		// hideRadarBlips();
 
-		// HOOK_JAL(0x004A84B0, &updateHook);
-		// HOOK_JAL(0x00441CE8, &drawHook);
-		// runFpsCounter();
+		runFpsCounter();
 
+		// printf("\nPlayer State: %d", playerDeobfuscate(&p->State, 0, 0));
 		// printf("\nstickRawAngle: %x", (u32)((u32)&p->stickRawAngle - (u32)PLAYER_STRUCT));
-		printf("\npnetplayer: %x", (u32)((u32)&p->pNetPlayer - (u32)PLAYER_STRUCT));
+		// printf("\npnetplayer: %x", (u32)((u32)&p->pNetPlayer - (u32)PLAYER_STRUCT));
 		// float x = SCREEN_WIDTH * 0.3;
 		// float y = SCREEN_HEIGHT * 0.85;
 		// gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, 4);
@@ -434,7 +439,7 @@ int main()
 		InfiniteHealthMoonjump();
     	DebugInGame();
     } else if (isInMenus()) {
-		patchUnkick();
+		// patchUnkick();
 		DebugInMenus();
 	}
 	
