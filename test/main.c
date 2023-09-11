@@ -282,14 +282,33 @@ void hideRadarBlips(void)
 
 }
 
+int patchUnkick_Logic(u32 a0, int a1)
+{
+	int i;
+	GameSettings * gs = gameGetSettings();
+	if (!gs) {
+		int clientId = gameGetMyClientId();
+		int popup = uiGetActiveSubPointer(UIP_UNK_POPUP);
+		for (i = 1; i < GAME_MAX_PLAYERS; ++i) {
+			if (gs->PlayerClients[i] == clientId && gs->PlayerStates[i] == 5) {
+				return ((int (*)(u32, int, int, int))0x006c0c60)(a0, 1, 0, 0x1600);
+				// if (popup != 0 && *(u32*)((u32)popup + 0x32c) != 0x64656B63) {
+			}
+		}
+	}
+	return ((int (*)(u32, int))0x006bec18)(a0, a1);
+}
+
+void patchUnkick(void)
+{
+	HOOK_JAL(0x00683a10, &patchUnkick_Logic);
+}
+
 void runFpsCounter_Logic(void)
 {
 	char buf[64];
 	static int lastGameTime = 0;
 	static int tickCounter = 0;
-
-	if (!isInGame())
-		return;
 
 	// initialize time
 	if (tickCounter == 0 && lastGameTime == 0)
@@ -318,7 +337,33 @@ void runFpsCounter_Logic(void)
 	}
 }
 
-
+VariableAddress_t vaDrawFunc = {
+#if UYA_PAL
+	.Lobby = 0x00589410,
+	.Bakisi = 0x00456328,
+	.Hoven = 0x00457ea8,
+	.OutpostX12 = 0x0044eca8,
+	.KorgonOutpost = 0x0044c868,
+	.Metropolis = 0x0044bba8,
+	.BlackwaterCity = 0x004493a8,
+	.CommandCenter = 0x0044a028,
+	.BlackwaterDocks = 0x0044c8a8,
+	.AquatosSewers = 0x0044bba8,
+	.MarcadiaPalace = 0x0044b528,
+#else
+	.Lobby = 0x005882a0,
+	.Bakisi = 0x004552b8,
+	.Hoven = 0x00456d78,
+	.OutpostX12 = 0x0044dbb8,
+	.KorgonOutpost = 0x0044b7f8,
+	.Metropolis = 0x0044ab38,
+	.BlackwaterCity = 0x00434ce8,
+	.CommandCenter = 0x004490f8,
+	.BlackwaterDocks = 0x0044b938,
+	.AquatosSewers = 0x0044ac78,
+	.MarcadiaPalace = 0x0044a5b8,
+#endif
+};
 void drawHook(void)
 {
 	static int renderTimeCounterMs = 0;
@@ -326,7 +371,7 @@ void drawHook(void)
 	static long ticksIntervalStarted = 0;
 
 	long t0 = timerGetSystemTime();
-	((void (*)(void))0x004552B8)();
+	((void (*)(void))GetAddress(&vaDrawFunc))();
 	long t1 = timerGetSystemTime();
 
 	renderTimeMs = (t1 - t0) / SYSTEM_TIME_TICKS_PER_MS;
@@ -344,6 +389,33 @@ void drawHook(void)
 	}
 }
 
+VariableAddress_t vaUpdateFunc = {
+#if UYA_PAL
+	.Lobby = 0x005fbf18,
+	.Bakisi = 0x004ce660,
+	.Hoven = 0x004d0778,
+	.OutpostX12 = 0x004c6050,
+	.KorgonOutpost = 0x004c37e8,
+	.Metropolis = 0x004c2b38,
+	.BlackwaterCity = 0x004c03d0,
+	.CommandCenter = 0x004c03c8,
+	.BlackwaterDocks = 0x004c2c48,
+	.AquatosSewers = 0x004c1f48,
+	.MarcadiaPalace = 0x004c18c8,
+#else
+	.Lobby = 0x005f9780,
+	.Bakisi = 0x004cbf20,
+	.Hoven = 0x004cdf78,
+	.OutpostX12 = 0x004c3890,
+	.KorgonOutpost = 0x004c10a8,
+	.Metropolis = 0x004c03f8,
+	.BlackwaterCity = 0x004bdc10,
+	.CommandCenter = 0x004bddc8,
+	.BlackwaterDocks = 0x004c0608,
+	.AquatosSewers = 0x004bf948,
+	.MarcadiaPalace = 0x004bf288,
+#endif
+};
 void updateHook(void)
 {
 	static int updateTimeCounterMs = 0;
@@ -351,7 +423,7 @@ void updateHook(void)
 	static long ticksIntervalStarted = 0;
 
 	long t0 = timerGetSystemTime();
-	((void (*)(void))0x004cbf20)();
+	((void (*)(void))GetAddress(&vaUpdateFunc))();
 	long t1 = timerGetSystemTime();
 
 	updateTimeMs = (t1 - t0) / SYSTEM_TIME_TICKS_PER_MS;
@@ -369,33 +441,43 @@ void updateHook(void)
 	}
 }
 
-int patchUnkick_Logic(u32 a0, int a1)
-{
-	int i;
-	GameSettings * gs = gameGetSettings();
-	if (!gs) {
-		int clientId = gameGetMyClientId();
-		int popup = uiGetActiveSubPointer(UIP_UNK_POPUP);
-		for (i = 1; i < GAME_MAX_PLAYERS; ++i) {
-			if (gs->PlayerClients[i] == clientId && gs->PlayerStates[i] == 5) {
-				return ((int (*)(u32, int, int, int))0x006c0c60)(a0, 1, 0, 0x1600);
-				// if (popup != 0 && *(u32*)((u32)popup + 0x32c) != 0x64656B63) {
-			}
-		}
-	}
-	return ((int (*)(u32, int))0x006bec18)(a0, a1);
-}
-
-void patchUnkick(void)
-{
-	HOOK_JAL(0x00683a10, &patchUnkick_Logic);
-}
-
+VariableAddress_t vaFpsCounterHooks = {
+#if UYA_PAL
+	.Lobby = 0x00575fc8,
+	.Bakisi = 0x004428c8,
+	.Hoven = 0x00444448,
+	.OutpostX12 = 0x0043b248,
+	.KorgonOutpost = 0x00438e08,
+	.Metropolis = 0x00438148,
+	.BlackwaterCity = 0x00435948,
+	.CommandCenter = 0x004365c8,
+	.BlackwaterDocks = 0x00438e48,
+	.AquatosSewers = 0x00438148,
+	.MarcadiaPalace = 0x00437ac8,
+#else
+	.Lobby = 0x00575288,
+	.Bakisi = 0x00441c88,
+	.Hoven = 0x00443748,
+	.OutpostX12 = 0x0043a588,
+	.KorgonOutpost = 0x004381c8,
+	.Metropolis = 0x00437508,
+	.BlackwaterCity = 0x00434c88,
+	.CommandCenter = 0x00435ac8,
+	.BlackwaterDocks = 0x00438308,
+	.AquatosSewers = 0x00437648,
+	.MarcadiaPalace = 0x00436f88,
+#endif
+};
 void runFpsCounter(void)
 {
-	HOOK_JAL(0x00441c88, &updateHook);
-	HOOK_JAL(0x00441ce8, &drawHook);
-	runFpsCounter_Logic();
+	int hook = GetAddress(&vaFpsCounterHooks);
+	int update = GetAddress(&vaUpdateFunc);
+	int draw = GetAddress(&vaDrawFunc);
+	// if (*(u32*)hook == ADDR2JAL(update)) {
+		HOOK_JAL(hook, &updateHook);
+		HOOK_JAL(((u32)hook + 0x60), &drawHook);
+		runFpsCounter_Logic();
+	// }
 }
 
 int main()
@@ -418,6 +500,8 @@ int main()
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 
+		runFpsCounter();
+
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
 		// *(u32*)0x00539258 = 0x240203E8;
@@ -426,8 +510,6 @@ int main()
 		// disableDrones();
 		// vampireLogic(VampireHealRate[0]);
 		// hideRadarBlips();
-
-		runFpsCounter();
 
 		// printf("\nPlayer State: %d", playerDeobfuscate(&p->State, 0, 0));
 		// printf("\nstickRawAngle: %x", (u32)((u32)&p->stickRawAngle - (u32)PLAYER_STRUCT));
@@ -438,6 +520,15 @@ int main()
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
     	DebugInGame();
+
+		// float high = 340282346638528859811704183484516925440.00;
+		// float low = -340282346638528859811704183484516925440.00;
+		// p->fps.Vars.CameraYaw.target_slowness_factor_quick = 0;
+		// p->fps.Vars.CameraYaw.target_slowness_factor_aim = high;
+		// p->fps.Vars.CameraPitch.target_slowness_factor = 0;
+		// p->fps.Vars.CameraPitch.strafe_turn_factor = high;
+		// // p->fps.Vars.CameraPitch.strafe_tilt_factor = high;
+		// p->fps.Vars.CameraPitch.max_target_angle = high;
     } else if (isInMenus()) {
 		// patchUnkick();
 		DebugInMenus();
