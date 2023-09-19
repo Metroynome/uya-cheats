@@ -17,10 +17,14 @@
 #include <libuya/ui.h>
 #include <libuya/time.h>
 #include <libuya/camera.h>
+#include <libuya/gameplay.h>
 
 void StartBots(void);
 
 extern VariableAddress_t vaPlayerRespawnFunc;
+extern VariableAddress_t vaPlayerSetPosRotFunc;
+extern VariableAddress_t vaGameplayFunc;
+extern VariableAddress_t vaGiveWeaponFunc;
 
 char weaponOrderBackup[2][3] = { {0,0,0}, {0,0,0} };
 char weapons[3];
@@ -37,7 +41,15 @@ int VampireHealRate[] = {
 VECTOR position;
 VECTOR rotation;
 
+int enableFpsCounter = 1;
+float lastFps = 0;
+int renderTimeMs = 0;
+float averageRenderTimeMs = 0;
+int updateTimeMs = 0;
+float averageUpdateTimeMs = 0;
 int playerFov = 5;
+int fovChange_Hook = 0;
+int fovChange_Func = 0;
 
 void DebugInGame()
 {
@@ -73,19 +85,15 @@ void DebugInGame()
         // - Inside above address: 0x0053C398 (JAL)
 
 		// Swap Teams
-		// int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
-		// playerSetTeam(player, SetTeam);
-
-		playerFov = playerFov - 1;
-
+		int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
+		playerSetTeam(player, SetTeam);
 	}
     else if ((pad->btns & PAD_RIGHT) == 0 && Active == 0)
     {
         Active = 1;
         // Hurt Player
-        // playerDecHealth(player, 14);
+        playerDecHealth(player, 14);
 		// playerSetHealth(player, clamp(((int)player->pNetPlayer->pNetPlayerData->hitPoints + VampireHealRate[1]), 0, PLAYER_MAX_HEALTH));
-		playerFov = playerFov + 1;
 	}
 	else if ((pad->btns & PAD_UP) == 0 && Active == 0)
 	{
@@ -96,11 +104,13 @@ void DebugInGame()
 		// Player ** ps = playerGetAll();
 		// Player * p = ps[1];
 		// playerSetPosRot(player, &p->PlayerPosition, &p->PlayerRotation);
+		// Allv2();
 	}
 	else if((pad->btns & PAD_DOWN) == 0 && Active == 0)
 	{
 		// Set Gattling Turret Health to 1.
 		DEBUGsetGattlingTurretHealth();
+		// setGattlingTurretHealth(1);
 	}
 	else if ((pad->btns & PAD_L3) == 0 && Active == 0)
 	{
@@ -223,6 +233,18 @@ void DEBUGsetGattlingTurretHealth(void)
 // 	weapon[WEAPON_ID_FLUX_V2].damage2 = weapon[WEAPON_ID_FLUX_V2].damage;
 // }
 
+// void Allv2()
+// {
+// 	int i;
+// 	// Give all weapons but Holos, and upgrade.
+// 	for (i = 1; i < 10; ++i) {
+// 		playerGiveWeapon(PLAYER_STRUCT, i);
+// 		playerGiveWeaponUpgrade(PLAYER_STRUCT, i);
+// 	};
+// 	// give holo
+// 	playerGiveWeapon(PLAYER_STRUCT, WEAPON_ID_HOLO);
+// }
+
 
 void vampireLogic(float healRate)
 {
@@ -303,156 +325,41 @@ void patchUnkick(void)
 	HOOK_JAL(0x00683a10, &patchUnkick_Logic);
 }
 
-VariableAddress_t vaFieldOfView_FluxRA = {
-#if UYA_PAL
-	.Lobby = 0,
-	.Bakisi = 0x0040682c,
-	.Hoven = 0x00406194,
-	.OutpostX12 = 0x003fe08c,
-    .KorgonOutpost = 0x003fd46c,
-	.Metropolis = 0x003fc02c,
-	.BlackwaterCity = 0x003f8e14,
-	.CommandCenter = 0x0040721c,
-    .BlackwaterDocks = 0x0040917c,
-    .AquatosSewers = 0x00408d84,
-    .MarcadiaPalace = 0x00407dfc,
-#else
-	.Lobby = 0,
-	.Bakisi = 0x004061c4,
-	.Hoven = 0x00405aac,
-	.OutpostX12 = 0x003fd9a4,
-    .KorgonOutpost = 0x003fcde4,
-	.Metropolis = 0x003fb9c4,
-	.BlackwaterCity = 0x003f874c,
-	.CommandCenter = 0x00406b9c,
-    .BlackwaterDocks = 0x00408afc,
-    .AquatosSewers = 0x00408704,
-    .MarcadiaPalace = 0x0040777c,
-#endif
-};
-void writeFov(int cameraIdx, int a1, int a2, u32 ra, float fov, float f13, float f14, float f15)
+void v2_logic(void)
 {
-	static float lastFov = 0;
-
-	GameCamera* camera = cameraGetGameCamera(cameraIdx);
-	if (!camera)
-		return;
-
-	// save last fov
-	// or reuse last if fov passed is 0
-	if (fov > 0)
-		lastFov = fov;
-	else if (lastFov > 0)
-		fov = lastFov;
-	else
-		fov = lastFov = camera->fov.ideal;
-
-	// apply our fov modifier
-	// only if not scoping with sniper
-	if (ra != GetAddress(&vaFieldOfView_FluxRA))
-		fov += (playerFov / 10.0) * 1;
-
-	if (a2 > 2) {
-		if (a2 != 3) return;
-		camera->fov.limit = f15;
-		camera->fov.changeType = a2;
-		camera->fov.ideal = fov;
-		camera->fov.state = 1;
-		camera->fov.gain = f13;
-		camera->fov.damp = f14;
-		return;
-	}
-	else if (a2 < 1) {
-		if (a2 != 0) return;
-		camera->fov.ideal = fov;
-		camera->fov.changeType = 0;
-		camera->fov.state = 1;
-		return;
-	}
-
-	if (a1 == 0) {
-		camera->fov.ideal = fov;
-		camera->fov.changeType = 0;
-	}
-	else {
-		camera->fov.changeType = a2;
-		camera->fov.init = camera->fov.actual;
-		camera->fov.timer = (short)a2;
-		camera->fov.timerInv = 1.0 / (float)a2;
-	}
-	camera->fov.state = 1;
-}
-
-/*
- * NAME :		patchFov
- * 
- * DESCRIPTION :
- * 			Installs SetFov override hook.
- * 
- * NOTES :
- * 
- * ARGS : 
- * 
- * RETURN :
- * 
- * AUTHOR :			Daniel "Dnawrkshp" Gerendasy
- */
-VariableAddress_t vaFieldOfView_Hook = {
-#if UYA_PAL
-	.Lobby = 0,
-	.Bakisi = 0x004452e0,
-	.Hoven = 0x00446e60,
-	.OutpostX12 = 0x0043dc60,
-    .KorgonOutpost = 0x0043b820,
-	.Metropolis = 0x0043ab60,
-	.BlackwaterCity = 0x00438360,
-	.CommandCenter = 0x00438fe0,
-    .BlackwaterDocks = 0x0043b860,
-    .AquatosSewers = 0x0043ab60,
-    .MarcadiaPalace = 0x0043a4e0,
-#else
-	.Lobby = 0,
-	.Bakisi = 0x00444468,
-	.Hoven = 0x00445f28,
-	.OutpostX12 = 0x0043cd68,
-    .KorgonOutpost = 0x0043a9a8,
-	.Metropolis = 0x00439ce8,
-	.BlackwaterCity = 0x00437468,
-	.CommandCenter = 0x004382a8,
-    .BlackwaterDocks = 0x0043aae8,
-    .AquatosSewers = 0x00439e28,
-    .MarcadiaPalace = 0x00439768,
-#endif
-};
-void patchFov(void)
-{
-	static int ingame = 0;
-	static int lastFov = 0;
-	if (!isInGame()) {
-		ingame = 0;
-		return;
-	}
-
-	// replace SetFov function
-	HOOK_J(GetAddress(&vaFieldOfView_Hook), &writeFov);
-	POKE_U32((u32)GetAddress(&vaFieldOfView_Hook) + 0x4, 0x03E0382d);
-
-	// initialize fov at start of game
-	if (!ingame || lastFov != playerFov) {
-		GameCamera* camera = cameraGetGameCamera(0);
-		if (!camera)
+	Player ** players = playerGetAll();
+	int i, j;
+	for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
+		Player * player = players[i];
+		if (!player)
 			return;
 
-		writeFov(0, 0, 3, 0, 0, 0.05, 0.2, 0);
-		lastFov = playerFov;
-		ingame = 1;
+		for(j = 1; j < 10; ++j)
+			playerGiveWeaponUpgrade(player, j);
 	}
+}
+
+void v2_hook()
+{
+		static int GaveV2s = 0;
+		if (GaveV2s)
+			return;
+
+		int GiveWeapon_JRRA = (u32)GetAddress(&vaGiveWeaponFunc) + 0x538;
+		if (*(u32*)GiveWeapon_JRRA == 0x03e00008)
+			HOOK_J(GiveWeapon_JRRA, &v2_logic);
+		
+		v2_logic();
+		GaveV2s = 1;
 }
 
 int main()
 {
 	// run normal hook
 	((void (*)(void))0x00126780)();
+
+	if (!musicIsLoaded())
+		return 1;
 
 	uyaPreUpdate();
 
@@ -464,10 +371,9 @@ int main()
 		// gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 0;
 	}
 
-	patchFov();
-	
     if (isInGame())
     {
+
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 
@@ -476,7 +382,6 @@ int main()
 		// *(u32*)0x00539258 = 0x240203E8;
 		// *(u32*)0x005392D8 = 0x240203E8;
 
-		// disableDrones();
 		// vampireLogic(VampireHealRate[0]);
 		// hideRadarBlips();
 
@@ -486,6 +391,9 @@ int main()
 		// float x = SCREEN_WIDTH * 0.3;
 		// float y = SCREEN_HEIGHT * 0.85;
 		// gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, 4);
+		
+		v2_hook();
+
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
     	DebugInGame();
