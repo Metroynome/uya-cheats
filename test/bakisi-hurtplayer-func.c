@@ -130,7 +130,7 @@ void FUN_0050ace8(Player * player, long damage)
 				// set n to the pNEtPlayer pointer address
 				n = *(int *)(&player->pNetPlayer);
 			}
-		// Save health (uOffset) to pNetPlayer
+		// Save health (uOffset) to pNetPlayer (Saves as a u32, not float)
 		*(u32*)(*(int*)(n + 4) + 0x44) = uOffset;
 		}
 	}
