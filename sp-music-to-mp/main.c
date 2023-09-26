@@ -30,7 +30,7 @@ void CheckFirstBits(int Track, int LeftAudio, int RightAudio)
 }
 void CampaignMusic(void)
 {
-	static int CustomSector = 0xABD1; //1d84
+	static int CustomSector = 0x1d84;
 	static int FinishedConvertingTracks = 0;
 	static int AddedTracks = 0;
 	static int SetupMusic = 0;
