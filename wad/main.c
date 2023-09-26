@@ -58,6 +58,7 @@ int main(void)
 				// levelaudiowad
 				if (SectorSize == 0x1818)
 				{
+					// printf("0x%x, ", MapSector);
 					printf("\nAudioWAD (0x%x): 0x00%x : 0x%x", MapSector, (u32)(Sector + Offset), SectorID);
 				}
 				// levelscenewad
