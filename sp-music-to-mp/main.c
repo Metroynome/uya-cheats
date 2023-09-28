@@ -6,40 +6,53 @@
 #include <libuya/music.h>
 
 int enableSingleplayerMusic = 1;
-static char AdderTracks[] = {};
 
-//debug
-int PLAYING_TRACK = 0;
-int StartSound = -1;
-
-
-void CheckFirstBits(int Track, int LeftAudio, int RightAudio)
-{
-	// Get First 2 bytes of the track data
-	LeftAudio = (LeftAudio >> 10);
-	RightAudio = (RightAudio >> 10);
-	if (LeftAudio == RightAudio)
-	{
-		AdderTracks[LeftAudio] = Track;
-	}
-	else
-	{
-		AdderTracks[LeftAudio] = Track;
-		AdderTracks[RightAudio] = Track;
-	}
-}
 void CampaignMusic(void)
 {
-	static int CustomSector = 0x1d84;
+	static int CustomSector = 0x1d8a;
 	static int FinishedConvertingTracks = 0;
 	static int AddedTracks = 0;
 	static int SetupMusic = 0;
-	static short Music[][2] = {};
-
 	// We go by each wad because we have to have Multiplayer one first.
-	static short wadArray[] = {0x54d, 0x3f9, 0x403, 0x40d, 0x417, 0x421, 0x42b, 0x435, 0x43f, 0x449, 0x453, 0x45d, 0x467, 0x471, 0x47b, 0x485, 0x48f, 0x499, 0x4a3, 0x4ad, 0x4b7, 0x4c1, 0x4cb, 0x4d5, 0x4df, 0x4e9, 0x4f3, 0x4fd, 0x507, 0x511, 0x51b, 0x525, 0x52f, 0x539, 0x543};
-	// We set how many songs we want from each wad because the bots audio is apart of the wad as well.
-	static int wadArray_songPerWAD[] = {14, 2, 3, 3, 3, 3, 0, 4, 3, 4, 0, 1, 4, 2, 0, 2, 0, 2, 3, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	static short wadArray[][2] = {
+		// wad, song per wad
+		// Commented tracks/sectors are due to them being dialoge or messed up.
+		{0x54d, 14}, // Multiplayer
+		{0x3f9, 2}, // Veldin
+		{0x403, 4}, // Florana
+		{0x40d, 4}, // Starship Phoenix
+		{0x417, 3}, // Marcadia
+		{0x421, 4}, // Daxx (This doesn't have padding between music and dialog)
+		{0x42b, 1}, // 
+		{0x435, 4}, // Annihilation Nation
+		{0x43f, 1}, // Aquatos
+		{0x449, 1}, // Tyhrranosis
+		{0x453, 2}, // Zeldrin Starport
+		{0x45d, 1}, // Obani Gemini
+		{0x467, 1}, // Blackwater City
+		{0x471, 2}, // Holostar Studios
+		{0x47b, 1}, // Koros
+		{0x485, 1}, // Metropolis
+		{0x48f, 1}, // Crash Site
+		{0x499, 1}, // Aridia
+		{0x4a3, 1}, // Quark's Hideout
+		{0x4ad, 1}, // Mylon - Bioliterator
+		{0x4b7, 2}, // Obani Draco
+		{0x4c1, 1}, // Mylon - Command Center
+		{0x4cb, 1}, // 
+		{0x4d5, 1}, // Insomniac Museum
+		// {0x4df, 0}, // 
+		{0x4e9, 1}, // 
+		{0x4f3, 1}, // 
+		{0x4fd, 1}, // 
+		{0x507, 1}, // 
+		{0x511, 1}, // 
+		{0x51b, 1}, // 
+		{0x525, 1}, // 
+		{0x52f, 1}, // 
+		{0x539, 1}, // 
+		{0x543, 1}  // 
+	};
 	// check to see if multiplayer tracks are loaded
 	if (!musicIsLoaded())
 		return;
@@ -54,17 +67,14 @@ void CampaignMusic(void)
 		int WAD_Table = 0x001f7f88;
 		int a;
 		int Offset = 0;
-		int wadArray_size = sizeof(wadArray);
-
 		// Zero out stack by the appropriate heap size (0x2a0 in this case)
 		// This makes sure we get the correct values we need later on.
 		memset((u32*)Stack, 0, 0x1818);
 
 		// Loop through each WAD ID
-		// Total: 35
-		for(a = 0; a < 10; a++)
+		for(a = 0; a < (sizeof(wadArray)/sizeof(wadArray[0])); a++)
 		{
-			int WAD = wadArray[a];
+			int WAD = wadArray[a][0];
 			// Check if Map Sector is not zero
 			if (WAD != 0)
 			{
@@ -84,28 +94,18 @@ void CampaignMusic(void)
 					// Remember we skip the first track because it is the start of the sp track, not the body of it.
 					int b = 0;
 					int Songs = Stack + (a == 0 ? 0x8 : 0x18);
-					// while current song doesn't equal zero, then convert.
-					// if it does equal zero, that means we reached the end of the list and we move onto the next batch of tracks.
 					int j;
-					for (j = 0; j < wadArray_songPerWAD[a]; ++j) {
+					for (j = 0; j < wadArray[a][1]; ++j) {
 						int Track_LeftAudio = *(u32*)(Songs + b);
 						int Track_RightAudio = *(u32*)((u32)(Songs + b) + 0x8);
 						int ConvertedTrack_LeftAudio = SP2MP + Track_LeftAudio;
 						int ConvertedTrack_RightAudio = SP2MP + Track_RightAudio;
-						// Checks the first 16 bits of track for 0, 1, 2, ect.
-						// CheckFirstBits(AddedTracks, ConvertedTrack_LeftAudio, ConvertedTrack_RightAudio);
-						// Store converted tracks for later
-						// Music[AddedTracks][0] = (u32)ConvertedTrack_LeftAudio;
-						// Music[AddedTracks][1] = (u32)ConvertedTrack_RightAudio;
 						*(u32*)(NewTracksLocation) = (u32)ConvertedTrack_LeftAudio;
 						*(u32*)(NewTracksLocation + 0x8) = (u32)ConvertedTrack_RightAudio;
 						NewTracksLocation += 0x10;
-						if (a == 0)
-						{
+						if (a == 0) {
 							b += 0x10;
-						}
-						else
-						{
+						} else {
 							b += 0x20;
 						}
 						AddedTracks++;
@@ -115,132 +115,27 @@ void CampaignMusic(void)
 		// Zero out stack to finish the job.
 		memset((u32*)Stack, 0, 0x1818);
 		}
-		
-		
-		
-		// Doesn't use wad array.
-		// for(a = 0; a < 35; a++)
-		// {
-		// 	Offset += 0x18;
-		// 	int WAD = *(u32*)(WAD_Table + Offset);
-		// 	// Check if Map Sector is not zero
-		// 	if (WAD != 0)
-		// 	{
-		// 		internal_wadGetSectors(WAD, 1, Stack);
-		// 		int WAD_Sector = *(u32*)(Stack + 0x4);
-
-		// 		// make sure WAD_Sector isn't zero
-		// 		if (WAD_Sector != 0)
-		// 		{
-		// 			printf("WAD: 0x%X\n", WAD);
-		// 			printf("WAD Sector: 0x%X\n", WAD_Sector);
-
-		// 			// do music stuffs~
-		// 			// Get SP 2 MP Offset for current WAD_Sector.
-		// 			// In UYA we use our own sector.
-		// 			int SP2MP = WAD_Sector - CustomSector;
-		// 			// Remember we skip the first track because it is the start of the sp track, not the body of it.
-		// 			int b = 0;
-		// 			int Songs = Stack + 0x18;
-		// 			// while current song doesn't equal zero, then convert.
-		// 			// if it does equal zero, that means we reached the end of the list and we move onto the next batch of tracks.
-		// 			do
-		// 			{
-		// 				int Track_LeftAudio = *(u32*)(Songs + b);
-		// 				int Track_RightAudio = *(u32*)((u32)(Songs + b) + 0x8);
-		// 				int ConvertedTrack_LeftAudio = SP2MP + Track_LeftAudio;
-		// 				int ConvertedTrack_RightAudio = SP2MP + Track_RightAudio;
-		// 				// Checks the first 16 bits of track for 0, 1, 2, ect.
-		// 				// CheckFirstBits(AddedTracks, ConvertedTrack_LeftAudio, ConvertedTrack_RightAudio);
-		// 				// Store converted tracks for later
-		// 				// Music[AddedTracks][0] = (u32)ConvertedTrack_LeftAudio;
-		// 				// Music[AddedTracks][1] = (u32)ConvertedTrack_RightAudio;
-		// 				*(u32*)(NewTracksLocation) = (u32)ConvertedTrack_LeftAudio;
-		// 				*(u32*)(NewTracksLocation + 0x8) = (u32)ConvertedTrack_RightAudio;
-		// 				AddedTracks++;
-		// 			}
-		// 			while (*(u32*)(Songs + b) != 0);
-		// 		}
-		// 		else
-		// 		{
-		// 			Offset -= 0x18;
-		// 			a--;
-		// 		}
-		// 	}
-		// 	else
-		// 	{
-		// 		a--;
-		// 	}
-		// // Zero out stack to finish the job.
-		// memset((u32*)Stack, 0, 0x1818);
-		// }
-
 		FinishedConvertingTracks = 1;
-		printf("Added Tracks: %d\n", AddedTracks);
 	}
 	
 
 	int DefaultMultiplayerTracks = 0x0d; // This number will never change
-	int StartingTrack = musicTrackRangeMin();
+	int StartingTrack = *(u32*)musicTrackRangeMin();
 	int AllTracks = DefaultMultiplayerTracks + AddedTracks;
 	int TotalTracks = (DefaultMultiplayerTracks - StartingTrack + 1) + AddedTracks;
 	int CodeSegmentPointer = *(u32*)0x01FFFD00;
 	// If not in main lobby, game lobby, ect.
 	if(CodeSegmentPointer != 0x00574F88){
 		// if TRACK_RANGE_MAX doesn't equal TotalTracks
-		if(musicTrackRangeMax() != TotalTracks){
+		if(*(u32*)musicTrackRangeMax() != TotalTracks){
 			int MusicFunctionData = CodeSegmentPointer + 0x1A8;
 			*(u16*)MusicFunctionData = AllTracks;
 		}
-		// *(u32*)NewTracksLocation == 0 || 
-		// if (!SetupMusic)
-		// {
-		// 	int Track;
-		// 	for(Track = 0; Track < AddedTracks; ++Track)
-		// 	{
-		// 		u32 Left = (u32)Music[Track][0];
-		// 		u32 Right = (u32)Music[Track][1];
-		// 		u32 Add1 = 0x10000;
-		// 		u32 Add2 = 0x20000;
-		// 		u32 Add3 = 0x30000;
-		// 		// if (Track == 8)
-		// 		// {
-		// 		// 	Right += Add1;
-		// 		// }
-		// 		// else if (Track >= 9 && Track <= 31)
-		// 		// {
-		// 		// 	Left += Add1;
-		// 		// 	Right += Add1;
-		// 		// }
-		// 		// else if (Track == 32)
-		// 		// {
-		// 		// 	Left += Add1;
-		// 		// 	Right += Add2;
-		// 		// }
-		// 		// else if (Track >= 33 && Track <= 56)
-		// 		// {
-		// 		// 	Left += Add2;
-		// 		// 	Right += Add2;
-		// 		// }
-		// 		// else if (Track >= 57)
-		// 		// {
-		// 		// 	Left += Add3;
-		// 		// 	Right += Add3;
-		// 		// }
-				
-		// 		*(u32*)(NewTracksLocation) = Left;
-		// 		*(u32*)(NewTracksLocation + 0x08) = Right;
-		// 		NewTracksLocation += 0x10;
-		// 	}
-		// 	SetupMusic = 1;
-		// }
 	}
 
 	// If in game
 	if (isInGame())
 	{
-		PrevNextSong();
-
 		static short CurrentTrack = 0;
 		static short NextTrack = 0;
 		music_Playing * music = musicGetTrackInfo();
@@ -271,51 +166,6 @@ void CampaignMusic(void)
 			// Doing this lets the current playing track to fade out.
 			musicTransitionTrack(0,0,0,0);
 		}
-	}
-}
-
-void PrevNextSong()
-{
-	//Exmaple for choosing track
-	PadButtonStatus * pad = (PadButtonStatus*)0x00225980;
-	music_Playing * music = musicGetTrackInfo();
-	// L3: Previous Sound
-	if (StartSound == -1) {
-		StartSound = music->track;
-		printf("Starting Track: 0x%x", music->track);
-	}
-	if ((pad->btns & PAD_L3) == 0 && PLAYING_TRACK == 0)
-	{
-		// Setting PLAYING_TRACK to 1 will make it so the current playing sound will play once.
-		PLAYING_TRACK = 1;
-		StartSound -= 0x1; // Subtract 1 from StartSound
-		musicStopTrack();
-		musicPlayTrack(StartSound * 2, 1); // Play Sound
-		printf("Sound Byte: 0x%x\n", StartSound); // print ID of sound played.
-	}
-	// R3: Next Sound
-	if ((pad->btns & PAD_R3) == 0 && PLAYING_TRACK == 0)
-	{
-		PLAYING_TRACK = 1;
-		StartSound += 0x1;
-		musicStopTrack();
-		musicPlayTrack(StartSound * 2, 1);
-		//printf("Sound Byte: 0x%x\n", StartSound);
-	}
-	// Select: Transition Track
-	if ((pad->btns & PAD_CIRCLE) == 0 && PLAYING_TRACK == 0)
-	{
-		PLAYING_TRACK = 1;
-		StartSound = 0;
-		// musicTransitionTrack(0,0,0,0);
-		musicStopTrack();
-		musicPlayTrack(0, 1);
-		printf("Sound Byte: 0x%x\n", StartSound);
-	}
-	// If neither of the above are pressed, PLAYING_TRACK = 0.
-	if (!(pad->btns & PAD_L3) == 0 && !(pad->btns & PAD_R3) == 0 && !(pad->btns & PAD_CIRCLE) == 0)
-	{
-		PLAYING_TRACK = 0;
 	}
 }
 
