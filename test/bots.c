@@ -17,6 +17,119 @@
 #include <libuya/utils.h>
 #include <libuya/interop.h>
 
+VariableAddress_t vaInit_RunUpdateFunctions = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0,
+	.Hoven = 0,
+	.OutpostX12 = 0,
+    .KorgonOutpost = 0,
+	.Metropolis = 0,
+	.BlackwaterCity = 0,
+	.CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x004ec650,
+	.Hoven = 0,
+	.OutpostX12 = 0x004e3fc0,
+    .KorgonOutpost = 0,
+	.Metropolis = 0,
+	.BlackwaterCity = 0,
+	.CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#endif
+};
+
+VariableAddress_t vaInit_StopPlayerUpdateFunctions = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0,
+	.Hoven = 0,
+	.OutpostX12 = 0,
+    .KorgonOutpost = 0,
+	.Metropolis = 0,
+	.BlackwaterCity = 0,
+	.CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x004ec538,
+	.Hoven = 0,
+	.OutpostX12 = 0x004e3ea8,
+    .KorgonOutpost = 0,
+	.Metropolis = 0,
+	.BlackwaterCity = 0,
+	.CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#endif
+};
+
+VariableAddress_t vaCreateHero = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0,
+	.Hoven = 0,
+	.OutpostX12 = 0,
+    .KorgonOutpost = 0,
+	.Metropolis = 0,
+	.BlackwaterCity = 0,
+	.CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x005312c0,
+	.Hoven = 0,
+	.OutpostX12 = 0x00528c30,
+    .KorgonOutpost = 0,
+	.Metropolis = 0,
+	.BlackwaterCity = 0,
+	.CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#endif
+};
+
+
+VariableAddress_t vaPAD_PadUpdate = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0,
+	.Hoven = 0,
+	.OutpostX12 = 0,
+    .KorgonOutpost = 0,
+	.Metropolis = 0,
+	.BlackwaterCity = 0,
+	.CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x00493a68,
+	.Hoven = 0,
+	.OutpostX12 = 0x0048b3d8,
+    .KorgonOutpost = 0,
+	.Metropolis = 0,
+	.BlackwaterCity = 0,
+	.CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#endif
+};
+
 VariableAddress_t vaPadProcessInput = {
 #if UYA_PAL
 	.Lobby = 0,
@@ -171,7 +284,7 @@ typedef struct TrainingState
 TrainingState_t State;
 SimulatedPlayer_t SimPlayers[];
 
-const int SimPlayerCount = 3;
+const int SimPlayerCount = 1;
 const int TargetTeam = 1; // Red Team
 static int BotsInit = 0;
 
@@ -185,6 +298,39 @@ void modeInitTarget(SimulatedPlayer_t * sPlayer)
 	sPlayer->Active = 1;
 
 	sprintf(gs->PlayerNames[sPlayer->Player->fps.Vars.cam_slot], "Fake %d", sPlayer->Idx);
+	printf("\nmodeInittarget: %d", sPlayer->Idx);
+}
+
+void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
+{
+	VECTOR delta, targetPos;
+	Player* player = (Player*)PLAYER_STRUCT;
+	if (!sPlayer || !player || !sPlayer->Active)
+		return;
+
+	Player* target = sPlayer->Player;
+	Moby* targetMoby = target->PlayerMoby;
+	struct TrainingTargetMobyPVar* pvar = &sPlayer->Vars;
+	if (!pvar)
+		return;
+
+	// face player
+	// vector_subtract(delta, player->PlayerPosition, target->PlayerPosition);
+	// float len = vector_length(delta);
+	// float yaw = atan2f(delta[1] / len, delta[0] / len);
+	
+	// MATRIX m;
+	// matrix_unit(m);
+	// matrix_rotate_z(m, m, yaw);
+	// memcpy(target->Camera->uMtx, m, sizeof(VECTOR) * 3);
+	// vector_copy(target->fps.CameraDir, &m[4]);
+	// target->fps.Vars.CameraYaw.rotation = sPlayer->Yaw;
+    
+	struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
+	int jumping = 0;
+	if (!jumping) {
+		pad->btns &= ~PAD_CROSS;
+	}
 }
 
 void SpawnBots(void)
@@ -193,8 +339,7 @@ void SpawnBots(void)
 
 	for (i = 0; i < SimPlayerCount; ++i)
 	{
-		if (!SimPlayers[i].Active || playerIsDead(SimPlayers[i].Player))
-		{
+		if (!SimPlayers[i].Active || ((int)playerGetHealth(SimPlayers[i].Player) <= 0)) {
 			spawnTarget(&SimPlayers[i]);
 		}
 	}
@@ -229,17 +374,17 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 	gameSettings->PlayerSkins[id] = 0;
 	gameSettings->PlayerTeams[id] = TargetTeam;
 
-	POKE_U32(0x002412f4 + (4 * id), (void*)&sPlayer->Pad);
+	POKE_U32(0x002412f0 + (4 * id), (void*)&sPlayer->Pad);
 
-	// local hero (Outpost x12)
-	((void (*)(int))0x00528c30)(id);
+	// local hero
+	((void (*)(int))GetAddress(&vaCreateHero))(id);
 
 	Player * newPlayer = players[id];
 	sPlayer->Player = newPlayer;
 
 	players[id] = sPlayer->Player;
 
-	POKE_U32(0x002412f4 + (4 * id), 0);
+	POKE_U32(0x002412f0 + (4 * id), 0);
 
 	sPlayer->Player->Paddata = (void*)&sPlayer->Pad;
 	sPlayer->Player->fps.Vars.cam_slot = id;
@@ -284,6 +429,9 @@ void targetUpdate(SimulatedPlayer_t *sPlayer)
 	pad->l2_p = 0;
 	pad->r1_p = 0;
 	pad->r2_p = 0;
+
+	// send to mode for custom logic
+	modeUpdateTarget(sPlayer);
 }
 
 void spawnTarget(SimulatedPlayer_t* sPlayer)
@@ -303,64 +451,33 @@ void spawnTarget(SimulatedPlayer_t* sPlayer)
 	modeInitTarget(sPlayer);
 }
 
-void UpdateBots(void)
-{
-	int i;
-	for (i = 0; i < SimPlayerCount; ++i)
-	{
-		if (playerIsDead(SimPlayers[i].Player))
-		{
-			updateTarget(&SimPlayers[i]);
-		}
-	}
-}
-
-void updateTarget(SimulatedPlayer_t* sPlayer)
-{
-	if (!sPlayer)
-		return;
-
-	// Respawn
-	struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
-	// PadButtonStatus * pad = (PadButtonStatus*)sPlayer->Player->Paddata;
-	int jumping = 0;
-	if (!jumping)
-	{
-		pad->btns &= ~PAD_CROSS;
-		jumping = 1;
-	}
-		
-	// playerRespawn(sPlayer->Player);
-}
-
 void onSimulateHeros(void)
 {
 	int i;
 
 	// update local hero first
-	Player * lPlayer = (Player*)PLAYER_STRUCT;
-	if (lPlayer) {
-		PlayerVTable * pVTable = playerGetVTable(lPlayer);
-		// HUD JAL: 004E3F14
-		pVTable->Update(lPlayer); // update hero
-	}
+	// Player * lPlayer = (Player*)PLAYER_STRUCT;
+	// if (lPlayer) {
+	// 	PlayerVTable * pVTable = playerGetVTable(lPlayer);
+	// 	// HUD JAL: 004E3F14
+	// 	pVTable->Update(lPlayer); // update hero
+	// }
 
 	// update remote clients
 	for (i = 0; i < SimPlayerCount; ++i) {
 		if (SimPlayers[i].Player) {
 			PlayerVTable * pVTable = playerGetVTable(SimPlayers[i].Player);
 
-			// targetUpdate(&SimPlayers[i]);
+			targetUpdate(&SimPlayers[i]);
 
 			// process input (Correct Address though)
-			// Causes syscall (0) error!
 			// ((void (*)(u32))GetAddress(&vaPadProcessInput))(&SimPlayers[i].Pad);
 
 			// update pad (THIS IS CORRECT! :D)
-			// Bakisi: 0x00493a68
-			((void (*)(int, int, int))0x0048b3d8)(&SimPlayers[i].Pad, &SimPlayers[i].Pad.rdata, 0x14);
+			// ((void (*)(int, int, int))GetAddress(&vaPAD_PadUpdate))(&SimPlayers[i].Pad, &SimPlayers[i].Pad.rdata, 0x14);
 
 			// run game's hero update
+			// Seems to already run
 			// pVTable->Update(SimPlayers[i].Player);
 		}
 	}
@@ -381,22 +498,21 @@ void InitBots(void)
 	memset(SimPlayers, 0, sizeof(SimulatedPlayer_t) * SimPlayerCount);
 
 	// run update functions for SimHeroes
-	HOOK_J(0x004E3FC0, onSimulateHeros); // This one seems to work well.
+	HOOK_J(GetAddress(&vaInit_RunUpdateFunctions), onSimulateHeros); // This one seems to work well.
 	// HOOK_JAL(0x003D29F0, onSimulateHeros); // This one removes hud and such.
 
 	// Stop player update functions.
-	int Addr = 0x004E3EA8;
-	int Value = 0x1860000E;
-	if (*(u32*)Addr == Value)
-		*(u32*)Addr = 0x1000000E;
+	// Lets us control when to update players
+	// int Addr = GetAddress(&vaInit_StopPlayerUpdateFunctions);
+	// int Value = 0x1860000E;
+	// if (*(u32*)Addr == Value)
+	// 	*(u32*)Addr = 0x1000000E;
 
 	for (i = 0; i < SimPlayerCount; ++i) {
 		SimPlayers[i].Idx = i;
 	}
 
 	BotsInit = 1;
-
-	SpawnBots();
 }
 
 void StartBots(void)
@@ -405,12 +521,10 @@ void StartBots(void)
 	// *(u32*)0x001a5e5c = 3;
 
 	if (!BotsInit && isInGame())
-	 	InitBots();
+		InitBots();
 
 	if (BotsInit && isInGame())
-	{
-		// UpdateBots();
-	}
+		SpawnBots();
 	
 	// Stop player update functions
 	// POKE_U32(0x005CD458, 0);
