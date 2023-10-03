@@ -214,6 +214,10 @@ VariableAddress_t vaPadProcessValue = {
 #endif
 };
 
+const int SimPlayerCount = 3;
+const int TargetTeam = 1; // Red Team
+int Initialized = 0;
+
 struct TrainingTargetMobyPVar
 {
 	VECTOR SpawnPos;
@@ -284,9 +288,10 @@ typedef struct TrainingState
 TrainingState_t State;
 SimulatedPlayer_t SimPlayers[];
 
-const int SimPlayerCount = 1;
-const int TargetTeam = 1; // Red Team
-static int BotsInit = 0;
+void modeProcessPlayer(int pIndex)
+{
+	
+}
 
 void modeInitTarget(SimulatedPlayer_t * sPlayer)
 {
@@ -298,7 +303,6 @@ void modeInitTarget(SimulatedPlayer_t * sPlayer)
 	sPlayer->Active = 1;
 
 	sprintf(gs->PlayerNames[sPlayer->Player->fps.Vars.cam_slot], "Fake %d", sPlayer->Idx);
-	printf("\nmodeInittarget: %d", sPlayer->Idx);
 }
 
 void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
@@ -328,12 +332,50 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     
 	struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
 	int jumping = 0;
+	int Health = ((int)playerGetHealth(sPlayer->Player) <= 0);
 	if (!jumping) {
 		pad->btns &= ~PAD_CROSS;
 	}
 }
 
-void SpawnBots(void)
+//=====================================================
+void frameTick(void)
+{
+	int i = 0;
+	char buf[32];
+	int nowTime = gameGetTime();
+	GameData* gameData = gameGetData();
+	GameOptions* gameOptions = gameGetOptions();
+
+	// 
+	for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
+		modeProcessPlayer(i);
+	}
+
+	// draw counter
+	//snprintf(buf, 32, "%d/%d", State.TargetsDestroyed, TARGET_GOAL);
+	//gfxScreenSpaceText(15, SCREEN_HEIGHT - 15, 1, 1, 0x80FFFFFF, buf, -1, 6);
+
+	// compute time left
+	// float secondsLeft = ((gameOptions->GameFlags.MultiplayerGameFlags.Timelimit * TIME_MINUTE) - (nowTime - gameData->TimeStart)) / (float)TIME_SECOND;
+	// if (secondsLeft < 0)
+	// 	secondsLeft = 0;
+	// int secondsLeftInt = (int)secondsLeft;
+	// float timeSecondsRounded = secondsLeftInt;
+	// if ((secondsLeft - timeSecondsRounded) > 0.5)
+	// 	timeSecondsRounded += 1;
+
+	// draw timer
+	// if (shouldDrawHud()) {
+	// 	sprintf(buf, "%02d:%02d", secondsLeftInt/60, secondsLeftInt%60);
+	// 	gfxScreenSpaceText(479+1, 57+1, 0.8, 0.8, 0x80000000, buf, -1, 1);
+	// 	gfxScreenSpaceText(479, 57, 0.8, 0.8, 0x80FFFFFF, buf, -1, 1);
+	// }
+
+	// modeTick();
+}
+
+void gameTick(void)
 {
 	int i;
 
@@ -359,12 +401,13 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 	// spawn player
 	memcpy(&sPlayer->Pad, players[0]->Paddata, sizeof(struct PAD));
 	
-	sPlayer->Pad.rdata[7] = 0x7F;
-	sPlayer->Pad.rdata[6] = 0x7F;
-	sPlayer->Pad.rdata[5] = 0x7F;
-	sPlayer->Pad.rdata[4] = 0x7F;
-	sPlayer->Pad.rdata[3] = 0xFF;
-	sPlayer->Pad.rdata[2] = 0xFF;
+	char * padrdata = (char*)((u32)sPlayer->Pad.rdata + 0x80);
+	padrdata[7] = 0x7F;
+	padrdata[6] = 0x7F;
+	padrdata[5] = 0x7F;
+	padrdata[4] = 0x7F;
+	padrdata[3] = 0xFF;
+	padrdata[2] = 0xFF;
 	sPlayer->Pad.port = 10;
 	sPlayer->Pad.slot = 10;
 	sPlayer->Pad.id = id;
@@ -444,8 +487,8 @@ void spawnTarget(SimulatedPlayer_t* sPlayer)
 		createSimPlayer(sPlayer, sPlayer->Idx);
 
 	// destroy existing
-	if (sPlayer->Active)
-		playerSetHealth(sPlayer, 0);
+	// if (sPlayer->Active)
+	// 	playerSetHealth(sPlayer, 0);
 
 	// playerRespawn(sPlayer->Player);
 	modeInitTarget(sPlayer);
@@ -474,10 +517,9 @@ void onSimulateHeros(void)
 			// ((void (*)(u32))GetAddress(&vaPadProcessInput))(&SimPlayers[i].Pad);
 
 			// update pad (THIS IS CORRECT! :D)
-			// ((void (*)(int, int, int))GetAddress(&vaPAD_PadUpdate))(&SimPlayers[i].Pad, &SimPlayers[i].Pad.rdata, 0x14);
+			((void (*)(int, int, int))GetAddress(&vaPAD_PadUpdate))(&SimPlayers[i].Pad, &SimPlayers[i].Pad.rdata, 0x14);
 
 			// run game's hero update
-			// Seems to already run
 			// pVTable->Update(SimPlayers[i].Player);
 		}
 	}
@@ -486,6 +528,16 @@ void onSimulateHeros(void)
 void InitBots(void)
 {
 	int i;
+
+	// Stop player update functions.
+	// Lets us control when to update players
+	// int Addr = GetAddressImmediate(&vaInit_StopPlayerUpdateFunctions);
+	// int Value = 0x1860000E;
+	// if (*(u32*)Addr == Value)
+	// 	*(u32*)Addr = 0x1000000E;
+
+
+	// Other Hooks Go Here
 
 	// give a small delay before finalizing the initialization.
 	// this helps prevent the slow loaders from desyncing
@@ -496,37 +548,37 @@ void InitBots(void)
 	}
 
 	memset(SimPlayers, 0, sizeof(SimulatedPlayer_t) * SimPlayerCount);
+	memset(&State, 0, sizeof(State));
+
+	State.TimeLastKill = timerGetSystemTime();
+	State.InitializedTime = gameGetTime();
 
 	// run update functions for SimHeroes
-	HOOK_J(GetAddress(&vaInit_RunUpdateFunctions), onSimulateHeros); // This one seems to work well.
+	HOOK_J(GetAddressImmediate(&vaInit_RunUpdateFunctions), onSimulateHeros); // This one seems to work well.
 	// HOOK_JAL(0x003D29F0, onSimulateHeros); // This one removes hud and such.
-
-	// Stop player update functions.
-	// Lets us control when to update players
-	// int Addr = GetAddress(&vaInit_StopPlayerUpdateFunctions);
-	// int Value = 0x1860000E;
-	// if (*(u32*)Addr == Value)
-	// 	*(u32*)Addr = 0x1000000E;
 
 	for (i = 0; i < SimPlayerCount; ++i) {
 		SimPlayers[i].Idx = i;
 	}
 
-	BotsInit = 1;
+	Initialized = 1;
 }
 
-void StartBots(void)
+void StartBots(void) // gameStart
 {
 	// How Many Local Players
 	// *(u32*)0x001a5e5c = 3;
 
-	if (!BotsInit && isInGame())
-		InitBots();
+	// Ensure in game
+	GameSettings * gameSettings = gameGetSettings();
+	if (!gameSettings || !isInGame())
+		return;
 
-	if (BotsInit && isInGame())
-		SpawnBots();
-	
-	// Stop player update functions
-	// POKE_U32(0x005CD458, 0);
-	// POKE_U32(0x005CD464, 0x90822FEA);
+	if (!Initialized) {
+		InitBots(); // initialize()
+		return;
+	}
+
+	frameTick();
+	gameTick();
 }
