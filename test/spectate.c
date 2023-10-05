@@ -182,7 +182,7 @@ void spectate(Player * currentPlayer, Player * playerToSpectate)
 
         // Interpolate camera towards target player
         vector_lerp(spectateData->LastCameraPos, spectateData->LastCameraPos, target, 1 - powf(MATH_E, -CAMERA_POSITION_SHARPNESS * MATH_DT));
-        vector_copy(currentPlayer->CameraPos, spectateData->LastCameraPos);
+        vector_copy(currentPlayer->fps.CameraPos, spectateData->LastCameraPos);
     } else {
         // cameraT = 1 - powf(MATH_E, -CAMERA_ROTATION_SHARPNESS * MATH_DT);
 
