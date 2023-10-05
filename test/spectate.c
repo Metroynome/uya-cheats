@@ -56,6 +56,34 @@ struct PlayerSpectateData
 
 int InitSpectate = 0;
 
+VariableAddress_t vaGetMissionDefHook = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0,
+	.Hoven = 0,
+	.OutpostX12 = 0,
+    .KorgonOutpost = 0,
+	.Metropolis = 0,
+	.BlackwaterCity = 0,
+	.CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x00545210,
+	.Hoven = 0,
+	.OutpostX12 = 0,
+    .KorgonOutpost = 0,
+	.Metropolis = 0,
+	.BlackwaterCity = 0,
+	.CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#endif
+};
+
 Player* playerGetFromSlot_Hook(int i)
 {
     if (SpectateData[i].Enabled) {
@@ -65,12 +93,15 @@ Player* playerGetFromSlot_Hook(int i)
             return player;
     }
     
-    return PLAYER_STRUCT;
+    return playerGetFromSlot(0);
 }
 
 void enableSpectate(Player * player, struct PlayerSpectateData * data)
 {
-    u32 hookv = 0x0C000000 | ((u32)&playerGetFromSlot_Hook >> 2);
+	if (GetAddress(&vaGetMissionDefHook)) {
+		u32 hookv = 0x0C000000 | ((u32)&playerGetFromSlot_Hook >> 2);
+		*(u32*)GetAddress(&vaGetMissionDefHook) = hookv;
+	}
 
     // Fixes void fall bug
     // *((u8*)0x00171DE0 + player->PlayerId) = 1;
