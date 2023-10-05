@@ -26,17 +26,21 @@ const float VEHICLE_CAMERA_ROTATION_SHARPNESS = 3;
 const float VEHICLE_DISTANCE[] =
 {
     3,                  // Turboslider
-    0,                  // Turboslider passenger
+    0,                  // Turboslider Passenger
     2,                  // Hovership
-    0,                  // Hovership passenger
+    0,                  // Hovership Passenger
+	3,					// Tank
+	0,					// Tank Passenger
 };
 
 const float VEHICLE_ELEVATION[] =
 {
     3,                  // Turboslider
-    3,                  // Turboslider passenger
+    3,                  // Turboslider Passenger
     2.5,                // Hovership
-    3,                  // Hovership passenger
+    3,                  // Hovership Passenger
+	3,					// Tank
+	3,					// Tank Passanger
 };
 
 struct PlayerSpectateData
@@ -119,7 +123,7 @@ void spectate(Player * currentPlayer, Player * playerToSpectate)
     {
         Moby * vehicleMoby = playerToSpectate->Vehicle->pMoby;
         int isPassenger = playerToSpectate->Vehicle->pPassenger == playerToSpectate;
-        cameraT = 1 - powf(MATH_E, -(isPassenger ? CAMERA_ROTATION_SHARPNESS : VEHICLE_CAMERA_ROTATION_SHARPNESS) * MATH_DT);
+        // cameraT = 1 - powf(MATH_E, -(isPassenger ? CAMERA_ROTATION_SHARPNESS : VEHICLE_CAMERA_ROTATION_SHARPNESS) * MATH_DT);
 
         // Grab rotation
         float yaw = playerToSpectate->Vehicle->netUpdatedRot[2];
@@ -134,7 +138,6 @@ void spectate(Player * currentPlayer, Player * playerToSpectate)
             {
                 distance = VEHICLE_DISTANCE[0 + isPassenger];
                 elevation = VEHICLE_ELEVATION[0 + isPassenger];
-
                 if (isPassenger)
                 {
                     yaw = playerToSpectate->Vehicle->netUpdatedPassengerRot[2];
@@ -146,7 +149,6 @@ void spectate(Player * currentPlayer, Player * playerToSpectate)
             {
                 distance = VEHICLE_DISTANCE[2 + isPassenger];
                 elevation = VEHICLE_ELEVATION[2 + isPassenger];
-
                 if (isPassenger)
                 {
                     yaw = playerToSpectate->Vehicle->netUpdatedPassengerRot[2];
@@ -156,7 +158,14 @@ void spectate(Player * currentPlayer, Player * playerToSpectate)
             }
 			case MOBY_ID_TANK:
 			{
-				
+                distance = VEHICLE_DISTANCE[4 + isPassenger];
+                elevation = VEHICLE_ELEVATION[4 + isPassenger];
+                if (isPassenger)
+                {
+                    yaw = playerToSpectate->Vehicle->netUpdatedPassengerRot[2];
+                    pitch = playerToSpectate->Vehicle->netUpdatedPassengerRot[1] + (float)0.08;
+                }
+                break;
 			}
         }
 
