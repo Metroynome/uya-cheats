@@ -308,7 +308,8 @@ void modeInitTarget(SimulatedPlayer_t * sPlayer)
 void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 {
 	VECTOR delta, targetPos;
-	Player* player = (Player*)PLAYER_STRUCT;
+	Player ** players = playerGetAll();
+	Player * player = players[0];
 	if (!sPlayer || !player || !sPlayer->Active)
 		return;
 
@@ -333,7 +334,7 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 	struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
 	int jumping = 0;
 	int Health = ((int)playerGetHealth(sPlayer->Player) <= 0);
-	if (!jumping) {
+	if (playerIsDead(sPlayer->Player)) {
 		pad->btns &= ~PAD_CROSS;
 	}
 }
@@ -401,13 +402,12 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 	// spawn player
 	memcpy(&sPlayer->Pad, players[0]->Paddata, sizeof(struct PAD));
 	
-	char * padrdata = (char*)((u32)sPlayer->Pad.rdata + 0x80);
-	padrdata[7] = 0x7F;
-	padrdata[6] = 0x7F;
-	padrdata[5] = 0x7F;
-	padrdata[4] = 0x7F;
-	padrdata[3] = 0xFF;
-	padrdata[2] = 0xFF;
+	sPlayer->Pad.rdata[7] = 0x7F;
+	sPlayer->Pad.rdata[6] = 0x7F;
+	sPlayer->Pad.rdata[5] = 0x7F;
+	sPlayer->Pad.rdata[4] = 0x7F;
+	sPlayer->Pad.rdata[3] = 0xFF;
+	sPlayer->Pad.rdata[2] = 0xFF;
 	sPlayer->Pad.port = 10;
 	sPlayer->Pad.slot = 10;
 	sPlayer->Pad.id = id;
@@ -487,8 +487,8 @@ void spawnTarget(SimulatedPlayer_t* sPlayer)
 		createSimPlayer(sPlayer, sPlayer->Idx);
 
 	// destroy existing
-	// if (sPlayer->Active)
-	// 	playerSetHealth(sPlayer, 0);
+	if (sPlayer->Active)
+		playerSetHealth(sPlayer->Player, 0);
 
 	// playerRespawn(sPlayer->Player);
 	modeInitTarget(sPlayer);

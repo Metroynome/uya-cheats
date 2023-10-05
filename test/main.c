@@ -61,23 +61,6 @@ void DebugInGame()
     if ((pad->btns & PAD_LEFT) == 0 && Active == 0)
 	{
         Active = 1;
-
-        // WeaponStripMe (Hook: 0x004EF550)
-        // ((void (*)(u32))0x004EF848)(PLAYER_STRUCT);
-
-        // GiveMeRandomWeapons (Hook: 0x004EF56C)
-        //((void (*)(u32, int))0x0050ED38)(PLAYER_STRUCT, 0x3);
-
-        // Give Weapon (Hook: 0x0050EE0C)
-        // - Quick Select Slots get set in order of which weapons are given first.
-        // ((void (*)(u32, int, int))0x0053BD90)((u32)PLAYER_STRUCT + 0x1a40, 0x2, 2);
-        // ((void (*)(u32, int, int))0x0053BD90)((u32)PLAYER_STRUCT + 0x1a40, 0x3, 2);
-        // ((void (*)(u32, int, int))0x0053BD90)((u32)PLAYER_STRUCT + 0x1a40, 0x5, 2);
-
-        // Equip Weapon: (Hook: 0x0050EE2C)
-        // ((void (*)(u32, int))0x0053C2D0)((u32)PLAYER_STRUCT + 0x1a40, 0x2);
-        // - Inside above address: 0x0053C398 (JAL)
-
 		// Swap Teams
 		int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
 		playerSetTeam(player, SetTeam);
@@ -95,9 +78,9 @@ void DebugInGame()
 		// static int Occlusion = (Occlusion == 2) ? 0 : 2;
 		// gfxOcclusion(Occlusion);
 		//spawnPointGetRandom(player, &position, &rotation);
-		// Player ** ps = playerGetAll();
-		// Player * p = ps[1];
-		// playerSetPosRot(player, &p->PlayerPosition, &p->PlayerRotation);
+		Player ** ps = playerGetAll();
+		Player * p = ps[1];
+		playerSetPosRot(player, &p->PlayerPosition, &p->PlayerRotation);
 	}
 	else if((pad->btns & PAD_DOWN) == 0 && Active == 0)
 	{
@@ -112,7 +95,7 @@ void DebugInGame()
 		// ((void (*)(int, int, int))0x0053FC28)(0, 10, 0x1f0);
 
 		// ((int (*)(int, int, int, char *, int))0x00460a70)(1, 1, 0x80ffffff, "TESTING", -1);
-		internal_wadGetSectors(0x53e, 1, 0x00269600);
+		internal_wadGetSectors(0x543, 1, 0x00269600);
 	}
 	else if ((pad->btns & PAD_R3) == 0 && Active == 0)
 	{
@@ -243,27 +226,27 @@ void hideRadarBlips(void)
 
 }
 
-int patchUnkick_Logic(u32 a0, int a1)
-{
-	int i;
-	GameSettings * gs = gameGetSettings();
-	if (!gs) {
-		int clientId = gameGetMyClientId();
-		int popup = uiGetActiveSubPointer(UIP_UNK_POPUP);
-		for (i = 1; i < GAME_MAX_PLAYERS; ++i) {
-			if (gs->PlayerClients[i] == clientId && gs->PlayerStates[i] == 5) {
-				return ((int (*)(u32, int, int, int))0x006c0c60)(a0, 1, 0, 0x1600);
-				// if (popup != 0 && *(u32*)((u32)popup + 0x32c) != 0x64656B63) {
-			}
-		}
-	}
-	return ((int (*)(u32, int))0x006bec18)(a0, a1);
-}
+// int patchUnkick_Logic(u32 a0, int a1)
+// {
+// 	int i;
+// 	GameSettings * gs = gameGetSettings();
+// 	if (!gs) {
+// 		int clientId = gameGetMyClientId();
+// 		int popup = uiGetActiveSubPointer(UIP_UNK_POPUP);
+// 		for (i = 1; i < GAME_MAX_PLAYERS; ++i) {
+// 			if (gs->PlayerClients[i] == clientId && gs->PlayerStates[i] == 5) {
+// 				return ((int (*)(u32, int, int, int))0x006c0c60)(a0, 1, 0, 0x1600);
+// 				// if (popup != 0 && *(u32*)((u32)popup + 0x32c) != 0x64656B63) {
+// 			}
+// 		}
+// 	}
+// 	return ((int (*)(u32, int))0x006bec18)(a0, a1);
+// }
 
-void patchUnkick(void)
-{
-	HOOK_JAL(0x00683a10, &patchUnkick_Logic);
-}
+// void patchUnkick(void)
+// {
+// 	HOOK_JAL(0x00683a10, &patchUnkick_Logic);
+// }
 
 
 int main()
@@ -297,7 +280,7 @@ int main()
 		// *(u32*)0x00539258 = 0x240203E8;
 		// *(u32*)0x005392D8 = 0x240203E8;
 
-		Allv2();
+		// Allv2();
 
 		// printf("\nstickRawAngle: %x", (u32)((u32)&p->stickRawAngle - (u32)PLAYER_STRUCT));
 		// printf("\npnetplayer: %x", (u32)((u32)&p->pNetPlayer - (u32)PLAYER_STRUCT));
@@ -322,7 +305,8 @@ int main()
 		DebugInMenus();
 	}
 	
-	// StartBots();
+	StartBots();
+	StartSpectate();
 
 	uyaPostUpdate();
     return 0;
