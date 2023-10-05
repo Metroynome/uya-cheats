@@ -98,10 +98,23 @@ Player* playerGetFromSlot_Hook(int i)
 
 void enableSpectate(Player * player, struct PlayerSpectateData * data)
 {
-	if (GetAddress(&vaGetMissionDefHook)) {
-		u32 hookv = 0x0C000000 | ((u32)&playerGetFromSlot_Hook >> 2);
-		*(u32*)GetAddress(&vaGetMissionDefHook) = hookv;
-	}
+	// if (GetAddress(&vaGetMissionDefHook)) {
+	// 	u32 hookv = 0x0C000000 | ((u32)&playerGetFromSlot_Hook >> 2);
+	// 	*(u32*)GetAddress(&vaGetMissionDefHook) = hookv;
+	// 	*(u32*)0x004CC030 = hookv;
+	// 	*(u32*)0x00547F3C = hookv;
+	// 	*(u32*)0x0048DCA8 = hookv;
+	// 	*(u32*)0x003D6344 = hookv;
+	// 	*(u32*)0x004C1880 = hookv;
+	// 	*(u32*)0x004D5FFC = hookv;
+	// 	*(u32*)0x004D2274 = hookv;
+	// 	*(u32*)0x004B1BAC = hookv;
+	// 	*(u32*)0x00545C0C = hookv;
+	// 	*(u32*)0x004D69A8 = hookv;
+	// 	*(u32*)0x004D7518 = hookv;
+	// 	*(u32*)0x004EC8A0 = hookv;
+	// 	*(u32*)0x00545C0C = hookv;
+	// }
 
     // Fixes void fall bug
     // *((u8*)0x00171DE0 + player->PlayerId) = 1;
