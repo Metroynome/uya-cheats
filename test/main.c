@@ -94,8 +94,26 @@ void DebugInGame()
 		// ((void (*)(u32, u32, int, u32))0x004A3B70)(-1, 0x00248B38, 0x1f0, 0x00248A38);
 		// ((void (*)(int, int, int))0x0053FC28)(0, 10, 0x1f0);
 
-		// ((int (*)(int, int, int, char *, int))0x00460a70)(1, 1, 0x80ffffff, "TESTING", -1);
-		internal_wadGetSectors(0x543, 1, 0x00269600);
+		// uiShowPopup(player, "HELLO MOMMY", 5);
+		((void (*)())0x004661d0)();
+		// FontWindow *buf;
+		// buf->win_top = 0x87;
+		// buf->win_bot = 0x1d;
+		// buf->win_left = 0xce;
+		// buf->win_right = 0x174;
+		// buf->text_x = 1;
+		// buf->text_y = 1;
+		// buf->max_width = 0;
+		// buf->max_height = 0;
+		// buf->line_spacing = 0;
+		// buf->flags = 0;
+		// buf->sub_pixel_x = 0;
+		// buf->sub_pixel_y = 0;
+		// buf->drop_shadow_offset_x = 2;
+		// buf->drop_shadow_offset_y = 2;
+		// SetFont
+		// ((void (*)(int))0x0045dc68)(1);
+		// ((void (*)(float, float, int, int, const char*, int, int))0x0045f530)(0x3f800000,0x3f800000,&buf,0x8066ccff,"TESTING BOXY",0xffffffffffffffff,0x80000000);
 	}
 	else if ((pad->btns & PAD_R3) == 0 && Active == 0)
 	{

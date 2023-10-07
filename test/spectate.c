@@ -8,12 +8,9 @@
 #include <libuya/gamesettings.h>
 #include <libuya/player.h>
 #include <libuya/camera.h>
-#include <libuya/weapon.h>
-#include <libuya/sha1.h>
 #include <libuya/ui.h>
 #include <libuya/stdio.h>
 #include <libuya/graphics.h>
-#include <libuya/net.h>
 #include <libuya/pad.h>
 #include <libuya/uya.h>
 #include <libuya/utils.h>
@@ -279,7 +276,7 @@ void Init(void)
     InitSpectate = 1;
 }
 
-void StartSpectate(void)
+void runSpectate(void)
 {
 	GameSettings * gameSettings = gameGetSettings();
 	Player ** players = playerGetAll();
@@ -317,7 +314,7 @@ void StartSpectate(void)
 					// Show help message when player dies
 					if (!spectateData->HasShownEnterMsg) {
 						spectateData->HasShownEnterMsg = 1;
-						// uiShowHelpPopup(player->fps.Vars.cam_slot, "Press \x13 to enter spectate mode.", 5 * 30);
+						uiShowPopup(player, "Press \x13 to enter spectate mode.", 5);
 					}
 
 					// When the player presses square and spectate isn't already enabled. Try to enable it.
@@ -350,7 +347,7 @@ void StartSpectate(void)
 					if (!spectateData->HasShownNavMsg) 
 					{
 						spectateData->HasShownNavMsg = 1;
-						// uiShowHelpPopup(player->fps.Vars.cam_slot, "Use \x14 and \x15 to navigate between players.", 10 * 30);
+						uiShowPopup(player, "Use \x14 and \x15 to navigate between players.", 5);
 					}
 				
 					// If the currently spectated player becomes null, we move forward to the next player            
