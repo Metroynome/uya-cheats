@@ -28,12 +28,14 @@ extern VariableAddress_t vaGiveWeaponFunc;
 extern VariableAddress_t vaPlayerObfuscateAddr;
 extern VariableAddress_t vaPlayerObfuscateWeaponAddr;
 
+char Teams[8];
 short PlayerKills[GAME_MAX_PLAYERS];
 short PlayerDeaths[GAME_MAX_PLAYERS];
 
 VECTOR position;
 VECTOR rotation;
 
+static int SPRITE_ME = 0;
 int enableFpsCounter = 1;
 float lastFps = 0;
 int renderTimeMs = 0;
@@ -202,7 +204,7 @@ void InfiniteHealthMoonjump(void)
         	playerSetHealth(player, 15);
 
         if (Joker == 0xBFFF)
-            (float)player->Velocity[2] = 0.125;
+            (float)player->move.behavior[2] = 0.125;
     }
 }
 
@@ -239,32 +241,194 @@ void Allv2()
 	playerGiveWeapon(PLAYER_STRUCT, WEAPON_ID_HOLO);
 }
 
-void hideRadarBlips(void)
+void Test_Sprites(float x, float y, float scale)
 {
+	float small = scale * 0.75;
+	float delta = (scale - small) / 2;
 
+	gfxSetupGifPaging(0);
+	u64 dreadzoneSprite = gfxGetFrameTex(SPRITE_ME);
+	// gfxDrawSprite(x+2, y+2, scale, scale, 0, 0, 32, 32, 0x40000000, dreadzoneSprite);
+	gfxDrawSprite(x,   y,   scale, scale, 0, 0, 32, 32, 0x80C0C0C0, dreadzoneSprite);
+	gfxDrawSprite(x+delta, y+delta, small, small, 0, 0, 32, 32, 0x80000040, dreadzoneSprite);
+	gfxDoGifPaging();
 }
 
-// int patchUnkick_Logic(u32 a0, int a1)
-// {
-// 	int i;
-// 	GameSettings * gs = gameGetSettings();
-// 	if (!gs) {
-// 		int clientId = gameGetMyClientId();
-// 		int popup = uiGetActiveSubPointer(UIP_UNK_POPUP);
-// 		for (i = 1; i < GAME_MAX_PLAYERS; ++i) {
-// 			if (gs->PlayerClients[i] == clientId && gs->PlayerStates[i] == 5) {
-// 				return ((int (*)(u32, int, int, int))0x006c0c60)(a0, 1, 0, 0x1600);
-// 				// if (popup != 0 && *(u32*)((u32)popup + 0x32c) != 0x64656B63) {
-// 			}
-// 		}
-// 	}
-// 	return ((int (*)(u32, int))0x006bec18)(a0, a1);
-// }
+void drawEffectQuad(VECTOR position, int texId, float scale)
+{
+	struct QuadDef quad;
+	MATRIX m2;
+	VECTOR t;
+	VECTOR pTL = {0.5,0,0.5,1};
+	VECTOR pTR = {-0.5,0,0.5,1};
+	VECTOR pBL = {0.5,0,-0.5,1};
+	VECTOR pBR = {-0.5,0,-0.5,1};
 
-// void patchUnkick(void)
-// {
-// 	HOOK_JAL(0x00683a10, &patchUnkick_Logic);
-// }
+	// determine color
+	u32 color = 0x80FFFFFF;
+
+	// set draw args
+	matrix_unit(m2);
+
+	// init
+	gfxResetQuad(&quad);
+
+	// color of each corner?
+	vector_copy(quad.VertexPositions[0], pTL);
+	vector_copy(quad.VertexPositions[1], pTR);
+	vector_copy(quad.VertexPositions[2], pBL);
+	vector_copy(quad.VertexPositions[3], pBR);
+	quad.VertexColors[0] = quad.VertexColors[1] = quad.VertexColors[2] = quad.VertexColors[3] = color;
+	quad.VertexUVs[0] = (struct UV){0,0};
+	quad.VertexUVs[1] = (struct UV){1,0};
+	quad.VertexUVs[2] = (struct UV){0,1};
+	quad.VertexUVs[3] = (struct UV){1,1};
+	quad.Clamp = 0;
+	quad.Tex0 = gfxGetEffectTex(texId, 1);
+	quad.Tex1 = 0xFF9000000260;
+	quad.Alpha = 0x8000000044;
+
+	GameCamera* camera = cameraGetGameCamera(0);
+	if (!camera)
+		return;
+
+	// get forward vector
+	vector_subtract(t, camera->pos, position);
+	t[2] = 0;
+	vector_normalize(&m2[4], t);
+
+	// up vector
+	m2[8 + 2] = 1;
+
+	// right vector
+	vector_outerproduct(&m2[0], &m2[4], &m2[8]);
+
+	t[0] = t[1] = t[2] = scale;
+	t[3] = 1;
+	matrix_scale(m2, m2, t);
+
+	// position
+	memcpy(&m2[12], position, sizeof(VECTOR));
+
+	// draw
+	gfxDrawQuad((void*)0x00222590, &quad, m2, 1);
+}
+
+void disableRespawning(void)
+{
+    VariableAddress_t vaDM_RespawnUpdater = {
+#if UYA_PAL
+        .Lobby = 0,
+        .Bakisi = 0x004b21f4,
+        .Hoven = 0x004b430c,
+        .OutpostX12 = 0x004a9be4,
+        .KorgonOutpost = 0x004a737c,
+        .Metropolis = 0x004a66cc,
+        .BlackwaterCity = 0x004a3f64,
+        .CommandCenter = 0x004a3f5c,
+        .BlackwaterDocks = 0x004a67dc,
+        .AquatosSewers = 0x004a5adc,
+        .MarcadiaPalace = 0x004a545c,
+#else
+        .Lobby = 0,
+        .Bakisi = 0x004afca4,
+        .Hoven = 0x004b1cfc,
+        .OutpostX12 = 0x004a7614,
+        .KorgonOutpost = 0x004a4e2c,
+        .Metropolis = 0x004a417c,
+        .BlackwaterCity = 0x004a1994,
+        .CommandCenter = 0x004a1b4c,
+        .BlackwaterDocks = 0x004a438c,
+        .AquatosSewers = 0x004a36cc,
+        .MarcadiaPalace = 0x004a300c,
+#endif
+    };
+	// Disable Timer and respawn text.
+    int RespawnUpdater = GetAddress(&vaDM_RespawnUpdater);
+    if (*(u32*)RespawnUpdater != 0)
+        *(u32*)RespawnUpdater = 0;
+
+	// Disable Respawn Function
+	int RespawnFunc = GetAddress(&vaPlayerRespawnFunc);
+    if (*(u32*)RespawnFunc != 0)
+	{
+		*(u32*)RespawnFunc = 0x03e00008;
+        *(u32*)(RespawnFunc + 0x4) = 0;
+	}
+}
+
+void survivor(void)
+{
+	disableRespawning();
+
+    static int DeadPlayers = 0;
+	static int TeamCount = 0;
+    int i;
+	Player ** players = playerGetAll();
+	GameData * gameData = gameGetData();
+    GameSettings * gameSettings = gameGetSettings();
+	GameOptions * gameOptions = gameGetOptions();
+	int teams = gameOptions->GameFlags.MultiplayerGameFlags.Teams;
+    int playerCount = gameSettings->PlayerCount;
+	if (teams) {
+		if (!TeamCount) {
+			for (i = 0; i < playerCount; ++i) {
+				if (!players[i])
+					continue;
+
+				++Teams[players[i]->mpTeam];
+				++TeamCount;
+			}
+		}
+		for (i = 0; i < playerCount; ++i) {
+			if (!players[i])
+				continue;
+					
+		    // Save current deaths for all players, and how many players have died.
+			if (gameData->PlayerStats[i].Deaths > PlayerDeaths[i]) {
+				PlayerDeaths[i] = gameData->PlayerStats[i].Deaths;
+				// Subtract player from their team.
+				--Teams[players[i]->mpTeam];
+				// if the team of the player who died noe equals zero, subject team coutn.
+				if (Teams[players[i]->mpTeam] == 0)
+					--TeamCount;
+			}
+			// If only one player in game, don't let game end until they die.
+			if (playerCount == 1 && TeamCount == 0) {
+				gameData->TimeEnd = 0;
+				gameData->WinningTeam = i;
+			}
+			// if only one team remains
+			else if (playerCount > 1 && TeamCount == 1 && Teams[i] != 0) {
+				gameData->TimeEnd = 0;
+                gameData->WinningTeam = i;
+			}
+		}
+	}
+	else {
+		for (i = 0; i < (playerCount - 1); ++i) {
+			// Save current deaths for all players, and how many players have died.
+			if (gameData->PlayerStats[i].Deaths > PlayerDeaths[i]) {
+				PlayerDeaths[i] = gameData->PlayerStats[i].Deaths;
+				++DeadPlayers;
+			}
+
+			// If only one player in game, don't let game end until they die.
+			if (playerCount == 1 && DeadPlayers == 1) {
+				gameData->TimeEnd = 0;
+				gameData->WinningTeam = i;
+			}
+			// if player count is greater than 1, and Dead Players == Player Count - 1
+			else if (playerCount > 1 && DeadPlayers == (playerCount - 1)) {
+				// Check to see who has not died
+				if (gameData->PlayerStats[i].Deaths == 0) {
+					gameData->TimeEnd = 0;
+					gameData->WinningTeam = i;
+				}
+			}
+		}
+	}
+}
 
 
 int main()
@@ -293,6 +457,8 @@ int main()
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 
+		playerSizeLogic();
+
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
 		// *(u32*)0x00539258 = 0x240203E8;
@@ -300,7 +466,9 @@ int main()
 
 		// Allv2();
 
-		// printf("\nstickRawAngle: %x", (u32)((u32)&p->stickRawAngle - (u32)PLAYER_STRUCT));
+		// Test_Sprites(SCREEN_WIDTH * 0.3, SCREEN_HEIGHT * .50, 100);
+
+		// printf("\nfireDir: %x", (u32)((u32)&p->fireDir - (u32)PLAYER_STRUCT));
 		// printf("\npnetplayer: %x", (u32)((u32)&p->pNetPlayer - (u32)PLAYER_STRUCT));
 		// float x = SCREEN_WIDTH * 0.3;
 		// float y = SCREEN_HEIGHT * 0.85;
@@ -319,12 +487,11 @@ int main()
 		// // p->fps.Vars.CameraPitch.strafe_tilt_factor = high;
 		// p->fps.Vars.CameraPitch.max_target_angle = high;
     } else {
-		// patchUnkick();
 		DebugInMenus();
 	}
-	
-	StartBots();
-	StartSpectate();
+
+	// StartBots();
+	// runSpectate();
 
 	uyaPostUpdate();
     return 0;

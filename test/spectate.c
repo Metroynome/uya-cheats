@@ -162,7 +162,7 @@ void spectate(Player * currentPlayer, Player * playerToSpectate)
 
     if (playerToSpectate->Vehicle)
     {
-        Moby * vehicleMoby = playerToSpectate->Vehicle->pMoby;
+        struct Moby * vehicleMoby = playerToSpectate->Vehicle->pMoby;
         int isPassenger = playerToSpectate->Vehicle->pPassenger == playerToSpectate;
         // cameraT = 1 - powf(MATH_E, -(isPassenger ? CAMERA_ROTATION_SHARPNESS : VEHICLE_CAMERA_ROTATION_SHARPNESS) * MATH_DT);
 
