@@ -430,6 +430,28 @@ void survivor(void)
 	}
 }
 
+void patchDeathBarrierBug(void)
+{
+	int i;
+	// Grab All Players
+	Player** players = playerGetAll();
+	// Cycle through all
+	for (i = 0; i < players[i]; ++i) {
+		Player* player = players[i];
+		// if player is local
+		if (player && playerIsLocal(player)) {
+			float deathbarrier = gameGetDeathHeight();
+			float pY = player->PlayerPosition[2];
+			DPRINTF("deathheight: %d\nplayery: %d\ninbasehack: %d\n", (int)deathbarrier, (int)pY, player->InBaseHack);
+			// if player is above death barrier and inBaseHack equals 1.
+			if (player->InBaseHack && deathbarrier < pY) {
+				player->InBaseHack = 0;
+			} else if (!player->InBaseHack && deathbarrier > pY) {
+				player->InBaseHack = 1;
+			}
+		}
+	}
+}
 
 int main()
 {
@@ -457,7 +479,8 @@ int main()
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 
-		playerSizeLogic();
+		// playerSizeLogic();
+		patchDeathBarrierBug();
 
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
@@ -469,7 +492,9 @@ int main()
 		// Test_Sprites(SCREEN_WIDTH * 0.3, SCREEN_HEIGHT * .50, 100);
 
 		// printf("\nfireDir: %x", (u32)((u32)&p->fireDir - (u32)PLAYER_STRUCT));
+		// printf("\nweaponPosRec: %x", (u32)((u32)&p->weaponPosRec - (u32)PLAYER_STRUCT));
 		// printf("\npnetplayer: %x", (u32)((u32)&p->pNetPlayer - (u32)PLAYER_STRUCT));
+
 		// float x = SCREEN_WIDTH * 0.3;
 		// float y = SCREEN_HEIGHT * 0.85;
 		// gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, 4);

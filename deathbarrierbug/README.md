@@ -1,2 +1,0 @@
-# fix death barrier bug
-This fixes the bug where when wrenching before being fully teleporting, the game thinks you are lower than the death barrier, thus lets you be able to fall off the ledge into the opposing base.

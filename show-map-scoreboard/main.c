@@ -19,11 +19,16 @@
 
 void InfiniteChargeboot(void)
 {
-	Player * player = (Player*)PLAYER_STRUCT;
-	PadButtonStatus * pad = (PadButtonStatus*)0x00225980;
-	if (player->IsChargebooting == 1 && (pad->btns & PAD_R2) == 0 && player->StateTimer > 55)
+	int i;
+	Player ** players = playerGetAll();
+	for (i = 0; i < GAME_MAX_PLAYERS; ++i)
 	{
-		player->StateTimer = 55;
+		Player * player = players[i];
+		if (!player)
+			continue;
+
+		if (player->timers.IsChargebooting == 1 && playerPadGetButton(player, PAD_R2) > 0 && player->timers.state > 55)
+			player->timers.state = 55;
 	}
 }
 
@@ -43,7 +48,7 @@ void InfiniteHealthMoonjump(void)
         	playerSetHealth(player, 15);
 
         if (Joker == 0xBFFF)
-            (float)player->Velocity[2] = 0.125;
+            (float)player->move.behavior[2] = 0.125;
     }
 }
 
@@ -64,30 +69,8 @@ void Debug()
     if ((pad->btns & PAD_LEFT) == 0 && Active == 0)
 	{
         Active = 1;
-
-        // WeaponStripMe (Hook: 0x004EF550)
-        // ((void (*)(u32))0x004EF848)(PLAYER_STRUCT);
-
-        // GiveMeRandomWeapons (Hook: 0x004EF56C)
-        //((void (*)(u32, int))0x0050ED38)(PLAYER_STRUCT, 0x3);
-
-        // Give Weapon (Hook: 0x0050EE0C)
-        // - Quick Select Slots get set in order of which weapons are given first.
-        // ((void (*)(u32, int, int))0x0053BD90)((u32)PLAYER_STRUCT + 0x1a40, 0x2, 2);
-        // ((void (*)(u32, int, int))0x0053BD90)((u32)PLAYER_STRUCT + 0x1a40, 0x3, 2);
-        // ((void (*)(u32, int, int))0x0053BD90)((u32)PLAYER_STRUCT + 0x1a40, 0x5, 2);
-
-        // Equip Weapon: (Hook: 0x0050EE2C)
-        // ((void (*)(u32, int))0x0053C2D0)((u32)PLAYER_STRUCT + 0x1a40, 0x2);
-        // - Inside above address: 0x0053C398 (JAL)
-
-		// Respawn Function
-		//((void (*)(u32))0x004EF510)(PLAYER_STRUCT);
-		// Remove save health to tnw player
-		//*(u32*)0x004EF79C = 0;
-
 		// Swap Teams (blue <-> red)
-		player->Team = !player->Team;
+		player->mpTeam = !player->mpTeam;
 
 	}
     else if ((pad->btns & PAD_RIGHT) == 0 && Active == 0)
@@ -104,8 +87,7 @@ void Debug()
 	}
 	else if((pad->btns & PAD_DOWN) == 0 && Active == 0)
 	{
-		// Set Gattling Turret Health to 1.
-		DEBUGsetGattlingTurretHealth();
+		Active = 1;
 	}
     if (!(pad->btns & PAD_LEFT) == 0 && !(pad->btns & PAD_RIGHT) == 0 && !(pad->btns & PAD_UP) == 0 && !(pad->btns & PAD_DOWN) == 0)
     {
@@ -135,14 +117,14 @@ void toggleMapScoreboard(int a0, int toggle)
 	{
 		toggle = 0;
 	}
-	((void (*)(int, int))0x0053FB90)(a0, toggle);
+	((void (*)(int, int))0x00548170)(a0, toggle);
 }
 void mapAndScoreboard_check_negative(int a0, int a1, int a2)
 {
 	if (ToggleMapScoreboard == -1)
 		return;
 	
-	((void (*)(int, int, int))0x004A6AC8)(a0, a1, a2);
+	((void (*)(int, int, int))0x004af140)(a0, a1, a2);
 }
 int mapAndScoreboard_hook(int a0, int a1)
 {
@@ -151,9 +133,9 @@ int mapAndScoreboard_hook(int a0, int a1)
 	if (SecondPass)
 	{
 		// Patch DM Func: Scoreboard or Map Check:
-		*(u32*)0x004A3DD8 = 0x10000007;
+		*(u32*)0x004ac468 = 0x10000007;
 		// Patch Seige/CTF Func: Scoreboard or Map Check:
-		*(u32*)0x004A6B08 = 0x10000007;
+		*(u32*)0x004af198 = 0x10000007;
 
 		return ToggleMapScoreboard;
 	}
@@ -183,15 +165,15 @@ int mapAndScoreboard_hook(int a0, int a1)
 void mapAndScoreboardBtns(void)
 {
 	// hook the show/hide function of the map.
-	HOOK_JAL(0x0053D214, &toggleMapScoreboard);
+	HOOK_JAL(0x005457f4, &toggleMapScoreboard);
 	// hook into loading of the select button if pressed
-	HOOK_JAL(0x0053D224, &mapAndScoreboard_hook);
+	HOOK_JAL(0x00545804, &mapAndScoreboard_hook);
 	// hook into Siege/CTF Map/Gamemode Check
 	// HOOK_JAL(0x0053FBA4, &mapAndScoreboard_hook);
 	// hook into DM Map/Gamemode Check
-	HOOK_JAL(0x0053FC3C, &mapAndScoreboard_hook);
+	HOOK_JAL(0x00548184, &mapAndScoreboard_hook);
 	// hook into DM scoreboard
-	HOOK_JAL(0x0053FC4C, &mapAndScoreboard_check_negative);
+	HOOK_JAL(0x00548194, &mapAndScoreboard_check_negative);
 }
 
 
