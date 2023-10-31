@@ -168,7 +168,7 @@ void gameStart(struct GameModule * module, PatchConfig_t * config, PatchGameConf
 {
 	GameSettings * gameSettings = gameGetSettings();
 	Player ** players = playerGetAll();
-	Player * localPlayer = (Player*)0x00347AA0;
+	Player * localPlayer = (Player*)PLAYER_STRUCT;
 	GameData * gameData = gameGetData();
 	int i;
 
