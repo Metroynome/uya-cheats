@@ -36,16 +36,7 @@ VECTOR position;
 VECTOR rotation;
 
 static int SPRITE_ME = 0;
-int enableFpsCounter = 1;
-float lastFps = 0;
-int renderTimeMs = 0;
-float averageRenderTimeMs = 0;
-int updateTimeMs = 0;
-float averageUpdateTimeMs = 0;
 int playerFov = 5;
-int fovChange_Hook = 0;
-int fovChange_Func = 0;
-int VampireHeal[] = {3.78, 7, 12, 15};
 
 void DebugInGame()
 {
@@ -91,36 +82,18 @@ void DebugInGame()
 	}
 	else if ((pad->btns & PAD_L3) == 0 && Active == 0)
 	{
-		// Show Map
-		// This one doesn't update until select button map is updated.
-		// ((void (*)(u32, u32, int, u32))0x004A3B70)(-1, 0x00248B38, 0x1f0, 0x00248A38);
-		// ((void (*)(int, int, int))0x0053FC28)(0, 10, 0x1f0);
+		Active = 1;
+		static int map = 1;
+		((void (*)(int, int))0x004ac410)(0, map);
+		map = !map;
 
-		// uiShowPopup(player, "HELLO MOMMY", 5);
-		((void (*)())0x004661d0)();
-		// FontWindow *buf;
-		// buf->win_top = 0x87;
-		// buf->win_bot = 0x1d;
-		// buf->win_left = 0xce;
-		// buf->win_right = 0x174;
-		// buf->text_x = 1;
-		// buf->text_y = 1;
-		// buf->max_width = 0;
-		// buf->max_height = 0;
-		// buf->line_spacing = 0;
-		// buf->flags = 0;
-		// buf->sub_pixel_x = 0;
-		// buf->sub_pixel_y = 0;
-		// buf->drop_shadow_offset_x = 2;
-		// buf->drop_shadow_offset_y = 2;
-		// SetFont
-		// ((void (*)(int))0x0045dc68)(1);
-		// ((void (*)(float, float, int, int, const char*, int, int))0x0045f530)(0x3f800000,0x3f800000,&buf,0x8066ccff,"TESTING BOXY",0xffffffffffffffff,0x80000000);
 	}
 	else if ((pad->btns & PAD_R3) == 0 && Active == 0)
 	{
-		// Show Scoreboard
-		// ((void (*)(int))0x004A3B70)(-1);
+		Active = 1;
+		static int score = 1;
+		((void (*)(int, int))0x004af140)(0, score);
+		score = !score;
 	}
     if (!(pad->btns & PAD_LEFT) == 0 && !(pad->btns & PAD_RIGHT) == 0 && !(pad->btns & PAD_UP) == 0 && !(pad->btns & PAD_DOWN) == 0 && !(pad->btns & PAD_L3) == 0 && !(pad->btns & PAD_R3) == 0)
     {
@@ -148,11 +121,6 @@ void DebugInMenus(void)
 	else if ((pad->btns & PAD_UP) == 0 && Active == 0)
 	{
 		Active = 1;
-		// kick
-		// 6bec18 jal v0
-		// ((int (*)(int, int, int, int))0x006c0c60)(, 1, 0, 0x1600);
-		// leave game
-		// ((int (*)(int, int, int, int))0x006c0c60)(, 0, 1, -1);
 	}
 	else if((pad->btns & PAD_DOWN) == 0 && Active == 0)
 	{
@@ -161,7 +129,6 @@ void DebugInMenus(void)
 	else if ((pad->btns & PAD_L3) == 0 && Active == 0)
 	{
 		Active = 1;
-		// wad, 1, stack
 	}
 	else if ((pad->btns & PAD_R3) == 0 && Active == 0)
 	{
@@ -228,18 +195,6 @@ void DEBUGsetGattlingTurretHealth(void)
 // 	weapon[WEAPON_ID_FLUX].damage2 = weapon[WEAPON_ID_FLUX].damage;
 // 	weapon[WEAPON_ID_FLUX_V2].damage2 = weapon[WEAPON_ID_FLUX_V2].damage;
 // }
-
-void Allv2()
-{
-	int i;
-	// Give all weapons but Holos, and upgrade.
-	for (i = 1; i < 10; ++i) {
-		playerGiveWeapon(PLAYER_STRUCT, i);
-		playerGiveWeaponUpgrade(PLAYER_STRUCT, i);
-	};
-	// give holo
-	playerGiveWeapon(PLAYER_STRUCT, WEAPON_ID_HOLO);
-}
 
 void Test_Sprites(float x, float y, float scale)
 {
@@ -314,143 +269,167 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 	gfxDrawQuad((void*)0x00222590, &quad, m2, 1);
 }
 
-void disableRespawning(void)
+int ping(void)
 {
-    VariableAddress_t vaDM_RespawnUpdater = {
+	static int ping_old = 0;
+	static int myPing = 0;
+	int ping_new = *(int*)0x001d3b5c;
+	if (ping_old != ping_new) {
+		myPing = ping_new - ping_old;
+		ping_old = ping_new;
+	}
+	return myPing;
+}
+
+
+VariableAddress_t vaMapScore_SelectBttn = {
 #if UYA_PAL
-        .Lobby = 0,
-        .Bakisi = 0x004b21f4,
-        .Hoven = 0x004b430c,
-        .OutpostX12 = 0x004a9be4,
-        .KorgonOutpost = 0x004a737c,
-        .Metropolis = 0x004a66cc,
-        .BlackwaterCity = 0x004a3f64,
-        .CommandCenter = 0x004a3f5c,
-        .BlackwaterDocks = 0x004a67dc,
-        .AquatosSewers = 0x004a5adc,
-        .MarcadiaPalace = 0x004a545c,
+    .Lobby = 0,
+    .Bakisi = 0x005480fc,
+    .Hoven = 0x0054a2c4,
+    .OutpostX12 = 0x0053fb9c,
+    .KorgonOutpost = 0x0053d284,
+    .Metropolis = 0x0053c684,
+    .BlackwaterCity = 0x00539e6c,
+    .CommandCenter = 0x005396c4,
+    .BlackwaterDocks = 0x0053bf44,
+    .AquatosSewers = 0x0053b244,
+    .MarcadiaPalace = 0x0053abc4,
 #else
-        .Lobby = 0,
-        .Bakisi = 0x004afca4,
-        .Hoven = 0x004b1cfc,
-        .OutpostX12 = 0x004a7614,
-        .KorgonOutpost = 0x004a4e2c,
-        .Metropolis = 0x004a417c,
-        .BlackwaterCity = 0x004a1994,
-        .CommandCenter = 0x004a1b4c,
-        .BlackwaterDocks = 0x004a438c,
-        .AquatosSewers = 0x004a36cc,
-        .MarcadiaPalace = 0x004a300c,
+    .Lobby = 0,
+    .Bakisi = 0x005457f4,
+    .Hoven = 0x005478fc,
+    .OutpostX12 = 0x0053d214,
+    .KorgonOutpost = 0x0053a97c,
+    .Metropolis = 0x00539d7c,
+    .BlackwaterCity = 0x005374e4,
+    .CommandCenter = 0x00536f14,
+    .BlackwaterDocks = 0x00539754,
+    .AquatosSewers = 0x00538a94,
+    .MarcadiaPalace = 0x005383d4,
 #endif
-    };
-	// Disable Timer and respawn text.
-    int RespawnUpdater = GetAddress(&vaDM_RespawnUpdater);
-    if (*(u32*)RespawnUpdater != 0)
-        *(u32*)RespawnUpdater = 0;
+};
+VariableAddress_t vaMapScore_SeigeCTFScoreboard_AlwaysRun = {
+#if UYA_PAL
+    .Lobby = 0,
+    .Bakisi = 0,
+    .Hoven = 0,
+    .OutpostX12 = 0,
+    .KorgonOutpost = 0,
+    .Metropolis = 0,
+    .BlackwaterCity = 0,
+    .CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#else
+    .Lobby = 0,
+    .Bakisi = 0x004ac428,
+    .Hoven = 0,
+    .OutpostX12 = 0,
+    .KorgonOutpost = 0,
+    .Metropolis = 0,
+    .BlackwaterCity = 0,
+    .CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#endif
+};
+VariableAddress_t vaMapScore_SeigeCTFMap_AlwaysRun = {
+#if UYA_PAL
+    .Lobby = 0,
+    .Bakisi = 0,
+    .Hoven = 0,
+    .OutpostX12 = 0,
+    .KorgonOutpost = 0,
+    .Metropolis = 0,
+    .BlackwaterCity = 0,
+    .CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#else
+    .Lobby = 0,
+    .Bakisi = 0x004af158,
+    .Hoven = 0,
+    .OutpostX12 = 0,
+    .KorgonOutpost = 0,
+    .Metropolis = 0,
+    .BlackwaterCity = 0,
+    .CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#endif
+};
+VariableAddress_t vaMapScore_ScoreboardToggle = {
+#if UYA_PAL
+    .Lobby = 0,
+    .Bakisi = 0,
+    .Hoven = 0,
+    .OutpostX12 = 0,
+    .KorgonOutpost = 0,
+    .Metropolis = 0,
+    .BlackwaterCity = 0,
+    .CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#else
+    .Lobby = 0,
+    .Bakisi = 0x004af140,
+    .Hoven = 0,
+    .OutpostX12 = 0,
+    .KorgonOutpost = 0,
+    .Metropolis = 0,
+    .BlackwaterCity = 0,
+    .CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#endif
+};
+VariableAddress_t vaMapScore_MapToggle = {
+#if UYA_PAL
+    .Lobby = 0,
+    .Bakisi = 0,
+    .Hoven = 0,
+    .OutpostX12 = 0,
+    .KorgonOutpost = 0,
+    .Metropolis = 0,
+    .BlackwaterCity = 0,
+    .CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#else
+    .Lobby = 0,
+    .Bakisi = 0x004ac410,
+    .Hoven = 0,
+    .OutpostX12 = 0,
+    .KorgonOutpost = 0,
+    .Metropolis = 0,
+    .BlackwaterCity = 0,
+    .CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#endif
+};
 
-	// Disable Respawn Function
-	int RespawnFunc = GetAddress(&vaPlayerRespawnFunc);
-    if (*(u32*)RespawnFunc != 0)
-	{
-		*(u32*)RespawnFunc = 0x03e00008;
-        *(u32*)(RespawnFunc + 0x4) = 0;
-	}
-}
-
-void survivor(void)
+void showMapAndScore(void)
 {
-	disableRespawning();
+	// Top Function: map/scoreboard (Seige/CTF)
+	// ((void (*)(int, int))0x00548208)(0, 10);
 
-    static int DeadPlayers = 0;
-	static int TeamCount = 0;
-    int i;
-	Player ** players = playerGetAll();
-	GameData * gameData = gameGetData();
-    GameSettings * gameSettings = gameGetSettings();
-	GameOptions * gameOptions = gameGetOptions();
-	int teams = gameOptions->GameFlags.MultiplayerGameFlags.Teams;
-    int playerCount = gameSettings->PlayerCount;
-	if (teams) {
-		if (!TeamCount) {
-			for (i = 0; i < playerCount; ++i) {
-				if (!players[i])
-					continue;
+	// disable regular map/scoreboard toggle (select)
+	*(u32*)GetAddress(&vaMapScore_SelectBttn) = 0;
 
-				++Teams[players[i]->mpTeam];
-				++TeamCount;
-			}
-		}
-		for (i = 0; i < playerCount; ++i) {
-			if (!players[i])
-				continue;
-					
-		    // Save current deaths for all players, and how many players have died.
-			if (gameData->PlayerStats[i].Deaths > PlayerDeaths[i]) {
-				PlayerDeaths[i] = gameData->PlayerStats[i].Deaths;
-				// Subtract player from their team.
-				--Teams[players[i]->mpTeam];
-				// if the team of the player who died noe equals zero, subject team coutn.
-				if (Teams[players[i]->mpTeam] == 0)
-					--TeamCount;
-			}
-			// If only one player in game, don't let game end until they die.
-			if (playerCount == 1 && TeamCount == 0) {
-				gameData->TimeEnd = 0;
-				gameData->WinningTeam = i;
-			}
-			// if only one team remains
-			else if (playerCount > 1 && TeamCount == 1 && Teams[i] != 0) {
-				gameData->TimeEnd = 0;
-                gameData->WinningTeam = i;
-			}
-		}
-	}
-	else {
-		for (i = 0; i < (playerCount - 1); ++i) {
-			// Save current deaths for all players, and how many players have died.
-			if (gameData->PlayerStats[i].Deaths > PlayerDeaths[i]) {
-				PlayerDeaths[i] = gameData->PlayerStats[i].Deaths;
-				++DeadPlayers;
-			}
-
-			// If only one player in game, don't let game end until they die.
-			if (playerCount == 1 && DeadPlayers == 1) {
-				gameData->TimeEnd = 0;
-				gameData->WinningTeam = i;
-			}
-			// if player count is greater than 1, and Dead Players == Player Count - 1
-			else if (playerCount > 1 && DeadPlayers == (playerCount - 1)) {
-				// Check to see who has not died
-				if (gameData->PlayerStats[i].Deaths == 0) {
-					gameData->TimeEnd = 0;
-					gameData->WinningTeam = i;
-				}
-			}
-		}
-	}
-}
-
-void patchDeathBarrierBug(void)
-{
-	int i;
-	// Grab All Players
-	Player** players = playerGetAll();
-	// Cycle through all
-	for (i = 0; i < players[i]; ++i) {
-		Player* player = players[i];
-		// if player is local
-		if (player && playerIsLocal(player)) {
-			float deathbarrier = gameGetDeathHeight();
-			float pY = player->PlayerPosition[2];
-			DPRINTF("deathheight: %d\nplayery: %d\ninbasehack: %d\n", (int)deathbarrier, (int)pY, player->InBaseHack);
-			// if player is above death barrier and inBaseHack equals 1.
-			if (player->InBaseHack && deathbarrier < pY) {
-				player->InBaseHack = 0;
-			} else if (!player->InBaseHack && deathbarrier > pY) {
-				player->InBaseHack = 1;
-			}
-		}
-	}
+	// Scoreboard (nested) (Seige/CTF)
+	((void (*)(int, int))GetAddress(&vaMapScore_SeigeCTFScoreboard_AlwaysRun))(0, 10);
+	// Map (nested) (Seige/CTF)
+	((void (*)(int, int))GetAddress(&vaMapScore_SeigeCTFMap_AlwaysRun))(0, 10);
 }
 
 int main()
@@ -470,17 +449,21 @@ int main()
 		// gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 0;
 	}
 
+	//int rawrs = ping();
+	//printf("\nping: %d", rawrs);
+
     if (isInGame())
     {
 		Player * p = (Player*)PLAYER_STRUCT;
 		if (!p)
 			return 0;
+	
+		showMapAndScore();
 
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 
 		// playerSizeLogic();
-		patchDeathBarrierBug();
 
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
@@ -492,13 +475,13 @@ int main()
 		// Test_Sprites(SCREEN_WIDTH * 0.3, SCREEN_HEIGHT * .50, 100);
 
 		// printf("\nfireDir: %x", (u32)((u32)&p->fireDir - (u32)PLAYER_STRUCT));
-		// printf("\nweaponPosRec: %x", (u32)((u32)&p->weaponPosRec - (u32)PLAYER_STRUCT));
+		// printf("\nmtxFxActive: %x", (u32)((u32)&p->mtxFxActive - (u32)PLAYER_STRUCT));
 		// printf("\npnetplayer: %x", (u32)((u32)&p->pNetPlayer - (u32)PLAYER_STRUCT));
 
 		// float x = SCREEN_WIDTH * 0.3;
 		// float y = SCREEN_HEIGHT * 0.85;
 		// gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, 4);
-		
+
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
     	DebugInGame();
@@ -515,7 +498,7 @@ int main()
 		DebugInMenus();
 	}
 
-	// StartBots();
+	StartBots();
 	// runSpectate();
 
 	uyaPostUpdate();
