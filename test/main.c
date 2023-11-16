@@ -102,7 +102,7 @@ VariableAddress_t vaMapScore_SeigeCTFMap_AlwaysRun = {
     .MarcadiaPalace = 0x004a24c0,
 #endif
 };
-VariableAddress_t vaMapScore_ScoreboardToggle = {
+VariableAddress_t vaMapScore_MapToggle = {
 #if UYA_PAL
     .Lobby = 0,
     .Bakisi = 0x004ae960,
@@ -117,7 +117,7 @@ VariableAddress_t vaMapScore_ScoreboardToggle = {
     .MarcadiaPalace = 0x004a1bc8,
 #else
     .Lobby = 0,
-    .Bakisi = 0x004af140,
+    .Bakisi = 0x004ac410,
     .Hoven = 0x004ae468,
     .OutpostX12 = 0x004a3d80,
     .KorgonOutpost = 0x004a1598,
@@ -129,7 +129,7 @@ VariableAddress_t vaMapScore_ScoreboardToggle = {
     .MarcadiaPalace = 0x0049f778,
 #endif
 };
-VariableAddress_t vaMapScore_MapToggle = {
+VariableAddress_t vaMapScore_ScoreboardToggle = {
 #if UYA_PAL
     .Lobby = 0,
     .Bakisi = 0x004b1690,
@@ -144,7 +144,7 @@ VariableAddress_t vaMapScore_MapToggle = {
     .MarcadiaPalace = 0x004a48f8,
 #else
     .Lobby = 0,
-    .Bakisi = 0x004ac410,
+    .Bakisi = 0x004af140,
     .Hoven = 0x004b1198,
     .OutpostX12 = 0x004a6ab0,
     .KorgonOutpost = 0x004a42c8,
