@@ -215,7 +215,7 @@ VariableAddress_t vaPadProcessValue = {
 #endif
 };
 
-const int SimPlayerCount = 1;
+const int SimPlayerCount = 3;
 const int TargetTeam = 1; // Red Team
 int Initialized = 0;
 
@@ -339,7 +339,7 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 		pad->btns &= ~PAD_CROSS;
 	}
 	// shoot!
-	pad->btns &= ~PAD_CIRCLE;
+	// pad->btns &= ~PAD_CIRCLE;
 }
 
 //=====================================================

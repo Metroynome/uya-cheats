@@ -48,7 +48,7 @@ void boxUpdate(Moby * moby)
 	if (moby->State == 2)
 		mobyDestroy(moby);
 
-	((void (*)(Moby*))0x004184E0)(moby);
+	((void (*)(Moby*))0x0041e3c8)(moby);
 }
 
 void resetRoundState(void)
