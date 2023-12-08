@@ -19,35 +19,20 @@
 #include <libuya/camera.h>
 #include <libuya/gameplay.h>
 #include <libuya/map.h>
+#include <libuya/collision.h>
+#include <libuya/guber.h>
 
 void StartBots(void);
 
-VariableAddress_t vaCollHotspot = {
-#if UYA_PAL
-    .Lobby = 0,
-    .Bakisi = 0,
-    .Hoven = 0,
-    .OutpostX12 = 0,
-    .KorgonOutpost = 0,
-    .Metropolis = 0,
-    .BlackwaterCity = 0,
-    .CommandCenter = 0,
-    .BlackwaterDocks = 0,
-    .AquatosSewers = 0,
-    .MarcadiaPalace = 0,
-#else
-    .Lobby = 0,
-    .Bakisi = 0x00450578,
-    .Hoven = 0,
-    .OutpostX12 = 0,
-    .KorgonOutpost = 0,
-    .Metropolis = 0,
-    .BlackwaterCity = 0,
-    .CommandCenter = 0,
-    .BlackwaterDocks = 0,
-    .AquatosSewers = 0,
-    .MarcadiaPalace = 0,
-#endif
+#define HBOLT_MOBY_OCLASS			(0x3004)
+#define HBOLT_PICKUP_RADIUS			(3)
+#define HBOLT_PARTICLE_COLOR        (0x00ff608f)
+#define HBOLT_SPRITE_COLOR          (0x00411313)
+#define HBOLT_SCALE                 (1)
+
+struct HBoltPVar {
+	int DestroyAtTime;
+	struct PartInstance* Particles[4];
 };
 
 extern VariableAddress_t vaPlayerRespawnFunc;
@@ -65,7 +50,6 @@ VECTOR position;
 VECTOR rotation;
 
 static int SPRITE_ME = 0;
-int playerFov = 5;
 
 void DebugInGame()
 {
@@ -112,7 +96,7 @@ void DebugInGame()
 	else if ((pad->btns & PAD_L3) == 0 && Active == 0)
 	{
 		Active = 1;
-
+		// ((void (*)(float, float, float))0x0049e2d8)(0, .13, 1);
 	}
 	else if ((pad->btns & PAD_R3) == 0 && Active == 0)
 	{
@@ -304,36 +288,69 @@ int ping(void)
 	return myPing;
 }
 
-int flagIsOnSafeGround(Moby* flagMoby)
+// void CreateParticle(void)
+// {	Moby * p = playerGetFromSlot(0)->PlayerMoby;
+// 	VECTOR v = {2, 2, 2, 2};
+// 	((void (*)(long, int, int, int, int))0x0049fb80)(p, p, v, 0x00246320, 1);
+// }
+
+VariableAddress_t vaSpawnPart_59 = {
+#if UYA_PAL
+    .Lobby = 0,
+    .Bakisi = 0x004a0508,
+    .Hoven = 0x004a2620,
+    .OutpostX12 = 0x00497ef8,
+    .KorgonOutpost = 0x00495690,
+    .Metropolis = 0x004949e0,
+    .BlackwaterCity = 0x00492278,
+    .CommandCenter = 0x00492270,
+    .BlackwaterDocks = 0x00494af0,
+    .AquatosSewers = 0x00493df0,
+    .MarcadiaPalace = 0x00493770,
+#else
+    .Lobby = 0,
+    .Bakisi = 0x0049e150,
+    .Hoven = 0x004a01a8,
+    .OutpostX12 = 0x00495ac0,
+    .KorgonOutpost = 0x004932d8,
+    .Metropolis = 0x00492628,
+    .BlackwaterCity = 0x0048fe40,
+    .CommandCenter = 0x0048fff8,
+    .BlackwaterDocks = 0x00492838,
+    .AquatosSewers = 0x00491b78,
+    .MarcadiaPalace = 0x004914b8,
+#endif
+};
+
+struct PartInstance * scavHuntSpawnParticle(VECTOR position, u32 color, char opacity, int idx)
 {
-	int collhot = ((u32 (*)())GetAddress(&vaCollHotspot))();
-		switch (collhot) {
-		case 0:
-		case 1:
-		case 3:
-		case 5:
-		case 6:
-		case 8:
-		case 11:
-		case 12:
-		case 13:
-			return 0;
-	}
-	return collhot;
+	return ((struct PartInstance* (*)(VECTOR, u32, char, u32, u32, int, int, int, float))GetAddress(&vaSpawnPart_59))(position, color, opacity, 0x35, 1, 2, 0, 0, idx);
 }
 
-void patchFlag(Moby* flagMoby, u64 a1)
+void scavHuntHBoltUpdate(Moby* moby)
 {
-	// call normal flag function
-	((void (*)(Moby*, u64))0x0042fb80)(flagMoby, a1);
+	const float rotSpeeds[] = { 0.05, 0.02, -0.03, -0.1 };
+	const int opacities[] = { 64, 32, 44, 51 };
+	VECTOR t;
+	int i;
+	struct HBoltPVar* pvars = (struct HBoltPVar*)moby->PVar;
+	if (!pvars)
+		return;
 
-	int rawr = flagIsOnSafeGround(flagMoby);
-	printf("\nCollHotspot: %d", rawr);
-	if (!rawr) {
-		// Return to base
-		((void (*)(Moby*, int, int))0x0042f678)(flagMoby, 0, 0xff);
+	// handle particles
+	u32 color = colorLerp(0, HBOLT_PARTICLE_COLOR, 1.0 / 4);
+	color |= 0x80000000;
+	for (i = 0; i < 4; ++i) {
+		struct PartInstance * particle = pvars->Particles[i];
+		if (!particle) {
+			particle = scavHuntSpawnParticle(moby->Position, color, opacities[i], i);
+		}
+
+		// update
+		if (particle) {
+			particle->rot = (int)((gameGetTime() + (i * 100)) / (TIME_SECOND * rotSpeeds[i])) & 0xFF;
+		}
 	}
-
 }
 
 int main()
@@ -348,9 +365,10 @@ int main()
 
 	GameSettings * gameSettings = gameGetSettings();
 	GameOptions * gameOptions = gameGetOptions();
-	if (gameOptions || gameSettings || gameSettings->GameLoadStartTime > 0)
-	{
-		// gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 0;
+	if (gameOptions || gameSettings || gameSettings->GameLoadStartTime > 0) {
+		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 0;
+		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 0;
+		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 0;
 	}
 
 	//int rawrs = ping();
@@ -362,13 +380,10 @@ int main()
 		if (!p)
 			return 0;
 
-		POKE_U32(0x0035264C, &patchFlag); // Red Flag
-		POKE_U32(0x20352630, &patchFlag); // Blud Flag
-
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 
-		// playerSizeLogic();
+		scavHuntHBoltUpdate(p->PlayerMoby);
 
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
@@ -405,6 +420,7 @@ int main()
 
 	// StartBots();
 	// runSpectate();
+	// scavHuntRun();
 
 	uyaPostUpdate();
     return 0;
