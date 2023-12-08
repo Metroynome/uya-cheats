@@ -310,11 +310,11 @@ void scavHuntHBoltPostDraw(Moby* moby)
   color = opacity | (color & HBOLT_SPRITE_COLOR);
   moby->PrimaryColor = color;
 
-  HOOK_JAL(0x005b64dc, 0x004e4d70);
+  HOOK_JAL(0x005b64dc, 0x004e4d70); // (GetEffectTex, GetFrameTex)
   // gfxDrawBillboardQuad?: 0x0045bae0
   gfxDrawBillboardQuad(vector_read(moby->Position), HBOLT_SCALE * 0.6, opacity, 0, -MATH_PI / 2, 3, 1, 0);
   gfxDrawBillboardQuad(vector_read(moby->Position), HBOLT_SCALE * 0.5, color, 0, -MATH_PI / 2, 3, 1, 0);
-  HOOK_JAL(0x005b64dc, 0x004c4200);
+  HOOK_JAL(0x005b64dc, 0x004c4200); // Reset back to regular Data
 }
 
 //--------------------------------------------------------------------------
