@@ -524,15 +524,15 @@ void scavHuntRun(void)
 #endif
 
   // hooks
-  HOOK_JAL(0x00621c7c, &scavHuntOnKillDeathMessage);
+  HOOK_JAL(GetAddress(&vaOnPlayerKill_Hook), &scavHuntOnKillDeathMessage);
 
   // use stats to detect when objective event happens
   static int lastFlagsCaptured = 0;
   static int lastNodesCaptured = 0;
   static int lastNodesSaved = 0;
-  // int flagsCaptured = gameData->PlayerStats.CtfFlagsCaptures[localPlayer->mpIndex];
-  // int nodesCaptured = gameData->PlayerStats.ConquestNodesCaptured[localPlayer->mpIndex];
-  // int nodesSaved = gameData->PlayerStats.ConquestNodeSaves[localPlayer->mpIndex];
+  int flagsCaptured = gameData->PlayerStats.FlagsCaptured[localPlayer->mpIndex];
+  int nodesCaptured = gameData->PlayerStats.NodesCaptured[localPlayer->mpIndex];
+  int nodesSaved = gameData->PlayerStats.NodeSaved[localPlayer->mpIndex];
 
   // decrement cooldown or check for event
   if (scavHuntBoltSpawnCooldown) {
