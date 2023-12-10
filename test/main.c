@@ -24,9 +24,9 @@
 
 void StartBots(void);
 
-#define HBOLT_MOBY_OCLASS			(0x3004)
+#define HBOLT_MOBY_OCLASS			(0x1C0D)
 #define HBOLT_PICKUP_RADIUS			(3)
-#define HBOLT_PARTICLE_COLOR        (0x00ff608f)
+#define HBOLT_PARTICLE_COLOR        (0x0000ffff)
 #define HBOLT_SPRITE_COLOR          (0x00411313)
 #define HBOLT_SCALE                 (1)
 
@@ -96,6 +96,7 @@ void DebugInGame()
 	else if ((pad->btns & PAD_L3) == 0 && Active == 0)
 	{
 		Active = 1;
+		scavHuntSpawnRandomNearPlayer(0);
 		// ((void (*)(float, float, float))0x0049e2d8)(0, .13, 1);
 	}
 	else if ((pad->btns & PAD_R3) == 0 && Active == 0)
@@ -343,7 +344,8 @@ void scavHuntHBoltUpdate(Moby* moby)
 	for (i = 0; i < 4; ++i) {
 		struct PartInstance * particle = pvars->Particles[i];
 		if (!particle) {
-			particle = scavHuntSpawnParticle(moby->Position, color, opacities[i], i);
+			// opacities[i]
+			particle = scavHuntSpawnParticle(moby->Position, color, 100, i);
 		}
 
 		// update
@@ -351,6 +353,71 @@ void scavHuntHBoltUpdate(Moby* moby)
 			particle->rot = (int)((gameGetTime() + (i * 100)) / (TIME_SECOND * rotSpeeds[i])) & 0xFF;
 		}
 	}
+}
+
+void scavHuntSpawn(VECTOR position)
+{
+  Moby* moby = mobySpawn(HBOLT_MOBY_OCLASS, sizeof(struct HBoltPVar));
+  if (!moby) return;
+
+  moby->PUpdate = &scavHuntHBoltUpdate;
+  vector_copy(moby->Position, position);
+  moby->UpdateDist = -1;
+  moby->Drawn = 1;
+  moby->Opacity = 0x80;
+  moby->DrawDist = 0x80;
+  
+	// update pvars
+	struct HBoltPVar* pvars = (struct HBoltPVar*)moby->PVar;
+	// pvars->DestroyAtTime = gameGetTime() + (TIME_SECOND * 30);
+	memset(pvars->Particles, 0, sizeof(pvars->Particles));
+
+	// mobySetState(moby, 0, -1);
+  // scavHuntResetBoltSpawnCooldown();
+  // mobyPlaySoundByClass(0, 0, moby, MOBY_ID_NODE_BASE);
+	DPRINTF("hbolt spawned at %08X destroyAt:%d %04X\n", (u32)moby, pvars->DestroyAtTime, moby->ModeBits);
+}
+
+void scavHuntSpawnRandomNearPosition(VECTOR position)
+{
+  // try 4 times to generate a random point near given position
+  int i = 0;
+  while (i < 4)
+  {
+    // generate random position
+    VECTOR from, to = {0,0,-6,0}, p = {0,0,1,0};
+    float theta = randRadian();
+    float radius = randRange(5, 10);
+    vector_fromyaw(from, theta);
+    vector_scale(from, from, radius);
+    from[2] = 3;
+    vector_add(from, from,  position);
+    vector_add(to, to, from);
+
+    // snap to ground
+    // and check if ground is walkable
+    if (CollLine_Fix(from, to, 0, NULL, NULL)) {
+      int colId = CollHotspot();
+      if (colId == 0xF || colId == 0x7 || colId == 0x9 || colId == 0xA) {
+        vector_add(p, p, CollLine_Fix_GetHitPosition());
+        scavHuntSpawn(p);
+        break;
+      }
+    }
+
+    ++i;
+  }
+}
+
+void scavHuntSpawnRandomNearPlayer(int pIdx)
+{
+	Player** players = playerGetAll();
+	Player* player = players[pIdx];
+	if (!player) return;
+
+	// scavHuntSpawnRandomNearPosition(player->PlayerPosition);
+	scavHuntSpawn(player->PlayerPosition);
+	printf("\nSpawned moby!");
 }
 
 int main()
@@ -383,7 +450,7 @@ int main()
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 
-		scavHuntHBoltUpdate(p->PlayerMoby);
+		// scavHuntHBoltUpdate(p->PlayerMoby);
 
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
