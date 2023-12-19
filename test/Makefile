@@ -3,7 +3,7 @@ EE_BIN_DIR = bin/
 
 EE_ELF = $(EE_BIN_DIR)test.elf
 EE_BIN = $(EE_BIN_DIR)test.bin
-EE_OBJS = functions.o main.o bots.o spectate.o
+EE_OBJS = functions.o main.o bots.o spectate.o scavengerhunt.o
 EE_LIBS = -luyantsc
 #EE_LIBS = -luyapal
 
