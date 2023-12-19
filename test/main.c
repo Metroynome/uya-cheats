@@ -21,14 +21,27 @@
 #include <libuya/map.h>
 #include <libuya/collision.h>
 #include <libuya/guber.h>
+#include <libuya/sound.h>
 
 void StartBots(void);
 
 #define HBOLT_MOBY_OCLASS			(0x1C0D)
 #define HBOLT_PICKUP_RADIUS			(3)
 #define HBOLT_PARTICLE_COLOR        (0x0000ffff)
-#define HBOLT_SPRITE_COLOR          (0x00411313)
+#define HBOLT_SPRITE_COLOR          (0x0013141)
 #define HBOLT_SCALE                 (1)
+
+#define HBOLT_MIN_SPAWN_DELAY_TPS   (60 * 10)
+#define HBOLT_MAX_SPAWN_DELAY_TPS   (60 * 20)
+#define HBOLT_SPAWN_PROBABILITY     (0.25)
+
+float scavHuntSpawnFactor = 1;
+float scavHuntSpawnTimerFactor = 0.5;
+int scavHuntShownPopup = 0;
+int scavHuntHasGotSettings = 0;
+int scavHuntEnabled = 0;
+int scavHuntInitialized = 0;
+int scavHuntBoltSpawnCooldown = 0;
 
 struct HBoltPVar {
 	int DestroyAtTime;
@@ -41,6 +54,8 @@ extern VariableAddress_t vaGameplayFunc;
 extern VariableAddress_t vaGiveWeaponFunc;
 extern VariableAddress_t vaPlayerObfuscateAddr;
 extern VariableAddress_t vaPlayerObfuscateWeaponAddr;
+extern VariableAddress_t vaGetFrameTex;
+extern VariableAddress_t vaGetEffectTex;
 
 char Teams[8];
 short PlayerKills[GAME_MAX_PLAYERS];
@@ -50,6 +65,8 @@ VECTOR position;
 VECTOR rotation;
 
 static int SPRITE_ME = 0;
+static int SOUND_ME = 0;
+static int SOUND_ME_FLAG = 3;
 
 void DebugInGame()
 {
@@ -83,7 +100,7 @@ void DebugInGame()
 		Active = 1;
 		// static int Occlusion = (Occlusion == 2) ? 0 : 2;
 		// gfxOcclusion(Occlusion);
-		//spawnPointGetRandom(player, &position, &rotation);
+		// spawnPointGetRandom(player, &position, &rotation);
 		Player ** ps = playerGetAll();
 		Player * p = ps[1];
 		playerSetPosRot(player, &p->PlayerPosition, &p->PlayerRotation);
@@ -97,7 +114,8 @@ void DebugInGame()
 	{
 		Active = 1;
 		scavHuntSpawnRandomNearPlayer(0);
-		// ((void (*)(float, float, float))0x0049e2d8)(0, .13, 1);
+		// Player * par = playerGetFromSlot(0)->PlayerPosition;
+		// soundPlayByOClass(SOUND_ME_FLAG, 0, par, SOUND_ME);
 	}
 	else if ((pad->btns & PAD_R3) == 0 && Active == 0)
 	{
@@ -289,12 +307,6 @@ int ping(void)
 	return myPing;
 }
 
-// void CreateParticle(void)
-// {	Moby * p = playerGetFromSlot(0)->PlayerMoby;
-// 	VECTOR v = {2, 2, 2, 2};
-// 	((void (*)(long, int, int, int, int))0x0049fb80)(p, p, v, 0x00246320, 1);
-// }
-
 VariableAddress_t vaSpawnPart_59 = {
 #if UYA_PAL
     .Lobby = 0,
@@ -323,13 +335,116 @@ VariableAddress_t vaSpawnPart_59 = {
 #endif
 };
 
+VariableAddress_t vaDeletePart = {
+#if UYA_PAL
+    .Lobby = 0,
+    .Bakisi = 0x00496c58,
+    .Hoven = 0x00498d70,
+    .OutpostX12 = 0x0048e648,
+    .KorgonOutpost = 0x0048bd18,
+    .Metropolis = 0x0048b130,
+    .BlackwaterCity = 0x004889c8,
+    .CommandCenter = 0x004889c0,
+    .BlackwaterDocks = 0x0048b240,
+    .AquatosSewers = 0x0048a540,
+    .MarcadiaPalace = 0x00489ec0,
+#else
+    .Lobby = 0,
+    .Bakisi = 0x00494a60,
+    .Hoven = 0x00496ab8,
+    .OutpostX12 = 0x0048c3d0,
+    .KorgonOutpost = 0x00489b20,
+    .Metropolis = 0x00488f38,
+    .BlackwaterCity = 0x00486750,
+    .CommandCenter = 0x00486908,
+    .BlackwaterDocks = 0x00489148,
+    .AquatosSewers = 0x00488488,
+    .MarcadiaPalace = 0x00487dc8,
+#endif
+};
+
+VariableAddress_t vaReplace_GetEffectTexJAL = {
+#if UYA_PAL
+    .Lobby = 0,
+    .Bakisi = 0x0045b2f0,
+    .Hoven = 0x0045ce70,
+    .OutpostX12 = 0x00453c70,
+    .KorgonOutpost = 0x00451830,
+    .Metropolis = 0x00450b70,
+    .BlackwaterCity = 0x0044e370,
+    .CommandCenter = 0x0044eff0,
+    .BlackwaterDocks = 0x00451870,
+    .AquatosSewers = 0x00450b70,
+    .MarcadiaPalace = 0x004504f0,
+#else
+    .Lobby = 0,
+    .Bakisi = 0x0045a220,
+    .Hoven = 0x0045bce0,
+    .OutpostX12 = 0x00452b20,
+    .KorgonOutpost = 0x00450760,
+    .Metropolis = 0x0044faa0,
+    .BlackwaterCity = 0x0044d220,
+    .CommandCenter = 0x0044e060,
+    .BlackwaterDocks = 0x004508a0,
+    .AquatosSewers = 0x0044fbe0,
+    .MarcadiaPalace = 0x0044f520,
+#endif
+};
+
+void scavHuntResetBoltSpawnCooldown(void)
+{
+  scavHuntBoltSpawnCooldown = randRangeInt(HBOLT_MIN_SPAWN_DELAY_TPS, HBOLT_MAX_SPAWN_DELAY_TPS) / scavHuntSpawnTimerFactor;
+}
+
 struct PartInstance * scavHuntSpawnParticle(VECTOR position, u32 color, char opacity, int idx)
 {
 	return ((struct PartInstance* (*)(VECTOR, u32, char, u32, u32, int, int, int, float))GetAddress(&vaSpawnPart_59))(position, color, opacity, 0x35, 1, 2, 0, 0, idx);
 }
 
+void scavHuntDestroyParticle(struct PartInstance* particle)
+{
+	((void (*)(struct PartInstance*))GetAddress(&vaDeletePart))(particle);
+}
+
+void scavHuntHBoltPostDraw(Moby* moby)
+{
+	printf("\npost draw function");
+	// struct QuadDef quad;
+	// MATRIX m2;
+	// VECTOR t;
+  int opacity = 0x80;
+	struct HBoltPVar* pvars = (struct HBoltPVar*)moby->PVar;
+	if (!pvars)
+		return;
+
+	// determine color
+	u32 color = HBOLT_SPRITE_COLOR;
+
+	// fade as we approach destruction
+	int timeUntilDestruction = (pvars->DestroyAtTime - gameGetTime()) / TIME_SECOND;
+	if (timeUntilDestruction < 1)
+		timeUntilDestruction = 1;
+
+	if (timeUntilDestruction < 10) {
+		float speed = timeUntilDestruction < 3 ? 20.0 : 3.0;
+		float pulse = (1 + sinf(clampAngle((gameGetTime() / 1000.0) * speed))) * 0.5;
+		opacity = 32 + (pulse * 96);
+	}
+
+  opacity = opacity << 24;
+  color = opacity | (color & HBOLT_SPRITE_COLOR);
+  moby->PrimaryColor = color;
+
+  u32 hook = (u32)GetAddress(&vaReplace_GetEffectTexJAL) + 0x20;
+  HOOK_JAL(hook, GetAddress(&vaGetFrameTex));
+  gfxDrawBillboardQuad(0.55, 0, MATH_PI, moby->Position, 81, opacity, 0);
+  gfxDrawBillboardQuad(0.5, 0.01, MATH_PI, moby->Position, 81, color, 0);
+  HOOK_JAL(hook, GetAddress(&vaGetEffectTex));
+}
+
 void scavHuntHBoltUpdate(Moby* moby)
 {
+	printf("\nupdate function");
 	const float rotSpeeds[] = { 0.05, 0.02, -0.03, -0.1 };
 	const int opacities[] = { 64, 32, 44, 51 };
 	VECTOR t;
@@ -337,6 +452,9 @@ void scavHuntHBoltUpdate(Moby* moby)
 	struct HBoltPVar* pvars = (struct HBoltPVar*)moby->PVar;
 	if (!pvars)
 		return;
+printf("\nbefore sticky fx");
+  gfxStickyFX(&scavHuntHBoltPostDraw, moby);
+printf("\nafter sticky fx");
 
 	// handle particles
 	u32 color = colorLerp(0, HBOLT_PARTICLE_COLOR, 1.0 / 4);
@@ -344,7 +462,6 @@ void scavHuntHBoltUpdate(Moby* moby)
 	for (i = 0; i < 4; ++i) {
 		struct PartInstance * particle = pvars->Particles[i];
 		if (!particle) {
-			// opacities[i]
 			particle = scavHuntSpawnParticle(moby->Position, color, 100, i);
 		}
 
@@ -352,6 +469,26 @@ void scavHuntHBoltUpdate(Moby* moby)
 		if (particle) {
 			particle->rot = (int)((gameGetTime() + (i * 100)) / (TIME_SECOND * rotSpeeds[i])) & 0xFF;
 		}
+	}
+
+  // handle pickup
+  for (i = 0; i < GAME_MAX_LOCALS; ++i) {
+    Player* p = playerGetFromSlot(i);
+    if (!p || playerIsDead(p)) continue;
+
+    vector_subtract(t, p->PlayerPosition, moby->Position);
+    if (vector_sqrmag(t) < (HBOLT_PICKUP_RADIUS * HBOLT_PICKUP_RADIUS)) {
+      uiShowPopup(0, "You found a Horizon Bolt!\x0", 3);
+      soundPlayByOClass(2, 0, moby, MOBY_ID_OMNI_SHIELD);
+      // scavHuntSendHorizonBoltPickedUpMessage();
+      scavHuntHBoltDestroy(moby);
+      break;
+    }
+  }
+
+	// handle auto destruct
+	if (pvars->DestroyAtTime && gameGetTime() > pvars->DestroyAtTime) {
+		scavHuntHBoltDestroy(moby);
 	}
 }
 
@@ -364,18 +501,18 @@ void scavHuntSpawn(VECTOR position)
   vector_copy(moby->Position, position);
   moby->UpdateDist = -1;
   moby->Drawn = 1;
-  moby->Opacity = 0x80;
-  moby->DrawDist = 0x80;
-  
-	// update pvars
-	struct HBoltPVar* pvars = (struct HBoltPVar*)moby->PVar;
-	// pvars->DestroyAtTime = gameGetTime() + (TIME_SECOND * 30);
-	memset(pvars->Particles, 0, sizeof(pvars->Particles));
+  moby->Opacity = 0x00;
+  moby->DrawDist = 0x00;
 
-	// mobySetState(moby, 0, -1);
-  // scavHuntResetBoltSpawnCooldown();
-  // mobyPlaySoundByClass(0, 0, moby, MOBY_ID_NODE_BASE);
-	DPRINTF("hbolt spawned at %08X destroyAt:%d %04X\n", (u32)moby, pvars->DestroyAtTime, moby->ModeBits);
+  // update pvars
+  struct HBoltPVar* pvars = (struct HBoltPVar*)moby->PVar;
+  // pvars->DestroyAtTime = gameGetTime() + (TIME_SECOND * 30);
+  memset(pvars->Particles, 0, sizeof(pvars->Particles));
+
+  // mobySetState(moby, 0, -1);
+  scavHuntResetBoltSpawnCooldown();
+  soundPlayByOClass(1, 0, moby, MOBY_ID_OMNI_SHIELD);
+  printf("hbolt spawned at %08X destroyAt:%d %04X\n", (u32)moby, pvars->DestroyAtTime, moby->ModeBits);
 }
 
 void scavHuntSpawnRandomNearPosition(VECTOR position)
@@ -385,26 +522,31 @@ void scavHuntSpawnRandomNearPosition(VECTOR position)
   while (i < 4)
   {
     // generate random position
-    VECTOR from, to = {0,0,-6,0}, p = {0,0,1,0};
+    VECTOR from = {0,0,0,0}, to = {0,0,-6,0}, p = {0,0,1,0};
     float theta = randRadian();
-    float radius = randRange(5, 10);
+    float radius = randRange(5, 8);
     vector_fromyaw(from, theta);
     vector_scale(from, from, radius);
     from[2] = 3;
     vector_add(from, from,  position);
     vector_add(to, to, from);
 
+	vector_add(p, p, CollLine_Fix_GetHitPosition());
+	scavHuntSpawn(from);
+  	break;
+
     // snap to ground
     // and check if ground is walkable
     if (CollLine_Fix(from, to, 0, NULL, NULL)) {
+      printf("\nSpawning Try: %d", i + 1);
       int colId = CollHotspot();
-      if (colId == 0xF || colId == 0x7 || colId == 0x9 || colId == 0xA) {
+      if (colId == 1 || colId == 2 || colId == 4 || colId == 7 || colId == 9 || colId == 10) {
+        printf("\ncollision id: %d", colId);
         vector_add(p, p, CollLine_Fix_GetHitPosition());
         scavHuntSpawn(p);
         break;
       }
     }
-
     ++i;
   }
 }
@@ -415,9 +557,24 @@ void scavHuntSpawnRandomNearPlayer(int pIdx)
 	Player* player = players[pIdx];
 	if (!player) return;
 
-	// scavHuntSpawnRandomNearPosition(player->PlayerPosition);
-	scavHuntSpawn(player->PlayerPosition);
-	printf("\nSpawned moby!");
+	scavHuntSpawnRandomNearPosition(player->PlayerPosition);
+}
+
+void scavHuntHBoltDestroy(Moby* moby)
+{
+  if (mobyIsDestroyed(moby)) return;
+	struct HBoltPVar* pvars = (struct HBoltPVar*)moby->PVar;
+
+	// destroy particles
+  int i;
+	for (i = 0; i < 4; ++i) {
+		if (pvars->Particles[i]) {
+			scavHuntDestroyParticle(pvars->Particles[i]);
+			pvars->Particles[i] = NULL;
+		}
+	}
+
+  mobyDestroy(moby);
 }
 
 int main()
@@ -461,13 +618,16 @@ int main()
 
 		// Test_Sprites(SCREEN_WIDTH * 0.3, SCREEN_HEIGHT * .50, 100);
 
-		// printf("\nfireDir: %x", (u32)((u32)&p->fireDir - (u32)PLAYER_STRUCT));
+		// printf("\nground: %x", (u32)((u32)&p->ground - (u32)PLAYER_STRUCT));
+		// printf("\nground->ground.pMoby: %x", (u32)((u32)&p->ground.pMoby - (u32)PLAYER_STRUCT));
 		// printf("\nmtxFxActive: %x", (u32)((u32)&p->mtxFxActive - (u32)PLAYER_STRUCT));
 		// printf("\npnetplayer: %x", (u32)((u32)&p->pNetPlayer - (u32)PLAYER_STRUCT));
 
 		// float x = SCREEN_WIDTH * 0.3;
 		// float y = SCREEN_HEIGHT * 0.85;
 		// gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, 4);
+		
+		// printf("Collision: %d\n", CollHotspot());
 
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();

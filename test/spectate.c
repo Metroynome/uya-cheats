@@ -149,7 +149,7 @@ void disableSpectate(Player * player, struct PlayerSpectateData * data)
 void spectate(Player * currentPlayer, Player * playerToSpectate)
 {
     float cameraT;
-    struct PlayerSpectateData * spectateData = SpectateData + currentPlayer->fps.Vars.cam_slot;
+    struct PlayerSpectateData * spectateData = SpectateData + currentPlayer->mpIndex;
     if(!playerToSpectate)
         return;
 
@@ -303,9 +303,9 @@ void runSpectate(void)
 		Player * player = players[i];
 
 		// Next, we have to ensure the player is the local player and they are dead
-		if (playerIsLocal(player)) {
+		if (playerIsLocal(player) || playerGetHealth(player) <= 0) {
 			// Grab player-specific spectate data
-			spectateData = SpectateData + player->fps.Vars.cam_slot;
+			spectateData = SpectateData + player->mpIndex;
 			spectateIndex = spectateData->Index;
 
 			// If dead
