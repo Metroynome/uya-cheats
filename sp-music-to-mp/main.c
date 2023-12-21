@@ -7,7 +7,7 @@
 
 int enableSingleplayerMusic = 1;
 
-void CampaignMusic(void)
+void runCampaignMusic(void)
 {
 	static int CustomSector = 0x1d8a;
 	static char FinishedConvertingTracks = 0;
@@ -54,14 +54,16 @@ void CampaignMusic(void)
 		{0x539, 1}, // 
 		{0x543, 1}  // 
 	};
-	// check to see if multiplayer tracks are loaded
-	if (!musicIsLoaded())
+	// if music isn't loaded or enable singleplayermusic isn't on, or in menus, return.
+	u32 CodeSegmentPointer = *(u32*)0x01FFFD00;
+	if (!musicIsLoaded() || CodeSegmentPointer == 0x00574F88 || !enableSingleplayerMusic)
 		return;
-
-	musicSetSector(CustomSector);
+	
 	u32 NewTracksLocation = 0x001F8588; // Overwrites current tracks too.
-	if (!FinishedConvertingTracks)
-	{
+	if (!FinishedConvertingTracks || musicIsLoaded() != CustomSector) {
+		// Set custom Sector
+		musicSetSector(CustomSector);
+
 		AddedTracks = 0;
 		int MultiplayerSector = *(u32*)0x001F8584;
 		int Stack = 0x000269300;
@@ -111,19 +113,16 @@ void CampaignMusic(void)
 		// Zero out stack to finish the job.
 		memset((u32*)Stack, 0, 0x1818);
 		}
+		printf("\nTracks: %d", AddedTracks);
 		FinishedConvertingTracks = 1;
 	}
 	
 	int DefaultMultiplayerTracks = 0x0d; // This number will never change
 	// Due to us overwriting original gracks, no need to do extra math like in DL.
 	TotalTracks = AddedTracks;
-	int CodeSegmentPointer = *(u32*)0x01FFFD00;
-	// If not in main lobby, game lobby, ect.
-	if (CodeSegmentPointer != 0x00574F88) {
-		if (*(u32*)musicTrackRangeMax() != TotalTracks) {
-			int MusicFunctionData = CodeSegmentPointer + 0x1A8;
-			*(u16*)MusicFunctionData = TotalTracks;
-		}
+	if (*(u32*)musicTrackRangeMax() != TotalTracks) {
+		int MusicFunctionData = CodeSegmentPointer + 0x1A8;
+		*(u16*)MusicFunctionData = TotalTracks;
 	}
 
 	// If in game
@@ -133,16 +132,23 @@ void CampaignMusic(void)
 		static short NextTrack = 0;
 		music_Playing* music = musicGetTrackInfo();
 		// double check if min/max info are correct
-		if (*(int*)musicTrackRangeMax() != TotalTracks || *(int*)musicTrackRangeMin() != 4) {
-			*(int*)musicTrackRangeMin() = 4;
-			*(int*)musicTrackRangeMax() = TotalTracks;
+		if (enableSingleplayerMusic) {
+			if (*(int*)musicTrackRangeMax() != (TotalTracks - *(int*)musicTrackRangeMin()) || *(int*)musicTrackRangeMin() != 4) {
+				*(int*)musicTrackRangeMin() = 4;
+				*(int*)musicTrackRangeMax() = TotalTracks - *(int*)musicTrackRangeMin();
+			}
+		} else {
+			if (*(int*)musicTrackRangeMax() != (DefaultMultiplayerTracks - *(int*)musicTrackRangeMin()) || *(int*)musicTrackRangeMin() != 4) {
+				*(int*)musicTrackRangeMin() = 4;
+				*(int*)musicTrackRangeMax() = DefaultMultiplayerTracks - *(int*)musicTrackRangeMin();
+			}
 		}
 		// Fixes bug where music doesn't always want to start playing at start of game
 		// might not be needed anymore due to forcing Min/Max Track info above
 		if (music->track == -1 && music->status == 0) {
 			// plays a random track
 			int randomTrack = randRangeInt(*(int*)musicTrackRangeMin(), *(int*)musicTrackRangeMax()) % *(int*)musicTrackRangeMax();
-			printf("\nrandomTrack: %d", randomTrack);
+			DPRINTF("\nrandomTrack: %d", randomTrack);
 			musicPlayTrack(randomTrack, FLAG_KEEP_PLAYING_AFTER, 1024);
 		}
 		// If Status is 8 and both Current Track and Next Track equal zero
@@ -180,7 +186,7 @@ int main(void)
 	// run normal hook
 	((void (*)(void))0x00126780)();
 
-	CampaignMusic();
+	runCampaignMusic();
 
 	return 0;
 }
