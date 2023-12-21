@@ -10,9 +10,10 @@ int enableSingleplayerMusic = 1;
 void CampaignMusic(void)
 {
 	static int CustomSector = 0x1d8a;
-	static int FinishedConvertingTracks = 0;
-	static int AddedTracks = 0;
-	static int SetupMusic = 0;
+	static char FinishedConvertingTracks = 0;
+	static char SetupMusic = 0;
+	static char AddedTracks = 0;
+	static char TotalTracks = 0;
 	// We go by each wad because we have to have Multiplayer one first.
 	static short wadArray[][2] = {
 		// wad, song per wad
@@ -20,14 +21,14 @@ void CampaignMusic(void)
 		{0x54d, 14}, // Multiplayer
 		{0x3f9, 2}, // Veldin
 		{0x403, 4}, // Florana
-		{0x40d, 4}, // Starship Phoenix
+		{0x40d, 3}, // Starship Phoenix
 		{0x417, 3}, // Marcadia
 		{0x421, 4}, // Daxx (This doesn't have padding between music and dialog)
 		{0x42b, 1}, // 
 		{0x435, 4}, // Annihilation Nation
 		{0x43f, 1}, // Aquatos
 		{0x449, 1}, // Tyhrranosis
-		{0x453, 2}, // Zeldrin Starport
+		{0x453, 1}, // Zeldrin Starport
 		{0x45d, 1}, // Obani Gemini
 		{0x467, 1}, // Blackwater City
 		{0x471, 2}, // Holostar Studios
@@ -45,7 +46,7 @@ void CampaignMusic(void)
 		{0x4e9, 1}, // 
 		{0x4f3, 1}, // 
 		{0x4fd, 1}, // 
-		{0x507, 1}, // 
+		{0x507, 1}, //
 		{0x511, 1}, // 
 		{0x51b, 1}, // 
 		{0x525, 1}, // 
@@ -64,9 +65,8 @@ void CampaignMusic(void)
 		AddedTracks = 0;
 		int MultiplayerSector = *(u32*)0x001F8584;
 		int Stack = 0x000269300;
-		int WAD_Table = 0x001f7f88;
+		// int WAD_Table = 0x001f7f88; // Kept for historical purposes.
 		int a;
-		int Offset = 0;
 		// Zero out stack by the appropriate heap size (0x2a0 in this case)
 		// This makes sure we get the correct values we need later on.
 		memset((u32*)Stack, 0, 0x1818);
@@ -103,11 +103,7 @@ void CampaignMusic(void)
 						*(u32*)(NewTracksLocation) = (u32)ConvertedTrack_LeftAudio;
 						*(u32*)(NewTracksLocation + 0x8) = (u32)ConvertedTrack_RightAudio;
 						NewTracksLocation += 0x10;
-						if (a == 0) {
-							b += 0x10;
-						} else {
-							b += 0x20;
-						}
+						b += (a == 0) ? 0x10 : 0x20;
 						AddedTracks++;
 					}
 				}
@@ -118,18 +114,15 @@ void CampaignMusic(void)
 		FinishedConvertingTracks = 1;
 	}
 	
-
 	int DefaultMultiplayerTracks = 0x0d; // This number will never change
-	int StartingTrack = *(u32*)musicTrackRangeMin();
-	int AllTracks = DefaultMultiplayerTracks + AddedTracks;
-	int TotalTracks = (DefaultMultiplayerTracks - StartingTrack + 1) + AddedTracks;
+	// Due to us overwriting original gracks, no need to do extra math like in DL.
+	TotalTracks = AddedTracks;
 	int CodeSegmentPointer = *(u32*)0x01FFFD00;
 	// If not in main lobby, game lobby, ect.
-	if(CodeSegmentPointer != 0x00574F88){
-		// if TRACK_RANGE_MAX doesn't equal TotalTracks
-		if(*(u32*)musicTrackRangeMax() != TotalTracks){
+	if (CodeSegmentPointer != 0x00574F88) {
+		if (*(u32*)musicTrackRangeMax() != TotalTracks) {
 			int MusicFunctionData = CodeSegmentPointer + 0x1A8;
-			*(u16*)MusicFunctionData = AllTracks;
+			*(u16*)MusicFunctionData = TotalTracks;
 		}
 	}
 
@@ -138,7 +131,20 @@ void CampaignMusic(void)
 	{
 		static short CurrentTrack = 0;
 		static short NextTrack = 0;
-		music_Playing * music = musicGetTrackInfo();
+		music_Playing* music = musicGetTrackInfo();
+		// double check if min/max info are correct
+		if (*(int*)musicTrackRangeMax() != TotalTracks || *(int*)musicTrackRangeMin() != 4) {
+			*(int*)musicTrackRangeMin() = 4;
+			*(int*)musicTrackRangeMax() = TotalTracks;
+		}
+		// Fixes bug where music doesn't always want to start playing at start of game
+		// might not be needed anymore due to forcing Min/Max Track info above
+		if (music->track == -1 && music->status == 0) {
+			// plays a random track
+			int randomTrack = randRangeInt(*(int*)musicTrackRangeMin(), *(int*)musicTrackRangeMax()) % *(int*)musicTrackRangeMax();
+			printf("\nrandomTrack: %d", randomTrack);
+			musicPlayTrack(randomTrack, FLAG_KEEP_PLAYING_AFTER, 1024);
+		}
 		// If Status is 8 and both Current Track and Next Track equal zero
 		if (music->unpause == UNPAUSE_LOADING && CurrentTrack == 0 && NextTrack == 0 && music->track != -1) {
 			// Set CurrentTrack to Track.  This will make it so we know which was is currently playing.
