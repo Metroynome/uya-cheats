@@ -56,11 +56,11 @@ void runCampaignMusic(void)
 	};
 	// if music isn't loaded or enable singleplayermusic isn't on, or in menus, return.
 	u32 CodeSegmentPointer = *(u32*)0x01FFFD00;
-	if (!musicIsLoaded() || CodeSegmentPointer == 0x00574F88 || !enableSingleplayerMusic)
+	if (!musicGetSector() || CodeSegmentPointer == 0x00574F88 || !enableSingleplayerMusic)
 		return;
 	
 	u32 NewTracksLocation = 0x001F8588; // Overwrites current tracks too.
-	if (!FinishedConvertingTracks || musicIsLoaded() != CustomSector) {
+	if (!FinishedConvertingTracks && musicGetSector() != CustomSector) {
 		// Set custom Sector
 		musicSetSector(CustomSector);
 
@@ -78,14 +78,12 @@ void runCampaignMusic(void)
 		{
 			int WAD = wadArray[a][0];
 			// Check if Map Sector is not zero
-			if (WAD != 0)
-			{
+			if (WAD != 0) {
 				internal_wadGetSectors(WAD, 1, Stack);
 				int WAD_Sector = *(u32*)(Stack + 0x4);
 
 				// make sure WAD_Sector isn't zero
-				if (WAD_Sector != 0)
-				{
+				if (WAD_Sector != 0) {
 					DPRINTF("WAD: 0x%X\n", WAD);
 					DPRINTF("WAD Sector: 0x%X\n", WAD_Sector);
 
@@ -113,7 +111,7 @@ void runCampaignMusic(void)
 		// Zero out stack to finish the job.
 		memset((u32*)Stack, 0, 0x1818);
 		}
-		printf("\nTracks: %d", AddedTracks);
+		DPRINTF("\nTracks: %d", AddedTracks);
 		FinishedConvertingTracks = 1;
 	}
 	
@@ -178,6 +176,8 @@ void runCampaignMusic(void)
 			// Doing this lets the current playing track to fade out.
 			musicTransitionTrack(0,0,0,0);
 		}
+	} else if (isInMenus() && FinishedConvertingTracks) {
+		FinishedConvertingTracks = 0;
 	}
 }
 
