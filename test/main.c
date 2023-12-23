@@ -287,7 +287,7 @@ int main()
 	// run normal hook
 	((void (*)(void))0x00126780)();
 
-	if (!musicIsLoaded())
+	if (!musicGetSector())
 		return 1;
 
 	uyaPreUpdate();
@@ -303,8 +303,7 @@ int main()
 	//int rawrs = ping();
 	//printf("\nping: %d", rawrs);
 
-    if (isInGame())
-    {
+    if (isInGame()) {
 		Player * p = (Player*)PLAYER_STRUCT;
 		if (!p)
 			return 0;
@@ -312,17 +311,19 @@ int main()
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 
-		// scavHuntHBoltUpdate(p->PlayerMoby);
-
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
 		// *(u32*)0x00539258 = 0x240203E8;
 		// *(u32*)0x005392D8 = 0x240203E8;
 
-		// Allv2();
-
 		// Test_Sprites(SCREEN_WIDTH * 0.3, SCREEN_HEIGHT * .50, 100);
 
+		// printf("\nState: %d", playerDeobfuscate(&p->State, 0, 0));
+		// printf("\nPrevious State: %d", playerDeobfuscate(&p->PreviousState, 0, 0));
+		// printf("\nPrePrevious State: %d", playerDeobfuscate(&p->PrePreviousState, 0, 0));
+		// printf("\nState Type: %d", playerDeobfuscate(&p->StateType, 0, 0));
+		// printf("\nPrevious Type: %d", playerDeobfuscate(&p->PreviousType, 0, 0));
+		// printf("\nPrePrevious Type: %d", playerDeobfuscate(&p->PrePreviousType, 0, 0));
 		// printf("\nground: %x", (u32)((u32)&p->ground - (u32)PLAYER_STRUCT));
 		// printf("\nground->ground.pMoby: %x", (u32)((u32)&p->ground.pMoby - (u32)PLAYER_STRUCT));
 		// printf("\nmtxFxActive: %x", (u32)((u32)&p->mtxFxActive - (u32)PLAYER_STRUCT));
@@ -350,9 +351,7 @@ int main()
 		DebugInMenus();
 	}
 
-	scavHuntRun();
-
-	StartBots();
+	// StartBots();
 	// runSpectate();
 	// scavHuntRun();
 
