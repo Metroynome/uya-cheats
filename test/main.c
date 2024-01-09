@@ -23,122 +23,57 @@
 #include <libuya/guber.h>
 #include <libuya/sound.h>
 
-void StartBots(void);
-void scavHuntRun(void);
-
-extern VariableAddress_t vaPlayerRespawnFunc;
-extern VariableAddress_t vaPlayerSetPosRotFunc;
-extern VariableAddress_t vaGameplayFunc;
-extern VariableAddress_t vaGiveWeaponFunc;
-extern VariableAddress_t vaPlayerObfuscateAddr;
-extern VariableAddress_t vaPlayerObfuscateWeaponAddr;
-extern VariableAddress_t vaGetFrameTex;
-extern VariableAddress_t vaGetEffectTex;
-
-char Teams[8];
-short PlayerKills[GAME_MAX_PLAYERS];
-short PlayerDeaths[GAME_MAX_PLAYERS];
+#define TestMoby	(*(Moby**)0x00091004)
 
 VECTOR position;
 VECTOR rotation;
 
 static int SPRITE_ME = 0;
+static int EFFECT_ME = 21;
 static int SOUND_ME = 0;
 static int SOUND_ME_FLAG = 3;
 
-void DebugInGame()
+void DebugInGame(Player* player)
 {
-    static int Active = 0;
-	Player * player = (Player*)PLAYER_STRUCT;
-    PadButtonStatus * pad = (PadButtonStatus*)0x00225980;
-
-    /*
-		DEBUG OPTIONS:
-		PAD_UP: Occlusion on/off
-		PAD_DOWN: Gattling Turret Health to 1
-		PAD_LEFT: Change Team (red <-> blue)
-		PAD_RIGHT: Hurt Player
-	*/
-    if ((pad->btns & PAD_LEFT) == 0 && Active == 0)
-	{
-        Active = 1;
+    if (playerPadGetButtonDown(player, PAD_LEFT) > 0) {
 		// Swap Teams
 		int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
 		playerSetTeam(player, SetTeam);
-		// playerDecHealth(player, 1);
-	}
-    else if ((pad->btns & PAD_RIGHT) == 0 && Active == 0)
-    {
-        Active = 1;
+	} else if (playerPadGetButtonDown(player, PAD_RIGHT) > 0) {
         // Hurt Player
         playerDecHealth(player, 1);
-	}
-	else if ((pad->btns & PAD_UP) == 0 && Active == 0)
-	{
-		Active = 1;
+	} else if (playerPadGetButtonDown(player, PAD_UP) > 0) {
 		// static int Occlusion = (Occlusion == 2) ? 0 : 2;
 		// gfxOcclusion(Occlusion);
 		// spawnPointGetRandom(player, &position, &rotation);
 		Player ** ps = playerGetAll();
 		Player * p = ps[1];
 		playerSetPosRot(player, &p->PlayerPosition, &p->PlayerRotation);
-	}
-	else if((pad->btns & PAD_DOWN) == 0 && Active == 0)
-	{
+	} else if(playerPadGetButtonDown(player, PAD_DOWN) > 0) {
 		// Set Gattling Turret Health to 1.
 		DEBUGsetGattlingTurretHealth();
+	} else if (playerPadGetButtonDown(player, PAD_L3) > 0) {
+		// Nothing Yet!
+	} else if (playerPadGetButtonDown(player, PAD_R3) > 0) {
+		// Nothing Yet!
 	}
-	else if ((pad->btns & PAD_L3) == 0 && Active == 0)
-	{
-		Active = 1;
-	}
-	else if ((pad->btns & PAD_R3) == 0 && Active == 0)
-	{
-		Active = 1;
-	}
-    if (!(pad->btns & PAD_LEFT) == 0 && !(pad->btns & PAD_RIGHT) == 0 && !(pad->btns & PAD_UP) == 0 && !(pad->btns & PAD_DOWN) == 0 && !(pad->btns & PAD_L3) == 0 && !(pad->btns & PAD_R3) == 0)
-    {
-        Active = 0;
-    }
 }
 
 void DebugInMenus(void)
 {
-	static int Active = 0;
-	Player * player = (Player*)PLAYER_STRUCT;
-    PadButtonStatus * pad = (PadButtonStatus*)0x00225980;
-    /*
-		DEBUG_InMenus OPTIONS:
-	*/
-    if ((pad->btns & PAD_LEFT) == 0 && Active == 0)
-	{
-        Active = 1;
-		// ((int (*)(int, int, int))0x00685798)(0x21, 0, 0);
+    if (padGetButtonDown(0, PAD_LEFT) > 0) {
+		// Nothing Yet!
+	} else if (padGetButtonDown(0, PAD_RIGHT) > 0) {
+		// Nothing Yet!
+	} else if (padGetButtonDown(0, PAD_UP) > 0) {
+		// Nothing Yet!
+	} else if(padGetButtonDown(0, PAD_DOWN) > 0) {
+		// Nothing Yet!
+	} else if (padGetButtonDown(0, PAD_L3) > 0) {
+		// Nothing Yet!
+	} else if (padGetButtonDown(0, PAD_R3) > 0) {
+		// Nothing Yet!
 	}
-    else if ((pad->btns & PAD_RIGHT) == 0 && Active == 0)
-    {
-        Active = 1;
-    }
-	else if ((pad->btns & PAD_UP) == 0 && Active == 0)
-	{
-		Active = 1;
-	}
-	else if((pad->btns & PAD_DOWN) == 0 && Active == 0)
-	{
-		Active = 1;
-	}
-	else if ((pad->btns & PAD_L3) == 0 && Active == 0)
-	{
-		Active = 1;
-	}
-	else if ((pad->btns & PAD_R3) == 0 && Active == 0)
-	{
-		Active = 1;
-	}
-    if (!(pad->btns & PAD_LEFT) == 0 && !(pad->btns & PAD_RIGHT) == 0 && !(pad->btns & PAD_UP) == 0 && !(pad->btns & PAD_DOWN) == 0 && !(pad->btns & PAD_L3) == 0 && !(pad->btns & PAD_R3) == 0)
-    {
-        Active = 0;
-    }
 }
 
 void InfiniteChargeboot(void)
@@ -178,24 +113,16 @@ void InfiniteHealthMoonjump(void)
 
 void DEBUGsetGattlingTurretHealth(void)
 {
-    Moby * moby = mobyListGetStart();
+    Moby* moby = mobyListGetStart();
     // Iterate through mobys and change health
-    while ((moby = mobyFindNextByOClass(moby, MOBY_ID_GATTLING_TURRET)))
-    {
-        if (moby->PVar)
-        {
+    while ((moby = mobyFindNextByOClass(moby, MOBY_ID_GATTLING_TURRET))) {
+        if (moby->PVar) {
 			*(float*)((u32)moby->PVar + 0x30) = 0;
         }
-        ++moby; // increment moby
+        ++moby;
     }
 }
 
-// void patchFluxNicking(void)
-// {
-// 	GadgetDef * weapon = weaponGadgetList();
-// 	weapon[WEAPON_ID_FLUX].damage2 = weapon[WEAPON_ID_FLUX].damage;
-// 	weapon[WEAPON_ID_FLUX_V2].damage2 = weapon[WEAPON_ID_FLUX_V2].damage;
-// }
 
 void Test_Sprites(float x, float y, float scale)
 {
@@ -227,7 +154,7 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 	matrix_unit(m2);
 
 	// init
-	gfxResetQuad(&quad);
+	// gfxResetQuad(&quad);
 
 	// color of each corner?
 	vector_copy(quad.VertexPositions[0], pTL);
@@ -267,7 +194,7 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 	memcpy(&m2[12], position, sizeof(VECTOR));
 
 	// draw
-	gfxDrawQuad((void*)0x00222590, &quad, m2, 1);
+	gfxDrawQuad(&quad, m2, 1);
 }
 
 int ping(void)
@@ -282,16 +209,114 @@ int ping(void)
 	return myPing;
 }
 
-int main()
+VECTOR b6ExplosionPositions[64];
+int b6ExplosionPositionCount = 0;
+void drawB6Visualizer(void)
 {
-	// run normal hook
-	((void (*)(void))0x00126780)();
+	int i;
 
-	if (!musicGetSector())
-		return 1;
+	for (i = 0; i < b6ExplosionPositionCount; ++i) {
+		drawEffectQuad(b6ExplosionPositions[i], 4, 1);
+	}
+}
 
-	uyaPreUpdate();
+void renderB6Visualizer(Moby* m)
+{
+	gfxStickyFX(&drawB6Visualizer, m);
+}
+void runB6HitVisualizer(void)
+{
+	VECTOR off = {0,0,2,0};
+	if (!TestMoby) {
+		Moby *m = TestMoby = mobySpawn(MOBY_ID_TEST, 0);
+		m->Scale *= 0.1;
+		m->PUpdate = &renderB6Visualizer;
+		vector_add(m->Position, playerGetFromSlot(0)->PlayerPosition, off);
+	}
 
+  // 
+  TestMoby->DrawDist = 0xFF;
+  TestMoby->UpdateDist = 0xFF;
+
+	// check for b6
+	Moby* b = mobyListGetStart();
+	Moby* mEnd = mobyListGetEnd();
+	while (b < mEnd) {
+		if (!mobyIsDestroyed(b) && b->OClass == MOBY_ID_SHOT_GRAVITY_BOMB1 && b->State == 2) {
+			DPRINTF("%08X\n", (u32)b->PUpdate);
+			vector_copy(b6ExplosionPositions[b6ExplosionPositionCount], b->Position);
+			b6ExplosionPositionCount = (b6ExplosionPositionCount + 1) % 64;
+		}
+		++b;
+	}
+}
+
+void drawCollider(Moby* moby)
+{
+	VECTOR pos,t,o = {0,0,0.7,0};
+	int i,j = 0;
+	int x,y;
+	char buf[12];
+	Player * p = playerGetFromSlot(0);
+
+	const int steps = 10 * 2;
+	const float radius = 2;
+
+	for (i = 0; i < steps; ++i) {
+		for (j = 0; j < steps; ++j) {
+			float theta = (i / (float)steps) * MATH_TAU;
+			float omega = (j / (float)steps) * MATH_TAU;
+
+			vector_copy(pos, p->PlayerPosition);
+			pos[0] += radius * sinf(theta) * cosf(omega);
+			pos[1] += radius * sinf(theta) * sinf(omega);
+			pos[2] += radius * cosf(theta);
+
+			vector_add(t, p->PlayerPosition, o);
+
+			if (CollLine_Fix(pos, t, 1, NULL, 0)) {
+				vector_copy(t, CollLine_Fix_GetHitPosition());
+				drawEffectQuad(t, EFFECT_ME, 0.1);
+			}
+		}
+	}
+}
+
+void drawSomething(Moby* moby)
+{
+	VECTOR pos,t,o = {0,0,0.7,0};
+	int i,j = 0;
+	int x,y;
+	char buf[12];
+	Player * p = playerGetFromSlot(0);
+
+	const int steps = 10 * 2;
+	const float radius = 2;
+
+	vector_copy(pos, p->PlayerPosition);
+	for (i = 0; i < steps; ++i) {
+		for (j = 0; j < steps; ++j) {
+			float theta = (i / (float)steps) * MATH_TAU;
+			float omega = (j / (float)steps) * MATH_TAU;
+
+			vector_copy(pos, p->PlayerPosition);
+			pos[0] += radius * sinf(theta) * cosf(omega);
+			pos[1] += radius * sinf(theta) * sinf(omega);
+			pos[2] += radius * cosf(theta);
+
+			vector_add(t, p->PlayerPosition, o);
+
+			if (CollLine_Fix(pos, t, 1, NULL, 0)) {
+				vector_copy(t, CollLine_Fix_GetHitPosition());
+				// drawEffectQuad(t, EFFECT_ME, 0.1);
+			}
+		}
+	}
+	drawEffectQuad(pos, EFFECT_ME, 2);
+}
+
+void Test()
+{
 	GameSettings * gameSettings = gameGetSettings();
 	GameOptions * gameOptions = gameGetOptions();
 	if (gameOptions || gameSettings || gameSettings->GameLoadStartTime > 0) {
@@ -300,16 +325,20 @@ int main()
 		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 0;
 	}
 
-	//int rawrs = ping();
-	//printf("\nping: %d", rawrs);
-
     if (isInGame()) {
-		Player * p = (Player*)PLAYER_STRUCT;
+		Player * p = playerGetFromSlot(0);
 		if (!p)
 			return 0;
 
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
+
+		// gfxStickyFX(&PostDraw, p->PlayerMoby);
+		// drawEffectQuad(p->PlayerMoby->Position, 1, .5);
+		// drawSomething(p->PlayerMoby);
+		
+		// base light follow player
+		// ((void (*)(Moby*))0x003F6670)(p->PlayerMoby);
 
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
@@ -334,27 +363,13 @@ int main()
 		// gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, 4);
 		
 		// printf("Collision: %d\n", CollHotspot());
-
+        
+		// drawCollider(p->PlayerMoby);
+        runB6HitVisualizer();
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
-    	DebugInGame();
-
-		// float high = 340282346638528859811704183484516925440.00;
-		// float low = -340282346638528859811704183484516925440.00;
-		// p->fps.Vars.CameraYaw.target_slowness_factor_quick = 0;
-		// p->fps.Vars.CameraYaw.target_slowness_factor_aim = high;
-		// p->fps.Vars.CameraPitch.target_slowness_factor = 0;
-		// p->fps.Vars.CameraPitch.strafe_turn_factor = high;
-		// // p->fps.Vars.CameraPitch.strafe_tilt_factor = high;
-		// p->fps.Vars.CameraPitch.max_target_angle = high;
+    	DebugInGame(p);
     } else {
 		DebugInMenus();
 	}
-
-	// StartBots();
-	// runSpectate();
-	// scavHuntRun();
-
-	uyaPostUpdate();
-    return 0;
 }
