@@ -654,7 +654,7 @@ int main(void)
 		// printf("Collision: %d\n", CollHotspot());
         
 		// drawCollider(p->PlayerMoby);
-		patchCTFFlag();
+		// patchCTFFlag();
         // runB6HitVisualizer();
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
