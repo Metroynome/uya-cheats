@@ -33,7 +33,11 @@ static int EFFECT_ME = 21;
 static int SOUND_ME = 0;
 static int SOUND_ME_FLAG = 3;
 
+int first = 1;
+
 extern VariableAddress_t vaFlagUpdate_Func;
+extern VariableAddress_t vaGiveWeaponFunc;
+extern VariableAddress_t vaPlayerRespawnFunc;
 
 void DebugInGame(Player* player)
 {
@@ -600,6 +604,112 @@ void patchCTFFlag(void)
 	}
 }
 
+char weaponOrderBackup[2][3] = { {0,0,0}, {0,0,0} };
+int cycleWeapon1 = 1;
+int cycleWeapon2 = 2;
+int cycleWeapon3 = 3;
+int prLoadoutWeaponsOnly = 0;
+void patchResurrectWeaponOrdering_HookWeaponStripMe(Player * player)
+{
+	// backup currently equipped weapons
+	if (player->IsLocal) {
+		weaponOrderBackup[player->mpIndex][0] = playerDeobfuscate(&player->QuickSelect.Slot[0], 1, 1);
+		weaponOrderBackup[player->mpIndex][1] = playerDeobfuscate(&player->QuickSelect.Slot[1], 1, 1);
+		weaponOrderBackup[player->mpIndex][2] = playerDeobfuscate(&player->QuickSelect.Slot[2], 1, 1);
+	}
+
+	// call hooked WeaponStripMe function after backup
+	playerStripWeapons(player);
+}
+
+void patchResurrectWeaponOrdering_HookGiveMeRandomWeapons(Player* player, int weaponCount)
+{
+	int i, j;
+	char matchCount = 0;
+	char cycleWeaponCount = 0;
+	char cycle[3] = {
+		cycleWeapon1 ? cycleWeapon1 : WEAPON_ID_BLITZ,
+		cycleWeapon2 ? cycleWeapon2 : WEAPON_ID_FLUX,
+		cycleWeapon3 ? cycleWeapon3 : WEAPON_ID_GBOMB
+	};
+
+	// call hooked GiveMeRandomWeapons function first
+	playerGiveRandomWeapons(player, weaponCount);
+
+	// then try and overwrite given weapon order if weapons match equipped weapons before death
+	if (player->IsLocal) {
+		int index = player->mpIndex;
+		// restore backup if they match (regardless of order) newly assigned weapons
+		for (i = 0; i < 3; i++) {
+			u8 backedUpSlotValue = weaponOrderBackup[index][i];
+			for(j = 0; j < 3; j++) {
+				if (backedUpSlotValue == playerDeobfuscate(&player->QuickSelect.Slot[j], 1, 1)) {
+					++matchCount;
+				}
+			}
+			if (cycleWeapon1 != 0 && cycleWeapon2 != 0 && cycleWeapon1 != 0) {
+				for(j = 0; j < 3; j++) {
+					if (backedUpSlotValue == cycle[j]) {
+						++cycleWeaponCount;
+					}
+				}
+			}
+		}
+		DPRINTF("Cycle Count: %d; Match Count: %d\n", cycleWeaponCount, matchCount);
+		// if cycleWeaponCount matches, set backup weapons.
+		// or if Party Rule LoadWeapons Onlye is on, force set to needed weapons.
+		if (cycleWeaponCount == 3 || prLoadoutWeaponsOnly) {
+			weaponOrderBackup[index][0] = cycle[0];
+			weaponOrderBackup[index][1] = cycle[1];
+			weaponOrderBackup[index][2] = cycle[2];
+		}
+		// if we found a match, set
+		if (matchCount == 3 || cycleWeaponCount == 3) {
+			// set equipped weapon in order
+			for (i = 0; i < 3; ++i)
+				playerGiveWeapon(player, weaponOrderBackup[index][i]);
+
+			// equip each weapon from last slot to first slot to keep correct order.
+			playerEquipWeapon(player, weaponOrderBackup[index][2]);
+			playerEquipWeapon(player, weaponOrderBackup[index][1]);
+			playerEquipWeapon(player, weaponOrderBackup[index][0]);
+		}
+	}
+}
+
+/*
+ * NAME :		patchResurrectWeaponOrdering
+ * 
+ * DESCRIPTION :
+ * 			Installs necessary hooks such that when respawning with same weapons,
+ * 			they are equipped in the same order.
+ * 
+ * NOTES :
+ * 
+ * ARGS : 
+ * 
+ * RETURN :
+ * 
+ * AUTHOR :			Troy "Metroynome" Pruitt
+ */
+void patchResurrectWeaponOrdering(void)
+{
+	u32 hook_StripMe = ((u32)GetAddress(&vaPlayerRespawnFunc) + 0x40);
+	u32 hook_RandomWeapons = hook_StripMe + 0x1c;
+	HOOK_JAL(hook_StripMe, &patchResurrectWeaponOrdering_HookWeaponStripMe);
+	HOOK_JAL(hook_RandomWeapons, &patchResurrectWeaponOrdering_HookGiveMeRandomWeapons);
+}
+
+void loadoutWeaponsOnly(int first)
+{
+	// only call once at the start of the game.
+	if (!first)
+		return;
+
+	// Strip weapons.
+	Player *player = playerGetFromSlot(0);
+}
+
 int main(void)
 {
 	((void (*)(void))0x00126780)();
@@ -656,6 +766,10 @@ int main(void)
 		// drawCollider(p->PlayerMoby);
 		// patchCTFFlag();
         // runB6HitVisualizer();
+		// v2_Setting(2, first);
+		patchResurrectWeaponOrdering();
+		loadoutWeaponsOnly(first);
+		first = 0;
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
     	DebugInGame(p);
