@@ -608,14 +608,14 @@ char weaponOrderBackup[2][3] = { {0,0,0}, {0,0,0} };
 int cycleWeapon1 = 1;
 int cycleWeapon2 = 2;
 int cycleWeapon3 = 3;
-int prLoadoutWeaponsOnly = 0;
+int prLoadoutWeaponsOnly = 1;
 void patchResurrectWeaponOrdering_HookWeaponStripMe(Player * player)
 {
+	int i;
 	// backup currently equipped weapons
 	if (player->IsLocal) {
-		weaponOrderBackup[player->mpIndex][0] = playerDeobfuscate(&player->QuickSelect.Slot[0], 1, 1);
-		weaponOrderBackup[player->mpIndex][1] = playerDeobfuscate(&player->QuickSelect.Slot[1], 1, 1);
-		weaponOrderBackup[player->mpIndex][2] = playerDeobfuscate(&player->QuickSelect.Slot[2], 1, 1);
+		for (i = 0; i < 3; ++i)
+			weaponOrderBackup[player->mpIndex][i] = playerDeobfuscate(&player->QuickSelect.Slot[i], 1, 1);
 	}
 
 	// call hooked WeaponStripMe function after backup
@@ -627,52 +627,58 @@ void patchResurrectWeaponOrdering_HookGiveMeRandomWeapons(Player* player, int we
 	int i, j;
 	char matchCount = 0;
 	char cycleWeaponCount = 0;
-	char cycle[3] = {
-		cycleWeapon1 ? cycleWeapon1 : WEAPON_ID_BLITZ,
-		cycleWeapon2 ? cycleWeapon2 : WEAPON_ID_FLUX,
-		cycleWeapon3 ? cycleWeapon3 : WEAPON_ID_GBOMB
+	int index = player->mpIndex;
+	// Set loadout/cycle weapons.  If not chosen, it will be set to default cycle.
+	char cycle[] = {
+		cycleWeapon1 > 0 ? cycleWeapon1 : WEAPON_ID_BLITZ,
+		cycleWeapon2 > 0 ? cycleWeapon2 : WEAPON_ID_FLUX,
+		cycleWeapon3 > 0 ? cycleWeapon3 : WEAPON_ID_GBOMB
 	};
 
 	// call hooked GiveMeRandomWeapons function first
-	playerGiveRandomWeapons(player, weaponCount);
+	if (!prLoadoutWeaponsOnly)
+		playerGiveRandomWeapons(player, weaponCount);
 
 	// then try and overwrite given weapon order if weapons match equipped weapons before death
 	if (player->IsLocal) {
-		int index = player->mpIndex;
-		// restore backup if they match (regardless of order) newly assigned weapons
-		for (i = 0; i < 3; i++) {
-			u8 backedUpSlotValue = weaponOrderBackup[index][i];
-			for(j = 0; j < 3; j++) {
-				if (backedUpSlotValue == playerDeobfuscate(&player->QuickSelect.Slot[j], 1, 1)) {
-					++matchCount;
-				}
-			}
-			if (cycleWeapon1 != 0 && cycleWeapon2 != 0 && cycleWeapon1 != 0) {
+		// if Loadout Weapons Only is not on
+		if (!prLoadoutWeaponsOnly) {
+			// restore backup if they match (regardless of order) newly assigned weapons
+			for (i = 0; i < 3; i++) {
+				// if respawned weapons match backup weapons
+				u8 backedUpSlotValue = weaponOrderBackup[player->mpIndex][i];
 				for(j = 0; j < 3; j++) {
-					if (backedUpSlotValue == cycle[j]) {
-						++cycleWeaponCount;
+					if (backedUpSlotValue == playerDeobfuscate(&player->QuickSelect.Slot[j], 1, 1)) {
+						++matchCount;
+					}
+				}
+				// if all loadout weapons are set
+				if (cycleWeapon1 != 0 && cycleWeapon2 != 0 && cycleWeapon1 != 0) {
+					// if respawned weapons match cycle weapons
+					for(j = 0; j < 3; j++) {
+						if (backedUpSlotValue == cycle[j]) {
+							++cycleWeaponCount;
+						}
 					}
 				}
 			}
+			DPRINTF("Cycle Count: %d; Match Count: %d\n", cycleWeaponCount, matchCount);
 		}
-		DPRINTF("Cycle Count: %d; Match Count: %d\n", cycleWeaponCount, matchCount);
 		// if cycleWeaponCount matches, set backup weapons.
-		// or if Party Rule LoadWeapons Onlye is on, force set to needed weapons.
+		// or if Party Rule LoadWeapons Only is on, force set to needed weapons.
 		if (cycleWeaponCount == 3 || prLoadoutWeaponsOnly) {
-			weaponOrderBackup[index][0] = cycle[0];
-			weaponOrderBackup[index][1] = cycle[1];
-			weaponOrderBackup[index][2] = cycle[2];
+			for (i = 0; i < 3; ++i)
+				weaponOrderBackup[index][i] = cycle[i];
 		}
-		// if we found a match, set
-		if (matchCount == 3 || cycleWeaponCount == 3) {
+		// we found a match, or loadout weapons only is on.
+		if (matchCount == 3 || cycleWeaponCount == 3 || prLoadoutWeaponsOnly) {
 			// set equipped weapon in order
 			for (i = 0; i < 3; ++i)
 				playerGiveWeapon(player, weaponOrderBackup[index][i]);
 
 			// equip each weapon from last slot to first slot to keep correct order.
-			playerEquipWeapon(player, weaponOrderBackup[index][2]);
-			playerEquipWeapon(player, weaponOrderBackup[index][1]);
-			playerEquipWeapon(player, weaponOrderBackup[index][0]);
+			for (i = 2; i >= 0; --i)
+				playerEquipWeapon(player, weaponOrderBackup[index][i]);
 		}
 	}
 }
@@ -706,8 +712,9 @@ void loadoutWeaponsOnly(int first)
 	if (!first)
 		return;
 
-	// Strip weapons.
 	Player *player = playerGetFromSlot(0);
+	patchResurrectWeaponOrdering_HookWeaponStripMe(player);
+	patchResurrectWeaponOrdering_HookGiveMeRandomWeapons(player, 3);
 }
 
 int main(void)
@@ -768,7 +775,9 @@ int main(void)
         // runB6HitVisualizer();
 		// v2_Setting(2, first);
 		patchResurrectWeaponOrdering();
-		loadoutWeaponsOnly(first);
+		if (prLoadoutWeaponsOnly)
+			loadoutWeaponsOnly(first);
+
 		first = 0;
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
