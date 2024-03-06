@@ -604,117 +604,233 @@ void patchCTFFlag(void)
 	}
 }
 
-char weaponOrderBackup[2][3] = { {0,0,0}, {0,0,0} };
-int cycleWeapon1 = 1;
-int cycleWeapon2 = 2;
-int cycleWeapon3 = 3;
-int prLoadoutWeaponsOnly = 1;
-void patchResurrectWeaponOrdering_HookWeaponStripMe(Player * player)
+
+
+VariableAddress_t vaFieldOfView_FluxRA = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0x0040682c,
+	.Hoven = 0x00406194,
+	.OutpostX12 = 0x003fe08c,
+    .KorgonOutpost = 0x003fd46c,
+	.Metropolis = 0x003fc02c,
+	.BlackwaterCity = 0x003f8e14,
+	.CommandCenter = 0x0040721c,
+    .BlackwaterDocks = 0x0040917c,
+    .AquatosSewers = 0x00408d84,
+    .MarcadiaPalace = 0x00407dfc,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x004061c4,
+	.Hoven = 0x00405aac,
+	.OutpostX12 = 0x003fd9a4,
+    .KorgonOutpost = 0x003fcde4,
+	.Metropolis = 0x003fb9c4,
+	.BlackwaterCity = 0x003f874c,
+	.CommandCenter = 0x00406b9c,
+    .BlackwaterDocks = 0x00408afc,
+    .AquatosSewers = 0x00408704,
+    .MarcadiaPalace = 0x0040777c,
+#endif
+};
+VariableAddress_t vaFieldOfView_Hook = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0x004452e0,
+	.Hoven = 0x00446e60,
+	.OutpostX12 = 0x0043dc60,
+    .KorgonOutpost = 0x0043b820,
+	.Metropolis = 0x0043ab60,
+	.BlackwaterCity = 0x00438360,
+	.CommandCenter = 0x00438fe0,
+    .BlackwaterDocks = 0x0043b860,
+    .AquatosSewers = 0x0043ab60,
+    .MarcadiaPalace = 0x0043a4e0,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x00444468,
+	.Hoven = 0x00445f28,
+	.OutpostX12 = 0x0043cd68,
+    .KorgonOutpost = 0x0043a9a8,
+	.Metropolis = 0x00439ce8,
+	.BlackwaterCity = 0x00437468,
+	.CommandCenter = 0x004382a8,
+    .BlackwaterDocks = 0x0043aae8,
+    .AquatosSewers = 0x00439e28,
+    .MarcadiaPalace = 0x00439768,
+#endif
+};
+VariableAddress_t vaSetPOSRot_fovChange_Hook = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0x0050ca54,
+	.Hoven = 0x0050eb6c,
+	.OutpostX12 = 0x00504444,
+    .KorgonOutpost = 0x00501bdc,
+	.Metropolis = 0x00500f2c,
+	.BlackwaterCity = 0x004fe7c4,
+	.CommandCenter = 0x004fe78c,
+    .BlackwaterDocks = 0x0050100c,
+    .AquatosSewers = 0x0050030c,
+    .MarcadiaPalace = 0x004ffc8c,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x0050a264,
+	.Hoven = 0x0050c2bc,
+	.OutpostX12 = 0x00501bd4,
+    .KorgonOutpost = 0x004ff3ec,
+	.Metropolis = 0x004fe73c,
+	.BlackwaterCity = 0x004fbf54,
+	.CommandCenter = 0x004fc0dc,
+    .BlackwaterDocks = 0x004fe91c,
+    .AquatosSewers = 0x004fdc5c,
+    .MarcadiaPalace = 0x004fd59c,
+#endif
+};
+VariableAddress_t vaSetPOSRot_fovChange_Func = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0x00462460,
+	.Hoven = 0x00464010,
+	.OutpostX12 = 0x0045ae10,
+    .KorgonOutpost = 0x004589a0,
+	.Metropolis = 0x00457ce0,
+	.BlackwaterCity = 0x00455510,
+	.CommandCenter = 0x00455e08,
+    .BlackwaterDocks = 0x00458688,
+    .AquatosSewers = 0x00457988,
+    .MarcadiaPalace = 0x00457308,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x004612b0,
+	.Hoven = 0x00462da0,
+	.OutpostX12 = 0x00459be0,
+    .KorgonOutpost = 0x004577f0,
+	.Metropolis = 0x00456b30,
+	.BlackwaterCity = 0x004542e0,
+	.CommandCenter = 0x00454d98,
+    .BlackwaterDocks = 0x004575d8,
+    .AquatosSewers = 0x00456918,
+    .MarcadiaPalace = 0x00456258,
+#endif
+};
+
+
+int config_playerFov = 5;
+int patched_config_playerFov = 0;
+void writeFov(int cameraIdx, int a1, int a2, u32 ra, float fov, float f13, float f14, float f15)
 {
-	int i;
-	// backup currently equipped weapons
-	if (player->IsLocal) {
-		for (i = 0; i < 3; ++i)
-			weaponOrderBackup[player->mpIndex][i] = playerDeobfuscate(&player->QuickSelect.Slot[i], 1, 1);
+	static float lastFov = 0;
+	GameCamera* camera = cameraGetGameCamera(cameraIdx);
+	if (!camera)
+		return;
+
+	// save last fov
+	// or reuse last if fov passed is 0
+	if (fov > 0)
+		lastFov = fov;
+	else if (lastFov > 0)
+		fov = lastFov;
+	else
+		fov = lastFov = camera->fov.ideal;
+
+	// apply our fov modifier
+	// only if not scoping with sniper
+	u32 FluxRA = GetAddress(&vaFieldOfView_FluxRA);
+	if (ra != FluxRA && ra != ((u32)FluxRA + 0xe0))
+		fov += (config_playerFov / 10.0) * 1;
+
+	if (a2 > 2) {
+		if (a2 != 3) return;
+		camera->fov.limit = f15;
+		camera->fov.changeType = a2;
+		camera->fov.ideal = fov;
+		camera->fov.state = 1;
+		camera->fov.gain = f13;
+		camera->fov.damp = f14;
+		return;
+	} else if (a2 < 1) {
+		if (a2 != 0) return;
+		camera->fov.ideal = fov;
+		camera->fov.changeType = 0;
+		camera->fov.state = 1;
+		return;
 	}
 
-	// call hooked WeaponStripMe function after backup
-	playerStripWeapons(player);
-}
-
-void patchResurrectWeaponOrdering_HookGiveMeRandomWeapons(Player* player, int weaponCount)
-{
-	int i, j;
-	char matchCount = 0;
-	char cycleWeaponCount = 0;
-	int index = player->mpIndex;
-	// Set loadout/cycle weapons.  If not chosen, it will be set to default cycle.
-	char cycle[] = {
-		cycleWeapon1 > 0 ? cycleWeapon1 : WEAPON_ID_BLITZ,
-		cycleWeapon2 > 0 ? cycleWeapon2 : WEAPON_ID_FLUX,
-		cycleWeapon3 > 0 ? cycleWeapon3 : WEAPON_ID_GBOMB
-	};
-
-	// call hooked GiveMeRandomWeapons function first
-	if (!prLoadoutWeaponsOnly)
-		playerGiveRandomWeapons(player, weaponCount);
-
-	// then try and overwrite given weapon order if weapons match equipped weapons before death
-	if (player->IsLocal) {
-		// if Loadout Weapons Only is not on
-		if (!prLoadoutWeaponsOnly) {
-			// restore backup if they match (regardless of order) newly assigned weapons
-			for (i = 0; i < 3; i++) {
-				// if respawned weapons match backup weapons
-				u8 backedUpSlotValue = weaponOrderBackup[player->mpIndex][i];
-				for(j = 0; j < 3; j++) {
-					if (backedUpSlotValue == playerDeobfuscate(&player->QuickSelect.Slot[j], 1, 1)) {
-						++matchCount;
-					}
-				}
-				// if all loadout weapons are set
-				if (cycleWeapon1 != 0 && cycleWeapon2 != 0 && cycleWeapon1 != 0) {
-					// if respawned weapons match cycle weapons
-					for(j = 0; j < 3; j++) {
-						if (backedUpSlotValue == cycle[j]) {
-							++cycleWeaponCount;
-						}
-					}
-				}
-			}
-			DPRINTF("Cycle Count: %d; Match Count: %d\n", cycleWeaponCount, matchCount);
-		}
-		// if cycleWeaponCount matches, set backup weapons.
-		// or if Party Rule LoadWeapons Only is on, force set to needed weapons.
-		if (cycleWeaponCount == 3 || prLoadoutWeaponsOnly) {
-			for (i = 0; i < 3; ++i)
-				weaponOrderBackup[index][i] = cycle[i];
-		}
-		// we found a match, or loadout weapons only is on.
-		if (matchCount == 3 || cycleWeaponCount == 3 || prLoadoutWeaponsOnly) {
-			// set equipped weapon in order
-			for (i = 0; i < 3; ++i)
-				playerGiveWeapon(player, weaponOrderBackup[index][i]);
-
-			// equip each weapon from last slot to first slot to keep correct order.
-			for (i = 2; i >= 0; --i)
-				playerEquipWeapon(player, weaponOrderBackup[index][i]);
-		}
+	if (a1 == 0) {
+		camera->fov.ideal = fov;
+		camera->fov.changeType = 0;
+	} else {
+		camera->fov.changeType = a2;
+		camera->fov.init = camera->fov.actual;
+		camera->fov.timer = (short)a2;
+		camera->fov.timerInv = 1.0 / (float)a2;
 	}
+	camera->fov.state = 1;
 }
 
 /*
- * NAME :		patchResurrectWeaponOrdering
- * 
+ * NAME :		fovChange
  * DESCRIPTION :
- * 			Installs necessary hooks such that when respawning with same weapons,
- * 			they are equipped in the same order.
- * 
+ * 			Rewrites the FOV (via SetPosRot) when player dies.
  * NOTES :
- * 
  * ARGS : 
- * 
  * RETURN :
- * 
  * AUTHOR :			Troy "Metroynome" Pruitt
  */
-void patchResurrectWeaponOrdering(void)
+void fovChange(u32 a0)
 {
-	u32 hook_StripMe = ((u32)GetAddress(&vaPlayerRespawnFunc) + 0x40);
-	u32 hook_RandomWeapons = hook_StripMe + 0x1c;
-	HOOK_JAL(hook_StripMe, &patchResurrectWeaponOrdering_HookWeaponStripMe);
-	HOOK_JAL(hook_RandomWeapons, &patchResurrectWeaponOrdering_HookGiveMeRandomWeapons);
+	// run base
+	((void (*)(u32))GetAddress(&vaSetPOSRot_fovChange_Func))(0);
+
+	writeFov(0, 0, 3, 0, 0, 0.05, 0.2, 0);
 }
 
-void loadoutWeaponsOnly(int first)
+/*
+ * NAME :		patchFov
+ * DESCRIPTION :
+ * 			Installs SetFov override hook.
+ * NOTES :
+ * ARGS : 
+ * RETURN :
+ * AUTHOR :			Daniel "Dnawrkshp" Gerendasy
+ */
+extern VariableAddress_t vaPlayerSetPosRotFunc;
+void patchFov(void)
 {
-	// only call once at the start of the game.
-	if (!first)
+	static int ingame = 0;
+	static int lastFov = 0;
+	if (!isInGame()) {
+		ingame = 0;
 		return;
+	}
 
-	Player *player = playerGetFromSlot(0);
-	patchResurrectWeaponOrdering_HookWeaponStripMe(player);
-	patchResurrectWeaponOrdering_HookGiveMeRandomWeapons(player, 3);
+	// replace SetFov function
+	if (!patched_config_playerFov) {
+		HOOK_J(GetAddress(&vaFieldOfView_Hook), &writeFov);
+		POKE_U32((u32)GetAddress(&vaFieldOfView_Hook) + 0x4, 0x03E0382d);
+
+		// modify SetPosRot Func. (Needed when player dies)
+		HOOK_J((u32)GetAddress(&vaPlayerSetPosRotFunc) + 0x584, &fovChange);
+
+		patched_config_playerFov = 1;
+	}
+
+	// If patching with `vaPlayerSetPosRotFunc` doesn't work, use this.
+	// Player *player = playerGetFromSlot(0);
+	// if (playerDeobfuscate(&player->PreviousState, 0, 0) == PLAYER_STATE_WAIT_FOR_RESURRECT)
+	// 	writeFov(0, 0, 3, 0, 0, 0.05, 0.2, 0);
+
+	// initialize fov at start of game
+	if (!ingame || lastFov != config_playerFov) {
+		GameCamera* camera = cameraGetGameCamera(0);
+		if (!camera)
+			return;
+
+		writeFov(0, 0, 3, 0, 0, 0.05, 0.2, 0);
+		lastFov = config_playerFov;
+		ingame = 1;
+	}
 }
 
 int main(void)
@@ -774,9 +890,7 @@ int main(void)
 		// patchCTFFlag();
         // runB6HitVisualizer();
 		// v2_Setting(2, first);
-		patchResurrectWeaponOrdering();
-		if (prLoadoutWeaponsOnly)
-			loadoutWeaponsOnly(first);
+		patchFov();
 
 		first = 0;
 		InfiniteChargeboot();
