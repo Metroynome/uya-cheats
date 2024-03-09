@@ -890,7 +890,30 @@ int main(void)
 		// patchCTFFlag();
         // runB6HitVisualizer();
 		// v2_Setting(2, first);
-		patchFov();
+		// patchFov();
+		static int changedFOV = 0;
+		float normalFOV = 1.11;
+		float newFOV = normalFOV + (5.0 / 10.0) * 1;
+		// if not in FPS View, set
+		if (p->fps.active == 1) {
+			p->Camera->fov.ideal = newFOV;
+			changedFOV = 0;
+		} else {
+			// if in FPS and not holding Flux, use new FOV, else use normal FOV.
+			if (p->WeaponHeldId != WEAPON_ID_FLUX) {
+				// set to new FOV
+				p->Camera->fov.ideal = newFOV;
+				changedFOV = 0;
+			// if in FPS and changed FOV is false
+			// or if the ideal camera is greater than the normal FOV.
+			} else if (!changedFOV || p->Camera->fov.ideal > normalFOV) {
+				// set to normal FOV.
+				p->Camera->fov.ideal = normalFOV;
+				changedFOV = 1;
+			}
+		}
+		p->Camera->fov.changeType = 3;
+		p->Camera->fov.state = 1;
 
 		first = 0;
 		InfiniteChargeboot();

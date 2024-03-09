@@ -341,11 +341,9 @@ void runSpectate(void)
 
 					// Update spectate index
 					spectateData->Index = spectateIndex;
-				}
-				else {
+				} else {
 					// Show nav message
-					if (!spectateData->HasShownNavMsg) 
-					{
+					if (!spectateData->HasShownNavMsg) {
 						spectateData->HasShownNavMsg = 1;
 						uiShowPopup(player, "Use \x14 and \x15 to navigate between players.", 5);
 					}
