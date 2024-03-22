@@ -54,14 +54,17 @@ void DebugInGame(Player* player)
 		// spawnPointGetRandom(player, &position, &rotation);
 		Player ** ps = playerGetAll();
 		Player * p = ps[1];
-		playerSetPosRot(player, &p->PlayerPosition, &p->PlayerRotation);
+		playerSetPosRot(player, &p->playerPosition, &p->playerRotation);
 	} else if(playerPadGetButtonDown(player, PAD_DOWN) > 0) {
 		// Set Gattling Turret Health to 1.
 		DEBUGsetGattlingTurretHealth();
 	} else if (playerPadGetButtonDown(player, PAD_L3) > 0) {
 		// Nothing Yet!
 	} else if (playerPadGetButtonDown(player, PAD_R3) > 0) {
-		// Nothing Yet!
+		int j;
+		u8* slot = (u8*)(u32)player + 0x1a32;
+		for(j = 0; j < 12; ++j)
+			playerGiveWeaponUpgrade(player, playerDeobfuscate(&slot[j], 1, 1));
 	}
 }
 
@@ -237,7 +240,7 @@ void runB6HitVisualizer(void)
 		Moby *m = TestMoby = mobySpawn(MOBY_ID_TEST, 0);
 		m->Scale *= 0.1;
 		m->PUpdate = &renderB6Visualizer;
-		vector_add(m->Position, playerGetFromSlot(0)->PlayerPosition, off);
+		vector_add(m->Position, playerGetFromSlot(0)->playerPosition, off);
 	}
 
   // 
@@ -273,12 +276,12 @@ void drawCollider(Moby* moby)
 			float theta = (i / (float)steps) * MATH_TAU;
 			float omega = (j / (float)steps) * MATH_TAU;
 
-			vector_copy(pos, p->PlayerPosition);
+			vector_copy(pos, p->playerPosition);
 			pos[0] += radius * sinf(theta) * cosf(omega);
 			pos[1] += radius * sinf(theta) * sinf(omega);
 			pos[2] += radius * cosf(theta);
 
-			vector_add(t, p->PlayerPosition, o);
+			vector_add(t, p->playerPosition, o);
 
 			if (CollLine_Fix(pos, t, 1, NULL, 0)) {
 				vector_copy(t, CollLine_Fix_GetHitPosition());
@@ -299,18 +302,18 @@ void drawSomething(Moby* moby)
 	const int steps = 10 * 2;
 	const float radius = 2;
 
-	vector_copy(pos, p->PlayerPosition);
+	vector_copy(pos, p->playerPosition);
 	for (i = 0; i < steps; ++i) {
 		for (j = 0; j < steps; ++j) {
 			float theta = (i / (float)steps) * MATH_TAU;
 			float omega = (j / (float)steps) * MATH_TAU;
 
-			vector_copy(pos, p->PlayerPosition);
+			vector_copy(pos, p->playerPosition);
 			pos[0] += radius * sinf(theta) * cosf(omega);
 			pos[1] += radius * sinf(theta) * sinf(omega);
 			pos[2] += radius * cosf(theta);
 
-			vector_add(t, p->PlayerPosition, o);
+			vector_add(t, p->playerPosition, o);
 
 			if (CollLine_Fix(pos, t, 1, NULL, 0)) {
 				vector_copy(t, CollLine_Fix_GetHitPosition());
@@ -377,7 +380,7 @@ void flagHandlePickup(Moby* flagMoby, int pIdx)
 		flagReturnToBase(flagMoby, 0, pIdx);
 	} else {
 		flagPickup(flagMoby, pIdx);
-		player->FlagMoby = flagMoby;
+		player->flagMoby = flagMoby;
 	}
 	DPRINTF("player %d picked up flag %X at %d\n", player->mpIndex, flagMoby->OClass, gameGetTime());
 }
@@ -500,7 +503,7 @@ void customFlagLogic(Moby* flagMoby)
 
 	for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
 		Player* player = players[i];
-		if (!player || !player->IsLocal)
+		if (!player || !player->isLocal)
 			continue;
 
 		// only allow actions by living players, and non-chargebooting players
@@ -517,11 +520,11 @@ void customFlagLogic(Moby* flagMoby)
 			continue;
 
 		// skip player if in vehicle
-		if (player->Vehicle && playerDeobfuscate(&player->State, 0, 0) == PLAYER_STATE_VEHICLE)
+		if (player->vehicle && playerDeobfuscate(&player->state, 0, 0) == PLAYER_STATE_VEHICLE)
 			continue;
 
 		// skip if player state is in vehicle and critterMode is on
-		if (player->Camera && player->Camera->camHeroData.critterMode)
+		if (player->camera && player->camera->camHeroData.critterMode)
 			continue;
 
 		// skip if player is on teleport pad
@@ -530,14 +533,14 @@ void customFlagLogic(Moby* flagMoby)
 			continue;
 
 		// player must be within 2 units of flag
-		vector_subtract(t, flagMoby->Position, player->PlayerPosition);
+		vector_subtract(t, flagMoby->Position, player->playerPosition);
 		float sqrDistance = vector_sqrmag(t);
 		if (sqrDistance > (2*2))
 			continue;
 
 		// player is on different team than flag and player isn't already holding flag
 		if (player->mpTeam != pvars->Team) {
-			if (!player->FlagMoby) {
+			if (!player->flagMoby) {
 				flagRequestPickup(flagMoby, i);
 				return;
 			}
@@ -604,235 +607,6 @@ void patchCTFFlag(void)
 	}
 }
 
-
-
-VariableAddress_t vaFieldOfView_FluxRA = {
-#if UYA_PAL
-	.Lobby = 0,
-	.Bakisi = 0x0040682c,
-	.Hoven = 0x00406194,
-	.OutpostX12 = 0x003fe08c,
-    .KorgonOutpost = 0x003fd46c,
-	.Metropolis = 0x003fc02c,
-	.BlackwaterCity = 0x003f8e14,
-	.CommandCenter = 0x0040721c,
-    .BlackwaterDocks = 0x0040917c,
-    .AquatosSewers = 0x00408d84,
-    .MarcadiaPalace = 0x00407dfc,
-#else
-	.Lobby = 0,
-	.Bakisi = 0x004061c4,
-	.Hoven = 0x00405aac,
-	.OutpostX12 = 0x003fd9a4,
-    .KorgonOutpost = 0x003fcde4,
-	.Metropolis = 0x003fb9c4,
-	.BlackwaterCity = 0x003f874c,
-	.CommandCenter = 0x00406b9c,
-    .BlackwaterDocks = 0x00408afc,
-    .AquatosSewers = 0x00408704,
-    .MarcadiaPalace = 0x0040777c,
-#endif
-};
-VariableAddress_t vaFieldOfView_Hook = {
-#if UYA_PAL
-	.Lobby = 0,
-	.Bakisi = 0x004452e0,
-	.Hoven = 0x00446e60,
-	.OutpostX12 = 0x0043dc60,
-    .KorgonOutpost = 0x0043b820,
-	.Metropolis = 0x0043ab60,
-	.BlackwaterCity = 0x00438360,
-	.CommandCenter = 0x00438fe0,
-    .BlackwaterDocks = 0x0043b860,
-    .AquatosSewers = 0x0043ab60,
-    .MarcadiaPalace = 0x0043a4e0,
-#else
-	.Lobby = 0,
-	.Bakisi = 0x00444468,
-	.Hoven = 0x00445f28,
-	.OutpostX12 = 0x0043cd68,
-    .KorgonOutpost = 0x0043a9a8,
-	.Metropolis = 0x00439ce8,
-	.BlackwaterCity = 0x00437468,
-	.CommandCenter = 0x004382a8,
-    .BlackwaterDocks = 0x0043aae8,
-    .AquatosSewers = 0x00439e28,
-    .MarcadiaPalace = 0x00439768,
-#endif
-};
-VariableAddress_t vaSetPOSRot_fovChange_Hook = {
-#if UYA_PAL
-	.Lobby = 0,
-	.Bakisi = 0x0050ca54,
-	.Hoven = 0x0050eb6c,
-	.OutpostX12 = 0x00504444,
-    .KorgonOutpost = 0x00501bdc,
-	.Metropolis = 0x00500f2c,
-	.BlackwaterCity = 0x004fe7c4,
-	.CommandCenter = 0x004fe78c,
-    .BlackwaterDocks = 0x0050100c,
-    .AquatosSewers = 0x0050030c,
-    .MarcadiaPalace = 0x004ffc8c,
-#else
-	.Lobby = 0,
-	.Bakisi = 0x0050a264,
-	.Hoven = 0x0050c2bc,
-	.OutpostX12 = 0x00501bd4,
-    .KorgonOutpost = 0x004ff3ec,
-	.Metropolis = 0x004fe73c,
-	.BlackwaterCity = 0x004fbf54,
-	.CommandCenter = 0x004fc0dc,
-    .BlackwaterDocks = 0x004fe91c,
-    .AquatosSewers = 0x004fdc5c,
-    .MarcadiaPalace = 0x004fd59c,
-#endif
-};
-VariableAddress_t vaSetPOSRot_fovChange_Func = {
-#if UYA_PAL
-	.Lobby = 0,
-	.Bakisi = 0x00462460,
-	.Hoven = 0x00464010,
-	.OutpostX12 = 0x0045ae10,
-    .KorgonOutpost = 0x004589a0,
-	.Metropolis = 0x00457ce0,
-	.BlackwaterCity = 0x00455510,
-	.CommandCenter = 0x00455e08,
-    .BlackwaterDocks = 0x00458688,
-    .AquatosSewers = 0x00457988,
-    .MarcadiaPalace = 0x00457308,
-#else
-	.Lobby = 0,
-	.Bakisi = 0x004612b0,
-	.Hoven = 0x00462da0,
-	.OutpostX12 = 0x00459be0,
-    .KorgonOutpost = 0x004577f0,
-	.Metropolis = 0x00456b30,
-	.BlackwaterCity = 0x004542e0,
-	.CommandCenter = 0x00454d98,
-    .BlackwaterDocks = 0x004575d8,
-    .AquatosSewers = 0x00456918,
-    .MarcadiaPalace = 0x00456258,
-#endif
-};
-
-
-int config_playerFov = 5;
-int patched_config_playerFov = 0;
-void writeFov(int cameraIdx, int a1, int a2, u32 ra, float fov, float f13, float f14, float f15)
-{
-	static float lastFov = 0;
-	GameCamera* camera = cameraGetGameCamera(cameraIdx);
-	if (!camera)
-		return;
-
-	// save last fov
-	// or reuse last if fov passed is 0
-	if (fov > 0)
-		lastFov = fov;
-	else if (lastFov > 0)
-		fov = lastFov;
-	else
-		fov = lastFov = camera->fov.ideal;
-
-	// apply our fov modifier
-	// only if not scoping with sniper
-	u32 FluxRA = GetAddress(&vaFieldOfView_FluxRA);
-	if (ra != FluxRA && ra != ((u32)FluxRA + 0xe0))
-		fov += (config_playerFov / 10.0) * 1;
-
-	if (a2 > 2) {
-		if (a2 != 3) return;
-		camera->fov.limit = f15;
-		camera->fov.changeType = a2;
-		camera->fov.ideal = fov;
-		camera->fov.state = 1;
-		camera->fov.gain = f13;
-		camera->fov.damp = f14;
-		return;
-	} else if (a2 < 1) {
-		if (a2 != 0) return;
-		camera->fov.ideal = fov;
-		camera->fov.changeType = 0;
-		camera->fov.state = 1;
-		return;
-	}
-
-	if (a1 == 0) {
-		camera->fov.ideal = fov;
-		camera->fov.changeType = 0;
-	} else {
-		camera->fov.changeType = a2;
-		camera->fov.init = camera->fov.actual;
-		camera->fov.timer = (short)a2;
-		camera->fov.timerInv = 1.0 / (float)a2;
-	}
-	camera->fov.state = 1;
-}
-
-/*
- * NAME :		fovChange
- * DESCRIPTION :
- * 			Rewrites the FOV (via SetPosRot) when player dies.
- * NOTES :
- * ARGS : 
- * RETURN :
- * AUTHOR :			Troy "Metroynome" Pruitt
- */
-void fovChange(u32 a0)
-{
-	// run base
-	((void (*)(u32))GetAddress(&vaSetPOSRot_fovChange_Func))(0);
-
-	writeFov(0, 0, 3, 0, 0, 0.05, 0.2, 0);
-}
-
-/*
- * NAME :		patchFov
- * DESCRIPTION :
- * 			Installs SetFov override hook.
- * NOTES :
- * ARGS : 
- * RETURN :
- * AUTHOR :			Daniel "Dnawrkshp" Gerendasy
- */
-extern VariableAddress_t vaPlayerSetPosRotFunc;
-void patchFov(void)
-{
-	static int ingame = 0;
-	static int lastFov = 0;
-	if (!isInGame()) {
-		ingame = 0;
-		return;
-	}
-
-	// replace SetFov function
-	if (!patched_config_playerFov) {
-		HOOK_J(GetAddress(&vaFieldOfView_Hook), &writeFov);
-		POKE_U32((u32)GetAddress(&vaFieldOfView_Hook) + 0x4, 0x03E0382d);
-
-		// modify SetPosRot Func. (Needed when player dies)
-		HOOK_J((u32)GetAddress(&vaPlayerSetPosRotFunc) + 0x584, &fovChange);
-
-		patched_config_playerFov = 1;
-	}
-
-	// If patching with `vaPlayerSetPosRotFunc` doesn't work, use this.
-	// Player *player = playerGetFromSlot(0);
-	// if (playerDeobfuscate(&player->PreviousState, 0, 0) == PLAYER_STATE_WAIT_FOR_RESURRECT)
-	// 	writeFov(0, 0, 3, 0, 0, 0.05, 0.2, 0);
-
-	// initialize fov at start of game
-	if (!ingame || lastFov != config_playerFov) {
-		GameCamera* camera = cameraGetGameCamera(0);
-		if (!camera)
-			return;
-
-		writeFov(0, 0, 3, 0, 0, 0.05, 0.2, 0);
-		lastFov = config_playerFov;
-		ingame = 1;
-	}
-}
-
 int main(void)
 {
 	((void (*)(void))0x00126780)();
@@ -869,10 +643,10 @@ int main(void)
 
 		// Test_Sprites(SCREEN_WIDTH * 0.3, SCREEN_HEIGHT * .50, 100);
 
-		// printf("\nState: %d", playerDeobfuscate(&p->State, 0, 0));
+		// printf("\nState: %d", playerDeobfuscate(&p->state, 0, 0));
 		// printf("\nPrevious State: %d", playerDeobfuscate(&p->PreviousState, 0, 0));
 		// printf("\nPrePrevious State: %d", playerDeobfuscate(&p->PrePreviousState, 0, 0));
-		// printf("\nState Type: %d", playerDeobfuscate(&p->StateType, 0, 0));
+		// printf("\nState Type: %d", playerDeobfuscate(&p->stateType, 0, 0));
 		// printf("\nPrevious Type: %d", playerDeobfuscate(&p->PreviousType, 0, 0));
 		// printf("\nPrePrevious Type: %d", playerDeobfuscate(&p->PrePreviousType, 0, 0));
 		// printf("\nground: %x", (u32)((u32)&p->ground - (u32)PLAYER_STRUCT));
@@ -890,38 +664,14 @@ int main(void)
 		// patchCTFFlag();
         // runB6HitVisualizer();
 		// v2_Setting(2, first);
-		// patchFov();
-		static int changedFOV = 0;
-		float normalFOV = 1.11;
-		float newFOV = normalFOV + (5.0 / 10.0) * 1;
-		// if not in FPS View, set
-		if (p->fps.active == 1) {
-			p->Camera->fov.ideal = newFOV;
-			changedFOV = 0;
-		} else {
-			// if in FPS and not holding Flux, use new FOV, else use normal FOV.
-			if (p->WeaponHeldId != WEAPON_ID_FLUX) {
-				// set to new FOV
-				p->Camera->fov.ideal = newFOV;
-				changedFOV = 0;
-			// if in FPS and changed FOV is false
-			// or if the ideal camera is greater than the normal FOV.
-			} else if (!changedFOV || p->Camera->fov.ideal > normalFOV) {
-				// set to normal FOV.
-				p->Camera->fov.ideal = normalFOV;
-				changedFOV = 1;
-			}
-		}
-		p->Camera->fov.changeType = 3;
-		p->Camera->fov.state = 1;
-
-		first = 0;
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
-    	DebugInGame(p);
+    	// DebugInGame(p);
     } else {
 		DebugInMenus();
 	}
+
+	StartBots();
 
 	uyaPostUpdate();
 

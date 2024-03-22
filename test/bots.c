@@ -308,29 +308,30 @@ void modeInitTarget(SimulatedPlayer_t * sPlayer)
 
 void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 {
-	VECTOR delta, targetPos;
+	VECTOR delta;
+	VECTOR targetPos;
 	Player ** players = playerGetAll();
 	Player * player = players[0];
 	if (!sPlayer || !player || !sPlayer->Active)
 		return;
 
 	Player* target = sPlayer->Player;
-	Moby* targetMoby = target->PlayerMoby;
+	Moby* targetMoby = target->pMoby;
 	struct TrainingTargetMobyPVar* pvar = &sPlayer->Vars;
 	if (!pvar)
 		return;
 
 	// face player
-	// vector_subtract(delta, player->PlayerPosition, target->PlayerPosition);
+	// vector_subtract(delta, player->playerPosition, target->playerPosition);
 	// float len = vector_length(delta);
 	// float yaw = atan2f(delta[1] / len, delta[0] / len);
 	
 	// MATRIX m;
 	// matrix_unit(m);
 	// matrix_rotate_z(m, m, yaw);
-	// memcpy(target->Camera->uMtx, m, sizeof(VECTOR) * 3);
+	// memcpy(target->camera->uMtx, m, sizeof(VECTOR) * 3);
 	// vector_copy(target->fps.CameraDir, &m[4]);
-	// target->fps.Vars.CameraYaw.rotation = sPlayer->Yaw;
+	// target->fps.Vars.CameraY.rotation = sPlayer->Yaw;
     
 	struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
 	int jumping = 0;
@@ -403,7 +404,7 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 	memset(sPlayer, 0, sizeof(SimulatedPlayer_t));
 	
 	// spawn player
-	memcpy(&sPlayer->Pad, players[0]->Paddata, sizeof(struct PAD));
+	memcpy(&sPlayer->Pad, players[0]->pPad, sizeof(struct PAD));
 	
 	sPlayer->Pad.rdata[7] = 0x7F;
 	sPlayer->Pad.rdata[6] = 0x7F;
@@ -432,16 +433,16 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 
 	POKE_U32(0x002412f0 + (4 * id), 0);
 
-	sPlayer->Player->Paddata = (void*)&sPlayer->Pad;
+	sPlayer->Player->pPad = (void*)&sPlayer->Pad;
 	sPlayer->Player->fps.Vars.cam_slot = id;
 	sPlayer->Player->mpIndex = id;
 	sPlayer->Player->mpTeam = TargetTeam;
 	sPlayer->Idx = idx;
 	POKE_U32(sPlayer->Player->fps.Vars.pHero, (u32)sPlayer->Player);
 
-	// if (sPlayer->Player->PlayerMoby) {
-	// 	sPlayer->Player->PlayerMoby->NetObject = sPlayer->Player;
-	// 	*(u32*)((u32)sPlayer->Player->PlayerMoby->PVar + 0x70) = (u32)sPlayer->Player;
+	// if (sPlayer->Player->pMoby) {
+	// 	sPlayer->Player->pMoby->NetObject = sPlayer->Player;
+	// 	*(u32*)((u32)sPlayer->Player->pMoby->PVar + 0x70) = (u32)sPlayer->Player;
 	// }
 
 	sPlayer->Active = 0;
@@ -456,7 +457,7 @@ void targetUpdate(SimulatedPlayer_t *sPlayer)
 		return;
 
 	Player* target = sPlayer->Player;
-	Moby* targetMoby = target->PlayerMoby;
+	Moby* targetMoby = target->pMoby;
 
 	// reset pad
 	struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
