@@ -1,1 +1,33 @@
 patch=1,EE,20139E68,extended,0C03C800
+
+
+
+// // follow aimer
+// patch=1,EE,E002F7FD,extended,00225982
+// patch=1,EE,502F8BB0,extended,0000000c
+// patch=1,EE,002F9E38,extended,00000000
+// // chargeboot forever ({R2} + {L1})
+// patch=1,EE,E002f9ff,extended,00225982
+// patch=1,EE,60225e70,extended,00000027
+// patch=1,EE,00010000,extended,ffffbfe4
+// // rapid fire (Hold {R3})
+// patch=1,EE,e002f7fb,extended,00225982
+// patch=1,EE,60225e70,extended,00000000
+// patch=1,EE,00020000,extended,ffffc01c
+// // Air Walk (Hold {L3})
+// patch=1,EE,e002fffd,extended,00225982
+// patch=1,EE,60225e70,extended,00000000
+// patch=1,EE,00010000,extended,ffffbfd0
+
+//Disable HUD
+//patch=1,EE,20243788,extended,00000000
+//patch=1,EE,20243A90,extended,00000000
+//patch=1,EE,20243AA0,extended,01010101
+//patch=1,EE,20243728,extended,00000000
+
+// Loading Check
+patch=1,EE,e0040000,extended,00225e70
+patch=1,EE,20139E68,extended,0c0499e0
+patch=1,EE,201264e8,extended,03e00008
+patch=1,EE,20126628,extended,03e00008
+patch=1,EE,20126608,extended,03e00008

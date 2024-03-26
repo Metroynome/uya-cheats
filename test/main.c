@@ -644,13 +644,15 @@ int main(void)
 		// Test_Sprites(SCREEN_WIDTH * 0.3, SCREEN_HEIGHT * .50, 100);
 
 		// printf("\nState: %d", playerDeobfuscate(&p->state, 0, 0));
-		// printf("\nPrevious State: %d", playerDeobfuscate(&p->PreviousState, 0, 0));
-		// printf("\nPrePrevious State: %d", playerDeobfuscate(&p->PrePreviousState, 0, 0));
+		// printf("\nPrevious State: %d", playerDeobfuscate(&p->previousState, 0, 0));
+		// printf("\nPrePrevious State: %d", playerDeobfuscate(&p->prePreviousState, 0, 0));
 		// printf("\nState Type: %d", playerDeobfuscate(&p->stateType, 0, 0));
-		// printf("\nPrevious Type: %d", playerDeobfuscate(&p->PreviousType, 0, 0));
-		// printf("\nPrePrevious Type: %d", playerDeobfuscate(&p->PrePreviousType, 0, 0));
+		// printf("\nPrevious Type: %d", playerDeobfuscate(&p->previousType, 0, 0));
+		// printf("\nPrePrevious Type: %d", playerDeobfuscate(&p->prePreviousType, 0, 0));
 		// printf("\nground: %x", (u32)((u32)&p->ground - (u32)PLAYER_STRUCT));
-		// printf("\nground->ground.pMoby: %x", (u32)((u32)&p->ground.pMoby - (u32)PLAYER_STRUCT));
+		// printf("\nquickSelect: %x", (u32)((u32)&p->quickSelect - (u32)PLAYER_STRUCT));
+		// printf("\nloopingSounds: %x", (u32)((u32)&p->loopingSounds - (u32)PLAYER_STRUCT));
+		// printf("\nskinMoby3: %x", (u32)((u32)&p->skinMoby3 - (u32)PLAYER_STRUCT));
 		// printf("\nmtxFxActive: %x", (u32)((u32)&p->mtxFxActive - (u32)PLAYER_STRUCT));
 		// printf("\npnetplayer: %x", (u32)((u32)&p->pNetPlayer - (u32)PLAYER_STRUCT));
 

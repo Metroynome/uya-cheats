@@ -6,6 +6,7 @@ EE_BIN = $(EE_BIN_DIR)test.bin
 EE_OBJS = functions.o main.o bots.o spectate.o scavengerhunt.o
 EE_LIBS = -luyantsc
 #EE_LIBS = -luyapal
+HEADER = '1s/^/gametitle=Ratchet and Clank: Up Your Arsenal [45FE0CC4]\n\n/'
 
 ADDRESS = 000F5000
 
@@ -42,6 +43,7 @@ code:
 	bin2code $(EE_BIN) $(ADDRESS) $(EE_BIN).pnach pnach-writeonce
 	cat template/footer.raw >> $(EE_BIN).raw
 	cat template/footer.pnach >> $(EE_BIN).pnach
+	sed -i $(HEADER) $(EE_BIN).pnach
 
 clean:
 	rm -rf linkfile
