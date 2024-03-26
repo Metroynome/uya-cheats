@@ -28,8 +28,8 @@ void MovementInputs(Player * player, PadButtonStatus * pad)
 	// UYA Messes up because v would always be 0.
 	VECTOR v;
 	vector_copy(v, CameraPosition);
-    float CameraYaw = player->CameraYaw.Value;
-    float CameraPitch = player->CameraPitch.Value;
+    float CameraYaw = player->fps.Vars.CameraZ.rotation;
+    float CameraPitch = player->fps.Vars.CameraY.rotation;
 
 	// get rotation from yaw and pitch
 	float ySin = sinf(CameraYaw);
@@ -117,8 +117,8 @@ void MovementInputs(Player * player, PadButtonStatus * pad)
 		float len = vector_length(delta);
 		float targetYaw = atan2f(delta[1] / len, delta[0] / len);
 		float targetPitch = asinf(-delta[2] / len);
-		player->CameraPitch.Value = targetPitch;
-		player->CameraYaw.Value = targetYaw;
+		player->fps.Vars.CameraZ.rotation = targetPitch;
+		player->fps.Vars.CameraY.rotation = targetYaw;
 	}
 	
 	// Add Vector to Camera Position
@@ -130,10 +130,10 @@ void MovementInputs(Player * player, PadButtonStatus * pad)
 void activate(Player * player)
 {
 	// Copy Current Player Camera Position and store it.
-	vector_copy(CameraPosition, player->CameraPos);
+	vector_copy(CameraPosition, player->fps.CameraPos);
 
 	// Copy Current Player Position and store it.
-	vector_copy(PlayerBackup, player->PlayerPosition);
+	vector_copy(PlayerBackup, player->playerPosition);
 
 	// Let Camera go past the death barrier
 	// *(u32*)0x005F40DC = 0x10000006;
@@ -152,18 +152,18 @@ void activate(Player * player)
 void deactivate(Player * player)
 {
 	// Reset Player Position
-	player->PlayerPositionX = PlayerBackup[0];
-	player->PlayerPositionZ = PlayerBackup[1];
-	player->PlayerPositionY = PlayerBackup[2];
+	player->cheatX = PlayerBackup[0];
+	player->cheatZ = PlayerBackup[1];
+	player->cheatY = PlayerBackup[2];
 
 	// Set Camera Distance to Default
-	player->CameraOffset[0] = -6;
+	player->fps.Vars.CameraPositionOffset[0] = -6;
 
 	// Don't let Camera go past death barrier
 	// *(u32*)0x005F40DC = 0x10400006;
 
 	// Reset Respawn timer
-	player->RespawnTimer = 0;
+	player->timers.resurrectWait = 0;
 
 	// Reset Occlusion
 	if (Occlusion == 0)
@@ -191,7 +191,7 @@ int main(void)
 
 	// Get Local Player
 	Player * player = (Player*)PLAYER_STRUCT;
-	PadButtonStatus * pad = (PadButtonStatus*)player->Paddata;
+	PadButtonStatus * pad = (PadButtonStatus*)player->pPad;
 	// PlayerHUDFlags * hud = hudGetPlayerFlags(0);
 
 	if (!Active)
@@ -218,7 +218,7 @@ int main(void)
 		return 0;
 
 	// If start isn't open, let inputs go through.
-	if (player->TimerFadeToBlack == 0)
+	if (player->pauseTimer == 0)
 	{
 		// Select: Toggle Score
 		// if ((pad->btns & PAD_SELECT) == 0 && ToggleScoreboard == 0)
@@ -247,25 +247,25 @@ int main(void)
 		MovementInputs(player, pad);
 	}
 	// Apply Camera Position
-	vector_copy(player->CameraPos, CameraPosition);
+	vector_copy(player->fps.CameraPos, CameraPosition);
 
 	// If player isn't dead, move player to X: Zero
 	if (playerGetHealth(player) > 0)
 	{
-		player->PlayerPositionX = 0;
-		player->PlayerPositionZ = PlayerBackup[1];
-		player->PlayerPositionY = PlayerBackup[2] + 0x00100000;
+		player->cheatX = 0;
+		player->cheatZ = PlayerBackup[1];
+		player->cheatY = PlayerBackup[2] + 0x00100000;
 	}
 
 	// Force Hold Wrench
-	player->WrenchOnly = 1;
+	player->wrenchOnly = 1;
 
 	// Constanty Set Camera Distance to Zero
-	player->CameraOffset[0] = 0;
+	player->fps.Vars.CameraPositionOffset[0] = 0;
 
 	// fix death camera lock
-	player->CameraPitchMin = 1.48353;
-	player->CameraPitchMax = -1.22173;
+	player->fps.Vars.CameraYMin = 1.48353;
+	player->fps.Vars.CameraYMax = -1.22173;
 
 	return 0;
 }
