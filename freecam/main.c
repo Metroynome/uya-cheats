@@ -28,8 +28,8 @@ void MovementInputs(Player * player, PadButtonStatus * pad)
 	// UYA Messes up because v would always be 0.
 	VECTOR v;
 	vector_copy(v, CameraPosition);
-    float CameraYaw = player->fps.Vars.CameraZ.rotation;
-    float CameraPitch = player->fps.Vars.CameraY.rotation;
+    float CameraYaw = player->fps.vars.cameraZ.rotation;
+    float CameraPitch = player->fps.vars.cameraY.rotation;
 
 	// get rotation from yaw and pitch
 	float ySin = sinf(CameraYaw);
@@ -117,8 +117,8 @@ void MovementInputs(Player * player, PadButtonStatus * pad)
 		float len = vector_length(delta);
 		float targetYaw = atan2f(delta[1] / len, delta[0] / len);
 		float targetPitch = asinf(-delta[2] / len);
-		player->fps.Vars.CameraZ.rotation = targetPitch;
-		player->fps.Vars.CameraY.rotation = targetYaw;
+		player->fps.vars.cameraZ.rotation = targetPitch;
+		player->fps.vars.cameraY.rotation = targetYaw;
 	}
 	
 	// Add Vector to Camera Position
@@ -130,7 +130,7 @@ void MovementInputs(Player * player, PadButtonStatus * pad)
 void activate(Player * player)
 {
 	// Copy Current Player Camera Position and store it.
-	vector_copy(CameraPosition, player->fps.CameraPos);
+	vector_copy(CameraPosition, player->fps.cameraPos);
 
 	// Copy Current Player Position and store it.
 	vector_copy(PlayerBackup, player->playerPosition);
@@ -157,7 +157,7 @@ void deactivate(Player * player)
 	player->cheatY = PlayerBackup[2];
 
 	// Set Camera Distance to Default
-	player->fps.Vars.CameraPositionOffset[0] = -6;
+	player->fps.vars.positionOffset[0] = -6;
 
 	// Don't let Camera go past death barrier
 	// *(u32*)0x005F40DC = 0x10400006;
@@ -247,7 +247,7 @@ int main(void)
 		MovementInputs(player, pad);
 	}
 	// Apply Camera Position
-	vector_copy(player->fps.CameraPos, CameraPosition);
+	vector_copy(player->fps.cameraPos, CameraPosition);
 
 	// If player isn't dead, move player to X: Zero
 	if (playerGetHealth(player) > 0)
@@ -261,11 +261,11 @@ int main(void)
 	player->wrenchOnly = 1;
 
 	// Constanty Set Camera Distance to Zero
-	player->fps.Vars.CameraPositionOffset[0] = 0;
+	player->fps.vars.positionOffset[0] = 0;
 
 	// fix death camera lock
-	player->fps.Vars.CameraYMin = 1.48353;
-	player->fps.Vars.CameraYMax = -1.22173;
+	player->fps.vars.min_y_rot = 1.48353;
+	player->fps.vars.max_y_rot = -1.22173;
 
 	return 0;
 }

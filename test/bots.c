@@ -303,7 +303,7 @@ void modeInitTarget(SimulatedPlayer_t * sPlayer)
 
 	sPlayer->Active = 1;
 
-	sprintf(gs->PlayerNames[sPlayer->Player->fps.Vars.cam_slot], "Fake %d", sPlayer->Idx);
+	sprintf(gs->PlayerNames[sPlayer->Player->fps.vars.cam_slot], "Fake %d", sPlayer->Idx);
 }
 
 void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
@@ -330,8 +330,8 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 	// matrix_unit(m);
 	// matrix_rotate_z(m, m, yaw);
 	// memcpy(target->camera->uMtx, m, sizeof(VECTOR) * 3);
-	// vector_copy(target->fps.CameraDir, &m[4]);
-	// target->fps.Vars.CameraY.rotation = sPlayer->Yaw;
+	// vector_copy(target->fps.cameraDir, &m[4]);
+	// target->fps.vars.cameraY.rotation = sPlayer->Yaw;
     
 	struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
 	int jumping = 0;
@@ -434,11 +434,11 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 	POKE_U32(0x002412f0 + (4 * id), 0);
 
 	sPlayer->Player->pPad = (void*)&sPlayer->Pad;
-	sPlayer->Player->fps.Vars.cam_slot = id;
+	sPlayer->Player->fps.vars.cam_slot = id;
 	sPlayer->Player->mpIndex = id;
 	sPlayer->Player->mpTeam = TargetTeam;
 	sPlayer->Idx = idx;
-	POKE_U32(sPlayer->Player->fps.Vars.pHero, (u32)sPlayer->Player);
+	POKE_U32(sPlayer->Player->fps.vars.pHero, (u32)sPlayer->Player);
 
 	// if (sPlayer->Player->pMoby) {
 	// 	sPlayer->Player->pMoby->NetObject = sPlayer->Player;
