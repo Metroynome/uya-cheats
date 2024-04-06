@@ -656,9 +656,9 @@ int main(void)
 		// printf("\nmtxFxActive: %x", (u32)((u32)&p->mtxFxActive - (u32)PLAYER_STRUCT));
 		// printf("\npnetplayer: %x", (u32)((u32)&p->pNetPlayer - (u32)PLAYER_STRUCT));
 
-		// float x = SCREEN_WIDTH * 0.3;
-		// float y = SCREEN_HEIGHT * 0.85;
-		// gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, 4);
+		float x = SCREEN_WIDTH * 0.3;
+		float y = SCREEN_HEIGHT * 0.85;
+		gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, FONT_ALIGN_CENTER_CENTER);
 		
 		// printf("Collision: %d\n", CollHotspot());
         
