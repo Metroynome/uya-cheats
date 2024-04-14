@@ -124,9 +124,9 @@ void DEBUGsetGattlingTurretHealth(void)
 {
     Moby* moby = mobyListGetStart();
     // Iterate through mobys and change health
-    while ((moby = mobyFindNextByOClass(moby, MOBY_ID_GATTLING_TURRET))) {
-        if (moby->PVar) {
-			*(float*)((u32)moby->PVar + 0x30) = 0;
+    while ((moby = mobyFindNextByOClass(moby, MOBY_ID_GATLING_TURRET))) {
+        if (moby->pVar) {
+			*(float*)((u32)moby->pVar + 0x30) = 0;
         }
         ++moby;
     }
@@ -238,22 +238,22 @@ void runB6HitVisualizer(void)
 	VECTOR off = {0,0,2,0};
 	if (!TestMoby) {
 		Moby *m = TestMoby = mobySpawn(MOBY_ID_TEST, 0);
-		m->Scale *= 0.1;
-		m->PUpdate = &renderB6Visualizer;
-		vector_add(m->Position, playerGetFromSlot(0)->playerPosition, off);
+		m->scale *= 0.1;
+		m->pUpdate = &renderB6Visualizer;
+		vector_add(m->position, playerGetFromSlot(0)->playerPosition, off);
 	}
 
   // 
-  TestMoby->DrawDist = 0xFF;
-  TestMoby->UpdateDist = 0xFF;
+  TestMoby->drawDist = 0xFF;
+  TestMoby->updateDist = 0xFF;
 
 	// check for b6
 	Moby* b = mobyListGetStart();
 	Moby* mEnd = mobyListGetEnd();
 	while (b < mEnd) {
-		if (!mobyIsDestroyed(b) && b->OClass == MOBY_ID_SHOT_GRAVITY_BOMB1 && b->State == 2) {
-			DPRINTF("%08X\n", (u32)b->PUpdate);
-			vector_copy(b6ExplosionPositions[b6ExplosionPositionCount], b->Position);
+		if (!mobyIsDestroyed(b) && b->oClass == MOBY_ID_SHOT_GRAVITY_BOMB1 && b->state == 2) {
+			DPRINTF("%08X\n", (u32)b->pUpdate);
+			vector_copy(b6ExplosionPositions[b6ExplosionPositionCount], b->position);
 			b6ExplosionPositionCount = (b6ExplosionPositionCount + 1) % 64;
 		}
 		++b;
@@ -328,12 +328,12 @@ void drawSomething(Moby* moby)
 
 struct FlagPVars
 {
-	VECTOR BasePosition;
-	short CarrierIdx;
-	short LastCarrierIdx;
-	short Team;
+	VECTOR basePosition;
+	short carrierIdx;
+	short lastCarrierIdx;
+	short team;
 	char UNK_16[6];
-	int TimeFlagDropped;
+	int timeFlagDropped;
 };
 /*
  * NAME :		flagHandlePickup
@@ -355,12 +355,12 @@ void flagHandlePickup(Moby* flagMoby, int pIdx)
 	if (!player || !flagMoby)
 		return;
 	
-	struct FlagPVars* pvars = (struct FlagPVars*)flagMoby->PVar;
+	struct FlagPVars* pvars = (struct FlagPVars*)flagMoby->pVar;
 	if (!pvars)
 		return;
 
 	// fi flag state isn't 1
-	if (flagMoby->State != 1)
+	if (flagMoby->state != 1)
 		return;
 
 	// flag is currently returning
@@ -376,13 +376,13 @@ void flagHandlePickup(Moby* flagMoby, int pIdx)
 		return;
 
 	// Handle pickup/return
-	if (player->mpTeam == pvars->Team) {
+	if (player->mpTeam == pvars->team) {
 		flagReturnToBase(flagMoby, 0, pIdx);
 	} else {
 		flagPickup(flagMoby, pIdx);
 		player->flagMoby = flagMoby;
 	}
-	DPRINTF("player %d picked up flag %X at %d\n", player->mpIndex, flagMoby->OClass, gameGetTime());
+	DPRINTF("player %d picked up flag %X at %d\n", player->mpIndex, flagMoby->oClass, gameGetTime());
 }
 
 /*
@@ -409,7 +409,7 @@ void flagRequestPickup(Moby* flagMoby, int pIdx)
 	if (!player || !flagMoby)
 		return;
 	
-	struct FlagPVars* pvars = (struct FlagPVars*)flagMoby->PVar;
+	struct FlagPVars* pvars = (struct FlagPVars*)flagMoby->pVar;
 	if (!pvars)
 		return;
 
@@ -466,12 +466,12 @@ void customFlagLogic(Moby* flagMoby)
 		return;
 
 	// if flag pvars don't exist
-	struct FlagPVars* pvars = (struct FlagPVars*)flagMoby->PVar;
+	struct FlagPVars* pvars = (struct FlagPVars*)flagMoby->pVar;
 	if (!pvars)
 		return;
 
 	// if flag state doesn't equal 1
-	if (flagMoby->State != 1)
+	if (flagMoby->state != 1)
 		return;
 
 	// if flag is returning
@@ -483,7 +483,7 @@ void customFlagLogic(Moby* flagMoby)
 		return;
 
 	// return to base if flag has been idle for 40 seconds
-	if ((pvars->TimeFlagDropped + (TIME_SECOND * 40)) < gameTime && !flagIsAtBase(flagMoby)) {
+	if ((pvars->timeFlagDropped + (TIME_SECOND * 40)) < gameTime && !flagIsAtBase(flagMoby)) {
 		flagReturnToBase(flagMoby, 0, 0xFF);
 		return;
 	}
@@ -498,7 +498,7 @@ void customFlagLogic(Moby* flagMoby)
 	// }
 
 	// wait 1.5 seconds for last carrier to be able to pick up again
-	if ((pvars->TimeFlagDropped + 1500) > gameTime)
+	if ((pvars->timeFlagDropped + 1500) > gameTime)
 		return;
 
 	for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
@@ -509,7 +509,7 @@ void customFlagLogic(Moby* flagMoby)
 		// only allow actions by living players, and non-chargebooting players
 		if ((playerIsDead(player) || playerGetHealth(player) <= 0) || (player->timers.IsChargebooting == 1 && (playerPadGetButton(player, PAD_R2) > 0) && player->timers.state > 55)){
 			// if flag holder died, update flagIgnorePlayer time.
-			if (pvars->LastCarrierIdx == player->mpIndex)
+			if (pvars->lastCarrierIdx == player->mpIndex)
 				flagIgnorePlayer = gameTime;
 
 			continue;
@@ -529,24 +529,24 @@ void customFlagLogic(Moby* flagMoby)
 
 		// skip if player is on teleport pad
 		// AQuATOS BUG: player->ground.pMoby points to wrong area
-		if (player->ground.pMoby && player->ground.pMoby->OClass == MOBY_ID_TELEPORT_PAD)
+		if (player->ground.pMoby && player->ground.pMoby->oClass == MOBY_ID_TELEPORT_PAD)
 			continue;
 
 		// player must be within 2 units of flag
-		vector_subtract(t, flagMoby->Position, player->playerPosition);
+		vector_subtract(t, flagMoby->position, player->playerPosition);
 		float sqrDistance = vector_sqrmag(t);
 		if (sqrDistance > (2*2))
 			continue;
 
 		// player is on different team than flag and player isn't already holding flag
-		if (player->mpTeam != pvars->Team) {
+		if (player->mpTeam != pvars->team) {
 			if (!player->flagMoby) {
 				flagRequestPickup(flagMoby, i);
 				return;
 			}
 		} else {
 			// if player is on same team as flag and close enough to return it
-			vector_subtract(t, pvars->BasePosition, flagMoby->Position);
+			vector_subtract(t, pvars->basePosition, flagMoby->position);
 			float sqrDistanceToBase = vector_sqrmag(t);
 			if (sqrDistanceToBase > 0.1) {
 				flagRequestPickup(flagMoby, i);
@@ -590,7 +590,7 @@ void patchCTFFlag(void)
 	GuberMoby* gm = guberMobyGetFirst();
 	while (gm) {
 		if (gm->Moby) {
-			switch (gm->Moby->OClass) {
+			switch (gm->Moby->oClass) {
 				case MOBY_ID_CTF_RED_FLAG:
 				case MOBY_ID_CTF_BLUE_FLAG:
 				{
@@ -605,6 +605,61 @@ void patchCTFFlag(void)
 		}
 		gm = (GuberMoby*)gm->Guber.Next;
 	}
+}
+
+VariableAddress_t vaPostHitInvinc = {
+#if UYA_PAL
+    .Lobby = 0,
+    .Bakisi = 0x005274b4,
+    .Hoven = 0x005295cc,
+    .OutpostX12 = 0x0051eea4,
+    .KorgonOutpost = 0x0051c63c,
+    .Metropolis = 0x0051b98c,
+    .BlackwaterCity = 0x00519224,
+    .CommandCenter = 0x00518fe4,
+    .BlackwaterDocks = 0x0051b864,
+    .AquatosSewers = 0x0051ab64,
+    .MarcadiaPalace = 0x0051a4e4,
+#else
+    .Lobby = 0,
+    .Bakisi = 0x00524c34,
+    .Hoven = 0x00526c8c,
+    .OutpostX12 = 0x0051c5a4,
+    .KorgonOutpost = 0x00519dbc,
+    .Metropolis = 0x0051910c,
+    .BlackwaterCity = 0x00516924,
+    .CommandCenter = 0x005168a4,
+    .BlackwaterDocks = 0x005190e4,
+    .AquatosSewers = 0x00518424,
+    .MarcadiaPalace = 0x00517d64,
+#endif
+};
+
+int noPostHitInvinc_Logic(void)
+{
+	// define ntsc and pal timer
+	#if UYA_PAL
+	int DEFAULT_TIMER = 0x27;
+	#else
+	int DEFAULT_TIMER = 0x2f;
+	#endif
+	// if player is getting shot by the gatling turret, set to default timer.
+	Player *p = playerGetFromSlot(0);
+	if (p->pWhoHitMe->oClass == MOBY_ID_GATLING_TURRET_SHOT && p->pWhoHitMe->pParent->oClass == MOBY_ID_GATLING_TURRET)
+		return DEFAULT_TIMER;
+	
+	return 1;
+}
+void noPostHitInvinc(void)
+{
+	int grNoCooldown = 0;
+	if (grNoCooldown)
+		return;
+	// PAL: 0x27, NTSC: 
+	u32 time = GetAddress(&vaPostHitInvinc);
+	HOOK_JAL(time, &noPostHitInvinc_Logic);
+	POKE_U32(time + 0x4, 0);
+	grNoCooldown = 1;
 }
 
 int main(void)
@@ -628,6 +683,8 @@ int main(void)
 
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
+
+		noPostHitInvinc();
 
 		// gfxStickyFX(&PostDraw, p->PlayerMoby);
 		// drawEffectQuad(p->PlayerMoby->Position, 1, .5);
@@ -656,9 +713,9 @@ int main(void)
 		// printf("\nmtxFxActive: %x", (u32)((u32)&p->mtxFxActive - (u32)PLAYER_STRUCT));
 		// printf("\npnetplayer: %x", (u32)((u32)&p->pNetPlayer - (u32)PLAYER_STRUCT));
 
-		float x = SCREEN_WIDTH * 0.3;
-		float y = SCREEN_HEIGHT * 0.85;
-		gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, FONT_ALIGN_CENTER_CENTER);
+		// float x = SCREEN_WIDTH * 0.3;
+		// float y = SCREEN_HEIGHT * 0.85;
+		// gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, FONT_ALIGN_CENTER_CENTER);
 		
 		// printf("Collision: %d\n", CollHotspot());
         
@@ -668,12 +725,12 @@ int main(void)
 		// v2_Setting(2, first);
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
-    	// DebugInGame(p);
+    	DebugInGame(p);
     } else {
 		DebugInMenus();
 	}
 
-	StartBots();
+	// StartBots();
 
 	uyaPostUpdate();
 
