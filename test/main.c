@@ -61,10 +61,10 @@ void DebugInGame(Player* player)
 	} else if (playerPadGetButtonDown(player, PAD_L3) > 0) {
 		// Nothing Yet!
 	} else if (playerPadGetButtonDown(player, PAD_R3) > 0) {
-		int j;
-		u8* slot = (u8*)(u32)player + 0x1a32;
-		for(j = 0; j < 12; ++j)
-			playerGiveWeaponUpgrade(player, playerDeobfuscate(&slot[j], 1, 1));
+		// int j;
+		// u8* slot = (u8*)(u32)player + 0x1a32;
+		// for(j = 0; j < 12; ++j)
+		// 	playerGiveWeaponUpgrade(player, playerDeobfuscate(&slot[j], 1, 1));
 	}
 }
 
@@ -607,59 +607,54 @@ void patchCTFFlag(void)
 	}
 }
 
-VariableAddress_t vaPostHitInvinc = {
+VariableAddress_t vaHypershotEquipBehavior_bits = {
 #if UYA_PAL
-    .Lobby = 0,
-    .Bakisi = 0x005274b4,
-    .Hoven = 0x005295cc,
-    .OutpostX12 = 0x0051eea4,
-    .KorgonOutpost = 0x0051c63c,
-    .Metropolis = 0x0051b98c,
-    .BlackwaterCity = 0x00519224,
-    .CommandCenter = 0x00518fe4,
-    .BlackwaterDocks = 0x0051b864,
-    .AquatosSewers = 0x0051ab64,
-    .MarcadiaPalace = 0x0051a4e4,
+	.Lobby = 0,
+	.Bakisi = 0x00510f54,
+	.Hoven = 0x0051306c,
+	.OutpostX12 = 0x00508944,
+	.KorgonOutpost = 0x005060dc,
+	.Metropolis = 0x0050542c,
+	.BlackwaterCity = 0x00502cc4,
+	.CommandCenter = 0x00502c8c,
+	.BlackwaterDocks = 0x0050550c,
+	.AquatosSewers = 0x0050480c,
+	.MarcadiaPalace = 0x0050418c,
 #else
-    .Lobby = 0,
-    .Bakisi = 0x00524c34,
-    .Hoven = 0x00526c8c,
-    .OutpostX12 = 0x0051c5a4,
-    .KorgonOutpost = 0x00519dbc,
-    .Metropolis = 0x0051910c,
-    .BlackwaterCity = 0x00516924,
-    .CommandCenter = 0x005168a4,
-    .BlackwaterDocks = 0x005190e4,
-    .AquatosSewers = 0x00518424,
-    .MarcadiaPalace = 0x00517d64,
+	.Lobby = 0,
+	.Bakisi = 0x0050e73c,
+	.Hoven = 0x00510794,
+	.OutpostX12 = 0x005060ac,
+	.KorgonOutpost = 0x005038c4,
+	.Metropolis = 0x00502c14,
+	.BlackwaterCity = 0x0050042c,
+	.CommandCenter = 0x018059e8,
+	.BlackwaterDocks = 0x00502df4,
+	.AquatosSewers = 0x00502134,
+	.MarcadiaPalace = 0x00501a74,
 #endif
 };
 
-int noPostHitInvinc_Logic(void)
+void hypershotEquipBehavior(void)
 {
-	// define ntsc and pal timer
-	#if UYA_PAL
-	int DEFAULT_TIMER = 0x27;
-	#else
-	int DEFAULT_TIMER = 0x2f;
-	#endif
-	// if player is getting shot by the gatling turret, set to default timer.
+	int hypershotEquipBehavior = 3;
+	int patchedHypershotEquipBehavior = 0;
+
+	// Force weaposn to only be taken out with only R1, and not both R1 or Circle.
+	if (!patchedHypershotEquipBehavior && hypershotEquipBehavior != 2) {
+		u32 a = GetAddress(&vaHypershotEquipBehavior_bits);
+		POKE_U32(a, 0x24020008);
+		POKE_U32(a + 0x4, 0x24020008);
+		patchedHypershotEquipBehavior = 1;
+	}
+
 	Player *p = playerGetFromSlot(0);
-	if (p->pWhoHitMe->oClass == MOBY_ID_GATLING_TURRET_SHOT && p->pWhoHitMe->pParent->oClass == MOBY_ID_GATLING_TURRET)
-		return DEFAULT_TIMER;
-	
-	return 1;
-}
-void noPostHitInvinc(void)
-{
-	int grNoCooldown = 0;
-	if (grNoCooldown)
-		return;
-	// PAL: 0x27, NTSC: 
-	u32 time = GetAddress(&vaPostHitInvinc);
-	HOOK_JAL(time, &noPostHitInvinc_Logic);
-	POKE_U32(time + 0x4, 0);
-	grNoCooldown = 1;
+	if ((hypershotEquipBehavior != 2 && playerPadGetButtonDown(p, PAD_CIRCLE) > 0) && !p->flagMoby) {
+		playerEquipWeapon(p, WEAPON_ID_SWINGSHOT);
+	} else if ((hypershotEquipBehavior != 1 && p->flagMoby != 0)) {
+		playerEquipWeapon(p, WEAPON_ID_SWINGSHOT);
+		// p->forceSwingSwitch = 0;
+	}	
 }
 
 int main(void)
@@ -670,11 +665,11 @@ int main(void)
 
 	GameSettings * gameSettings = gameGetSettings();
 	GameOptions * gameOptions = gameGetOptions();
-	// if (gameOptions || gameSettings || gameSettings->GameLoadStartTime > 0) {
-	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 0;
-	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 0;
-	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 0;
-	// }
+	if (gameOptions || gameSettings) {
+		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 0;
+		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 0;
+		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 0;
+	}
 
     if (isInGame()) {
 		Player * p = playerGetFromSlot(0);
@@ -684,7 +679,7 @@ int main(void)
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 
-		noPostHitInvinc();
+		hypershotEquipBehavior();
 
 		// gfxStickyFX(&PostDraw, p->PlayerMoby);
 		// drawEffectQuad(p->PlayerMoby->Position, 1, .5);
