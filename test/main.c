@@ -659,12 +659,12 @@ void hypershotEquipBehavior(void)
 
 void remap(void * destination, void * source, int num)
 {
-	int button = (void*)source + 0x2;
-	int grabButtons = *(u16*)button;
-	if ((grabButtons & PAD_CROSS) == 0)
-		*(u16*)button = PAD_CIRCLE ^ (0xffff & (*(u16*)button | PAD_CROSS));
+	if (isInGame()) {
+		int buttons = (void*)((u32)source + 0x2);
+		if ((*(u16*)buttons & PAD_CROSS) == 0)
+			*(u16*)buttons = PAD_CIRCLE ^ (0xffff & (*(u16*)buttons | PAD_CROSS));
+	}
 
-	printf("\nbutton: 0x%x", *(u16*)button);
 	memcpy(destination, source, num);
 }
 
