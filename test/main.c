@@ -660,9 +660,20 @@ void hypershotEquipBehavior(void)
 void remap(void * destination, void * source, int num)
 {
 	if (isInGame()) {
-		int buttons = (void*)((u32)source + 0x2);
-		if ((*(u16*)buttons & PAD_CROSS) == 0)
-			*(u16*)buttons = PAD_CIRCLE ^ (0xffff & (*(u16*)buttons | PAD_CROSS));
+		Player * player = playerGetFromSlot(0);
+		if (!player->pauseOn) {
+			int paddata = (void*)((u32)source + 0x2);
+			if ((*(u16*)paddata & PAD_CROSS) == 0)
+				*(u16*)paddata = PAD_CIRCLE ^ (0xffff & (*(u16*)paddata | PAD_CROSS));
+			if ((*(u16*)paddata & PAD_LEFT) == 0)
+				*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_LEFT));
+			if ((*(u16*)paddata & PAD_RIGHT) == 0)
+				*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_RIGHT));
+			if ((*(u16*)paddata & PAD_UP) == 0)
+				*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_UP));
+			if ((*(u16*)paddata & PAD_DOWN) == 0)
+				*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_DOWN));
+		}
 	}
 
 	memcpy(destination, source, num);
