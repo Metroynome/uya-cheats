@@ -43,8 +43,8 @@ void DebugInGame(Player* player)
 {
     if (playerPadGetButtonDown(player, PAD_LEFT) > 0) {
 		// Swap Teams
-		int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
-		playerSetTeam(player, SetTeam);
+		// int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
+		// playerSetTeam(player, SetTeam);
 	} else if (playerPadGetButtonDown(player, PAD_RIGHT) > 0) {
         // Hurt Player
         playerDecHealth(player, 1);
@@ -52,9 +52,9 @@ void DebugInGame(Player* player)
 		// static int Occlusion = (Occlusion == 2) ? 0 : 2;
 		// gfxOcclusion(Occlusion);
 		// spawnPointGetRandom(player, &position, &rotation);
-		Player ** ps = playerGetAll();
-		Player * p = ps[1];
-		playerSetPosRot(player, &p->playerPosition, &p->playerRotation);
+		// Player ** ps = playerGetAll();
+		// Player * p = ps[1];
+		// playerSetPosRot(player, &p->playerPosition, &p->playerRotation);
 	} else if(playerPadGetButtonDown(player, PAD_DOWN) > 0) {
 		// Set Gattling Turret Health to 1.
 		DEBUGsetGattlingTurretHealth();
@@ -657,6 +657,17 @@ void hypershotEquipBehavior(void)
 	}	
 }
 
+void remap(void * destination, void * source, int num)
+{
+	int button = (void*)source + 0x2;
+	int grabButtons = *(u16*)button;
+	if ((grabButtons & PAD_CROSS) == 0)
+		*(u16*)button = PAD_CIRCLE ^ (0xffff & (*(u16*)button | PAD_CROSS));
+
+	printf("\nbutton: 0x%x", *(u16*)button);
+	memcpy(destination, source, num);
+}
+
 int main(void)
 {
 	((void (*)(void))0x00126780)();
@@ -665,21 +676,23 @@ int main(void)
 
 	GameSettings * gameSettings = gameGetSettings();
 	GameOptions * gameOptions = gameGetOptions();
-	if (gameOptions || gameSettings) {
-		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 0;
-		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 0;
-		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 0;
-	}
+	// if (gameOptions || gameSettings) {
+	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 0;
+	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 0;
+	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 0;
+	// }
 
     if (isInGame()) {
 		Player * p = playerGetFromSlot(0);
 		if (!p)
 			return 0;
 
+		HOOK_JAL(0x0013CAE0, &remap);
+
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 
-		hypershotEquipBehavior();
+		// hypershotEquipBehavior();
 
 		// gfxStickyFX(&PostDraw, p->PlayerMoby);
 		// drawEffectQuad(p->PlayerMoby->Position, 1, .5);
