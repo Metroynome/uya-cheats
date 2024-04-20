@@ -12,16 +12,22 @@ int remapButtons(pad)
 	// unmask the pad data into its bits.
 	switch (*(u16*)pad ^ 0xffff) {
 		// if Presssing X, return by telling it to press circle instead.
-		case PAD_CROSS: return PAD_CIRCLE ^ (0xffff & (*(u16*)pad | PAD_CROSS));
+		case PAD_CROSS:
+			return PAD_CIRCLE ^ (0xffff & (*(u16*)pad | PAD_CROSS));
 
 		// if dpad is pressed, return by acting as if they were not pressed.
-		case PAD_LEFT: return (0xffff & (*(u16*)pad | PAD_LEFT));
-		case PAD_RIGHT: return (0xffff & (*(u16*)pad | PAD_RIGHT));
-		case PAD_UP: return (0xffff & (*(u16*)pad | PAD_UP));
-		case PAD_DOWN: return (0xffff & (*(u16*)pad | PAD_DOWN));
+		case PAD_LEFT:
+			return (0xffff & (*(u16*)pad | PAD_LEFT));
+		case PAD_RIGHT:
+			return (0xffff & (*(u16*)pad | PAD_RIGHT));
+		case PAD_UP:
+			return (0xffff & (*(u16*)pad | PAD_UP));
+		case PAD_DOWN:
+			return (0xffff & (*(u16*)pad | PAD_DOWN));
 
 		// if nothing is pressed, then return original data.
-		default: return *(u16*)pad;
+		default:
+			return *(u16*)pad;
 	}
 }
 
@@ -43,6 +49,7 @@ int main()
 	uyaPreUpdate();
 
 	// Start by checking if we are in game.  If so, hook our function!
+	// The function replaces the "memcpy" function inside the "scePadRead" function.
 	// Lucky these addresses are the same in NTSC and PAL!
 	if (isInGame())
 		HOOK_JAL(0x0013cae0, &patchRemapButtons);
