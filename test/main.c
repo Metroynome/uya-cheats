@@ -657,22 +657,35 @@ void hypershotEquipBehavior(void)
 	}	
 }
 
+int remapButtons(pad)
+{
+	switch (*(u16*)pad ^ 0xffff) {
+		case PAD_CROSS: return PAD_CIRCLE ^ (0xffff & (*(u16*)pad | PAD_CROSS));
+		case PAD_LEFT: return (0xffff & (*(u16*)pad | PAD_LEFT));
+		case PAD_RIGHT: return (0xffff & (*(u16*)pad | PAD_RIGHT));
+		case PAD_UP: return (0xffff & (*(u16*)pad | PAD_UP));
+		case PAD_DOWN: return (0xffff & (*(u16*)pad | PAD_DOWN));
+		default: return *(u16*)pad;
+	}
+}
+
 void remap(void * destination, void * source, int num)
 {
 	if (isInGame()) {
 		Player * player = playerGetFromSlot(0);
 		if (!player->pauseOn) {
-			int paddata = (void*)((u32)source + 0x2);
-			if ((*(u16*)paddata & PAD_CROSS) == 0)
-				*(u16*)paddata = PAD_CIRCLE ^ (0xffff & (*(u16*)paddata | PAD_CROSS));
-			if ((*(u16*)paddata & PAD_LEFT) == 0)
-				*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_LEFT));
-			if ((*(u16*)paddata & PAD_RIGHT) == 0)
-				*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_RIGHT));
-			if ((*(u16*)paddata & PAD_UP) == 0)
-				*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_UP));
-			if ((*(u16*)paddata & PAD_DOWN) == 0)
-				*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_DOWN));
+			u32 paddata = (void*)((u32)source + 0x2);
+			*(u16*)paddata = remapButtons(paddata);
+			// if ((*(u16*)paddata & PAD_CROSS) == 0)
+			// 	*(u16*)paddata = PAD_CIRCLE ^ (0xffff & (*(u16*)paddata | PAD_CROSS));
+			// if ((*(u16*)paddata & PAD_LEFT) == 0)
+			// 	*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_LEFT));
+			// if ((*(u16*)paddata & PAD_RIGHT) == 0)
+			// 	*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_RIGHT));
+			// if ((*(u16*)paddata & PAD_UP) == 0)
+			// 	*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_UP));
+			// if ((*(u16*)paddata & PAD_DOWN) == 0)
+			// 	*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_DOWN));
 		}
 	}
 
