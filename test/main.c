@@ -635,62 +635,92 @@ VariableAddress_t vaHypershotEquipBehavior_bits = {
 #endif
 };
 
-void hypershotEquipBehavior(void)
+int confighypershotEquipButton = 1;
+int configdisableDpadMovement = 1;
+
+int hypershotGetButton(void)
 {
-	int hypershotEquipBehavior = 3;
-	int patchedHypershotEquipBehavior = 0;
-
-	// Force weaposn to only be taken out with only R1, and not both R1 or Circle.
-	if (!patchedHypershotEquipBehavior && hypershotEquipBehavior != 2) {
-		u32 a = GetAddress(&vaHypershotEquipBehavior_bits);
-		POKE_U32(a, 0x24020008);
-		POKE_U32(a + 0x4, 0x24020008);
-		patchedHypershotEquipBehavior = 1;
+	switch (confighypershotEquipButton) {
+		case 1: return PAD_CIRCLE;
+		case 2: return PAD_LEFT;
+		case 3: return PAD_DOWN;
+		case 4: return PAD_RIGHT;
+		case 5: return PAD_UP;
+		case 6: return PAD_L3;
+		case 7: return PAD_R3;
+		default: return 0;
 	}
+}
 
+void hypershotEquipButton(void)
+{
+	// get Player 1 struct
 	Player *p = playerGetFromSlot(0);
-	if ((hypershotEquipBehavior != 2 && playerPadGetButtonDown(p, PAD_CIRCLE) > 0) && !p->flagMoby) {
+	// if player is found, and not holding flag, and prsses needed button.
+	if (p && !p->flagMoby && playerPadGetButtonDown(p, hypershotGetButton()) > 0)
 		playerEquipWeapon(p, WEAPON_ID_SWINGSHOT);
-	} else if ((hypershotEquipBehavior != 1 && p->flagMoby != 0)) {
-		playerEquipWeapon(p, WEAPON_ID_SWINGSHOT);
-		// p->forceSwingSwitch = 0;
-	}	
 }
 
 int remapButtons(pad)
 {
-	switch (*(u16*)pad ^ 0xffff) {
-		case PAD_CROSS: return PAD_CIRCLE ^ (0xffff & (*(u16*)pad | PAD_CROSS));
-		case PAD_LEFT: return (0xffff & (*(u16*)pad | PAD_LEFT));
-		case PAD_RIGHT: return (0xffff & (*(u16*)pad | PAD_RIGHT));
-		case PAD_UP: return (0xffff & (*(u16*)pad | PAD_UP));
-		case PAD_DOWN: return (0xffff & (*(u16*)pad | PAD_DOWN));
-		default: return *(u16*)pad;
+	// disable the default action for the chosen hypershot button.
+	if (confighypershotEquipButton) {
+		u16 hypershot = hypershotGetButton();
+		if ((pad & hypershot) == 0)
+			return 0xffff & (pad | hypershot);
+	}
+
+	if (configdisableDpadMovement) {
+		// Make a mask of the bits we want to filter
+		u16 mask = (PAD_LEFT | PAD_RIGHT | PAD_UP | PAD_DOWN);
+		// only grab the mask filter from the pad
+		u16 dpad = (pad ^ mask) & 0x00f0;
+		// if any dpad button is pressed, return data as if it's not pressed.
+		if ((dpad & pad) == 0)
+			return 0xffff & (pad | dpad);
+	}
+
+
+	switch (pad ^ 0xffff) {
+		// EXAMPLE: if Presssing X, return by telling it to press circle instead.
+		// case PAD_CROSS:
+		// 	return PAD_CIRCLE ^ (0xffff & (pad | PAD_CROSS));
+
+		// if dpad is pressed, return by acting as if they were not pressed.
+		// case PAD_LEFT: return configdisableDpadMovement ? (0xffff & (pad | PAD_LEFT)) : pad;
+		// case PAD_LEFT | PAD_UP: return configdisableDpadMovement ? (0xffff & (pad | (PAD_LEFT | PAD_UP))) : pad;
+		// case PAD_LEFT | PAD_DOWN: return configdisableDpadMovement ? (0xffff & (pad | (PAD_LEFT | PAD_DOWN))) : pad;
+		// case PAD_RIGHT: return configdisableDpadMovement ? (0xffff & (pad | PAD_RIGHT)) : pad;
+		// case PAD_RIGHT | PAD_UP: return configdisableDpadMovement ? (0xffff & (pad | (PAD_RIGHT | PAD_UP))) : pad;
+		// case PAD_RIGHT | PAD_DOWN: return configdisableDpadMovement ? (0xffff & (pad | (PAD_RIGHT | PAD_DOWN))) : pad;
+		// case PAD_UP: return configdisableDpadMovement ? (0xffff & (pad | PAD_UP)) : pad;
+		// case PAD_DOWN: return configdisableDpadMovement ? (0xffff & (pad | PAD_DOWN)) : pad;
+		// // if nothing is pressed, then return original data.
+		default: return pad;
+
 	}
 }
 
-void remap(void * destination, void * source, int num)
+void patchSceReadPad_memcpy(void * destination, void * source, int num)
 {
-	if (isInGame()) {
-		Player * player = playerGetFromSlot(0);
-		if (!player->pauseOn) {
-			u32 paddata = (void*)((u32)source + 0x2);
-			*(u16*)paddata = remapButtons(paddata);
-			// if ((*(u16*)paddata & PAD_CROSS) == 0)
-			// 	*(u16*)paddata = PAD_CIRCLE ^ (0xffff & (*(u16*)paddata | PAD_CROSS));
-			// if ((*(u16*)paddata & PAD_LEFT) == 0)
-			// 	*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_LEFT));
-			// if ((*(u16*)paddata & PAD_RIGHT) == 0)
-			// 	*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_RIGHT));
-			// if ((*(u16*)paddata & PAD_UP) == 0)
-			// 	*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_UP));
-			// if ((*(u16*)paddata & PAD_DOWN) == 0)
-			// 	*(u16*)paddata = (0xffff & (*(u16*)paddata | PAD_DOWN));
-		}
-	}
+	Player * player = playerGetFromSlot(0);
+	// make sure the pause menu is not open.  this way the pause menu can still be used.
+	if (player && !player->pauseOn) {
+		u32 paddata = (void*)((u32)source + 0x2);
+		u16 mask = (PAD_LEFT | PAD_RIGHT | PAD_UP | PAD_DOWN);
+		u16 dpad = ((*(u16*)paddata ^ mask) & 0x00f0);
+		printf("\nmask: 0x%04x", mask);
+		printf("\ndata: 0x%04x", *(u16*)paddata);
+		printf("\ndpad: 0x%04x", dpad); // checks dpad only
 
+		// edit the pad data.
+		*(u16*)paddata = remapButtons(*(u16*)paddata);
+		// printf("\npad 2: 0x%04x", PAD_LEFT | PAD_UP);
+	}
+	// finish up by running the original function we took over.
 	memcpy(destination, source, num);
 }
+
 
 int main(void)
 {
@@ -711,7 +741,10 @@ int main(void)
 		if (!p)
 			return 0;
 
-		HOOK_JAL(0x0013CAE0, &remap);
+		if (confighypershotEquipButton)
+			hypershotEquipButton();
+
+		HOOK_JAL(0x0013cae0, &patchSceReadPad_memcpy);
 
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
