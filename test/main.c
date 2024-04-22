@@ -24,15 +24,13 @@
 #include <libuya/sound.h>
 
 #define TestMoby	(*(Moby**)0x00091004)
-
 VECTOR position;
 VECTOR rotation;
 
-static int SPRITE_ME = 0;
-static int EFFECT_ME = 21;
-static int SOUND_ME = 0;
-static int SOUND_ME_FLAG = 3;
-
+int SPRITE_ME = 0;
+int EFFECT_ME = 21;
+int SOUND_ME = 0;
+int SOUND_ME_FLAG = 3;
 int first = 1;
 
 extern VariableAddress_t vaFlagUpdate_Func;
@@ -324,403 +322,39 @@ void drawSomething(Moby* moby)
 	drawEffectQuad(pos, EFFECT_ME, 2);
 }
 
-
-
-struct FlagPVars
+void patchAFK(void)
 {
-	VECTOR basePosition;
-	short carrierIdx;
-	short lastCarrierIdx;
-	short team;
-	char UNK_16[6];
-	int timeFlagDropped;
-};
-/*
- * NAME :		flagHandlePickup
- * 
- * DESCRIPTION :
- * 
- * NOTES :
- * 
- * ARGS : 
- * 
- * RETURN :
- * 
- * AUTHOR :			Daniel "Dnawrkshp" Gerendasy
- */
-void flagHandlePickup(Moby* flagMoby, int pIdx)
-{
-	Player** players = playerGetAll();
-	Player* player = players[pIdx];
-	if (!player || !flagMoby)
-		return;
-	
-	struct FlagPVars* pvars = (struct FlagPVars*)flagMoby->pVar;
-	if (!pvars)
-		return;
-
-	// fi flag state isn't 1
-	if (flagMoby->state != 1)
-		return;
-
-	// flag is currently returning
-	if (flagIsReturning(flagMoby))
-		return;
-
-	// flag is currently being picked up
-	if (flagIsBeingPickedUp(flagMoby))
-		return;
-
-	// only allow actions by living players
-	if (playerIsDead(player) || playerGetHealth(player) <= 0)
-		return;
-
-	// Handle pickup/return
-	if (player->mpTeam == pvars->team) {
-		flagReturnToBase(flagMoby, 0, pIdx);
-	} else {
-		flagPickup(flagMoby, pIdx);
-		player->flagMoby = flagMoby;
-	}
-	DPRINTF("player %d picked up flag %X at %d\n", player->mpIndex, flagMoby->oClass, gameGetTime());
-}
-
-/*
- * NAME :		flagRequestPickup
- * 
- * DESCRIPTION :
- * 			Requests to either pickup or return the given flag.
- * 			If host, this request is automatically passed to the handler.
- * 			If not host, this request is sent over the net to the host.
- * 
- * NOTES :
- * 
- * ARGS : 
- * 
- * RETURN :
- * 
- * AUTHOR :			Daniel "Dnawrkshp" Gerendasy
- */
-void flagRequestPickup(Moby* flagMoby, int pIdx)
-{
-	static int requestCounters[GAME_MAX_PLAYERS] = {0,0,0,0,0,0,0,0,0,0};
-	Player** players = playerGetAll();
-	Player* player = players[pIdx];
-	if (!player || !flagMoby)
-		return;
-	
-	struct FlagPVars* pvars = (struct FlagPVars*)flagMoby->pVar;
-	if (!pvars)
-		return;
-
-	if (gameAmIHost()) {
-		// handle locally
-		flagHandlePickup(flagMoby, pIdx);
-	} else if (requestCounters[pIdx] == 0) {
-		// send request to host
-		// void* dmeConnection = netGetDmeServerConnection();
-		// if (dmeConnection) {
-		// 	ClientRequestPickUpFlag_t msg;
-		// 	msg.GameTime = gameGetTime();
-		// 	msg.PlayerId = player->mpIndex;
-		// 	msg.FlagUID = guberGetUID(flagMoby);
-		// 	netSendCustomAppMessage(dmeConnection, gameGetHostId(), CUSTOM_MSG_ID_FLAG_REQUEST_PICKUP, sizeof(ClientRequestPickUpFlag_t), &msg);
-		// 	requestCounters[pIdx] = 10;
-		// 	DPRINTF("sent request flag pickup %d\n", gameGetTime());
-		// }
-	}
-	else
-	{
-		requestCounters[pIdx]--;
-	}
-}
-
-/*
- * NAME :		customFlagLogic
- * 
- * DESCRIPTION :
- * 			Reimplements flag pickup logic but runs through our host authoritative logic.
- * 
- * NOTES :
- * 
- * ARGS : 
- * 
- * RETURN :
- * 
- * AUTHOR :			Troy "Metroynome" Pruitt
- */
-void customFlagLogic(Moby* flagMoby)
-{
-	VECTOR t;
-	int i;
-	Player** players = playerGetAll();
+	int isAFK = 0;
+	// netInstallCustomMsgHandler(CUSTOM_MSG_ID_PLAYER_AFK, &onClientAFKRemote);
+	int AFK_Wait_Timer = 10; // in Minutes
 	int gameTime = gameGetTime();
-	GameOptions* gameOptions = gameGetOptions();
+	static int afk_time = 0;
+	if (afk_time == 0)
+		afk_time = gameTime + (AFK_Wait_Timer * TIME_MINUTE);
 
-	// if not in game
-	if (!isInGame())
-		return;
+	PAD * src = (PAD*)((u32)P1_PAD - 0x80);
+	// if no buttons/analogs are pressed
+	if (src->handsOff && src->handsOffStick) {
+		// if is already AFK, return.
+		if (isAFK)
+			return;
 
-	// if flagMoby doesn't exist
-	if (!flagMoby)
-		return;
+		// if time left to go afk is greater than the game time, then not afk yet, return.
+		if (afk_time > gameTime)
+			return;
 
-	// if flag pvars don't exist
-	struct FlagPVars* pvars = (struct FlagPVars*)flagMoby->pVar;
-	if (!pvars)
-		return;
+		void* connection = netGetLobbyServerConnection();
+		if (!connection)
+			return;
 
-	// if flag state doesn't equal 1
-	if (flagMoby->state != 1)
-		return;
-
-	// if flag is returning
-	if (flagIsReturning(flagMoby))
-		return;
-
-	// if flag is being picked up
-	if (flagIsBeingPickedUp(flagMoby))
-		return;
-
-	// return to base if flag has been idle for 40 seconds
-	if ((pvars->timeFlagDropped + (TIME_SECOND * 40)) < gameTime && !flagIsAtBase(flagMoby)) {
-		flagReturnToBase(flagMoby, 0, 0xFF);
-		return;
-	}
-	
-	// if flag didn't land on safe ground, and after .5s a player died
-	static int flagIgnorePlayer = 0;
-	// if(gameConfig.grFlagHotspots) {
-	// 	if (!flagIsOnSafeGround(flagMoby) && !flagIsAtBase(flagMoby) && (flagIgnorePlayer + 300) < gameTime) {
-	// 		flagReturnToBase(flagMoby, 0, 0xff);
-	// 		return;
-	// 	}
-	// }
-
-	// wait 1.5 seconds for last carrier to be able to pick up again
-	if ((pvars->timeFlagDropped + 1500) > gameTime)
-		return;
-
-	for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
-		Player* player = players[i];
-		if (!player || !player->isLocal)
-			continue;
-
-		// only allow actions by living players, and non-chargebooting players
-		if ((playerIsDead(player) || playerGetHealth(player) <= 0) || (player->timers.IsChargebooting == 1 && (playerPadGetButton(player, PAD_R2) > 0) && player->timers.state > 55)){
-			// if flag holder died, update flagIgnorePlayer time.
-			if (pvars->lastCarrierIdx == player->mpIndex)
-				flagIgnorePlayer = gameTime;
-
-			continue;
-		}
-
-		// skip player if they've only been alive for < 3 seconds
-		if (player->timers.timeAlive <= 180)
-			continue;
-
-		// skip player if in vehicle
-		if (player->vehicle && playerDeobfuscate(&player->state, 0, 0) == PLAYER_STATE_VEHICLE)
-			continue;
-
-		// skip if player state is in vehicle and critterMode is on
-		if (player->camera && player->camera->camHeroData.critterMode)
-			continue;
-
-		// skip if player is on teleport pad
-		// AQuATOS BUG: player->ground.pMoby points to wrong area
-		if (player->ground.pMoby && player->ground.pMoby->oClass == MOBY_ID_TELEPORT_PAD)
-			continue;
-
-		// player must be within 2 units of flag
-		vector_subtract(t, flagMoby->position, player->playerPosition);
-		float sqrDistance = vector_sqrmag(t);
-		if (sqrDistance > (2*2))
-			continue;
-
-		// player is on different team than flag and player isn't already holding flag
-		if (player->mpTeam != pvars->team) {
-			if (!player->flagMoby) {
-				flagRequestPickup(flagMoby, i);
-				return;
-			}
-		} else {
-			// if player is on same team as flag and close enough to return it
-			vector_subtract(t, pvars->basePosition, flagMoby->position);
-			float sqrDistanceToBase = vector_sqrmag(t);
-			if (sqrDistanceToBase > 0.1) {
-				flagRequestPickup(flagMoby, i);
-				return;
-			}
-		}
+		netSendCustomAppMessage(netGetLobbyServerConnection(), NET_LOBBY_CLIENT_INDEX, CUSTOM_MSG_ID_CLIENT_AFK, 0, NULL);
+		printf("\ni'm afk!");
+		isAFK = 1;
+	} else {
+		afk_time = gameTime + (TIME_SECOND * AFK_Timer);
+		isAFK = 0;
 	}
 }
-
-/*
- * NAME :		patchCTFFlag
- * 
- * DESCRIPTION :
- * 			Patch CTF Flag update function with our own
- * 
- * NOTES :
- * 
- * ARGS : 
- * 
- * RETURN :
- * 
- * AUTHOR :			Troy "Metroynome" Pruitt
- */
-void patchCTFFlag(void)
-{
-	VECTOR t;
-	int i = 0;
-	Player** players = playerGetAll();
-
-	if (!isInGame())
-		return;
-
-	// netInstallCustomMsgHandler(CUSTOM_MSG_ID_FLAG_REQUEST_PICKUP, &onRemoteClientRequestPickUpFlag);
-
-	u32 FlagFunc = GetAddress(&vaFlagUpdate_Func);
-	if (FlagFunc){
-		*(u32*)FlagFunc = 0x03e00008;
-		*(u32*)(FlagFunc + 0x4) = 0x0000102D;
-	}
-
-	GuberMoby* gm = guberMobyGetFirst();
-	while (gm) {
-		if (gm->Moby) {
-			switch (gm->Moby->oClass) {
-				case MOBY_ID_CTF_RED_FLAG:
-				case MOBY_ID_CTF_BLUE_FLAG:
-				{
-					customFlagLogic(gm->Moby);
-					// Master * master = masterGet(gm->Guber.Id.UID);
-					// if (master)
-					// 	masterDelete(master);
-
-					break;
-				}
-			}
-		}
-		gm = (GuberMoby*)gm->Guber.Next;
-	}
-}
-
-VariableAddress_t vaHypershotEquipBehavior_bits = {
-#if UYA_PAL
-	.Lobby = 0,
-	.Bakisi = 0x00510f54,
-	.Hoven = 0x0051306c,
-	.OutpostX12 = 0x00508944,
-	.KorgonOutpost = 0x005060dc,
-	.Metropolis = 0x0050542c,
-	.BlackwaterCity = 0x00502cc4,
-	.CommandCenter = 0x00502c8c,
-	.BlackwaterDocks = 0x0050550c,
-	.AquatosSewers = 0x0050480c,
-	.MarcadiaPalace = 0x0050418c,
-#else
-	.Lobby = 0,
-	.Bakisi = 0x0050e73c,
-	.Hoven = 0x00510794,
-	.OutpostX12 = 0x005060ac,
-	.KorgonOutpost = 0x005038c4,
-	.Metropolis = 0x00502c14,
-	.BlackwaterCity = 0x0050042c,
-	.CommandCenter = 0x018059e8,
-	.BlackwaterDocks = 0x00502df4,
-	.AquatosSewers = 0x00502134,
-	.MarcadiaPalace = 0x00501a74,
-#endif
-};
-
-int confighypershotEquipButton = 1;
-int configdisableDpadMovement = 1;
-
-int hypershotGetButton(void)
-{
-	switch (confighypershotEquipButton) {
-		case 1: return PAD_CIRCLE;
-		case 2: return PAD_LEFT;
-		case 3: return PAD_DOWN;
-		case 4: return PAD_RIGHT;
-		case 5: return PAD_UP;
-		case 6: return PAD_L3;
-		case 7: return PAD_R3;
-		default: return 0;
-	}
-}
-
-void hypershotEquipButton(void)
-{
-	// get Player 1 struct
-	Player *p = playerGetFromSlot(0);
-	// if player is found, and not holding flag, and prsses needed button.
-	if (p && !p->flagMoby && playerPadGetButtonDown(p, hypershotGetButton()) > 0)
-		playerEquipWeapon(p, WEAPON_ID_SWINGSHOT);
-}
-
-int remapButtons(pad)
-{
-	// disable the default action for the chosen hypershot button.
-	if (confighypershotEquipButton) {
-		u16 hypershot = hypershotGetButton();
-		if ((pad & hypershot) == 0)
-			return 0xffff & (pad | hypershot);
-	}
-
-	if (configdisableDpadMovement) {
-		// Make a mask of the bits we want to filter
-		u16 mask = (PAD_LEFT | PAD_RIGHT | PAD_UP | PAD_DOWN);
-		// only grab the mask filter from the pad
-		u16 dpad = (pad ^ mask) & 0x00f0;
-		// if any dpad button is pressed, return data as if it's not pressed.
-		if ((dpad & pad) == 0)
-			return 0xffff & (pad | dpad);
-	}
-
-
-	switch (pad ^ 0xffff) {
-		// EXAMPLE: if Presssing X, return by telling it to press circle instead.
-		// case PAD_CROSS:
-		// 	return PAD_CIRCLE ^ (0xffff & (pad | PAD_CROSS));
-
-		// if dpad is pressed, return by acting as if they were not pressed.
-		// case PAD_LEFT: return configdisableDpadMovement ? (0xffff & (pad | PAD_LEFT)) : pad;
-		// case PAD_LEFT | PAD_UP: return configdisableDpadMovement ? (0xffff & (pad | (PAD_LEFT | PAD_UP))) : pad;
-		// case PAD_LEFT | PAD_DOWN: return configdisableDpadMovement ? (0xffff & (pad | (PAD_LEFT | PAD_DOWN))) : pad;
-		// case PAD_RIGHT: return configdisableDpadMovement ? (0xffff & (pad | PAD_RIGHT)) : pad;
-		// case PAD_RIGHT | PAD_UP: return configdisableDpadMovement ? (0xffff & (pad | (PAD_RIGHT | PAD_UP))) : pad;
-		// case PAD_RIGHT | PAD_DOWN: return configdisableDpadMovement ? (0xffff & (pad | (PAD_RIGHT | PAD_DOWN))) : pad;
-		// case PAD_UP: return configdisableDpadMovement ? (0xffff & (pad | PAD_UP)) : pad;
-		// case PAD_DOWN: return configdisableDpadMovement ? (0xffff & (pad | PAD_DOWN)) : pad;
-		// // if nothing is pressed, then return original data.
-		default: return pad;
-
-	}
-}
-
-void patchSceReadPad_memcpy(void * destination, void * source, int num)
-{
-	Player * player = playerGetFromSlot(0);
-	// make sure the pause menu is not open.  this way the pause menu can still be used.
-	if (player && !player->pauseOn) {
-		u32 paddata = (void*)((u32)source + 0x2);
-		u16 mask = (PAD_LEFT | PAD_RIGHT | PAD_UP | PAD_DOWN);
-		u16 dpad = ((*(u16*)paddata ^ mask) & 0x00f0);
-		printf("\nmask: 0x%04x", mask);
-		printf("\ndata: 0x%04x", *(u16*)paddata);
-		printf("\ndpad: 0x%04x", dpad); // checks dpad only
-
-		// edit the pad data.
-		*(u16*)paddata = remapButtons(*(u16*)paddata);
-		// printf("\npad 2: 0x%04x", PAD_LEFT | PAD_UP);
-	}
-	// finish up by running the original function we took over.
-	memcpy(destination, source, num);
-}
-
 
 int main(void)
 {
@@ -741,13 +375,10 @@ int main(void)
 		if (!p)
 			return 0;
 
-		if (confighypershotEquipButton)
-			hypershotEquipButton();
-
-		HOOK_JAL(0x0013cae0, &patchSceReadPad_memcpy);
-
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
+
+		patchAFK();
 
 		// hypershotEquipBehavior();
 
