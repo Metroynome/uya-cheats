@@ -3,7 +3,11 @@ EE_BIN_DIR = bin/
 
 EE_ELF = $(EE_BIN_DIR)test.elf
 EE_BIN = $(EE_BIN_DIR)test.bin
-EE_OBJS = functions.o main.o bots.o spectate.o scavengerhunt.o
+EE_OBJS = functions.o main.o
+EE_OBJS += bots.o
+#EE_OBJS += spectate.o
+#EE_OBJS += scavengerhunt.o
+
 EE_LIBS = -luyantsc
 #EE_LIBS = -luyapal
 HEADER = '1s/^/gametitle=Ratchet and Clank: Up Your Arsenal [45FE0CC4]\n\n/'

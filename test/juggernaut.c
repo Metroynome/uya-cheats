@@ -1,13 +1,10 @@
 /***************************************************
  * FILENAME :		main.c
- * 
  * DESCRIPTION :
  * 		Infected entrypoint and logic.
- * 
  * NOTES :
  * 		Each offset is determined per app id.
  * 		This is to ensure compatibility between versions of Deadlocked/Gladiator.
- * 		
  * AUTHOR :			Troy "Metroynome" Pruitt
  */
 
@@ -30,13 +27,13 @@
 #define ARRAY_SIZE(x)			(sizeof(x)/sizeof(x[0]))
 #define CHEATCMP(str)			strncmp(str, CS, sizeof(str)-1)
 
-struct JuggernaughtGameData
-{
+struct JuggernautGameData {
 	u32 Version;
 };
 
 int Initialized = 0;
-const char * JuggernaughtPopup = "%s is the Juggernaught!\x0";
+int WhoIsJuggernaut = -1;
+const char * JuggernautPopup = "%s is the Juggernaut!\0";
 int ShieldTex = 0;
 char CS[12];
 
@@ -153,69 +150,55 @@ VariableAddress_t vaWhoHitMe_Func = {
 
 /*
  * NAME :	    patchWhoHitMe
- * 
  * DESCRIPTION :
- *             Patches the "Got Hit" function so those who are not juggernaught
+ *             Patches the "Got Hit" function so those who are not juggernaut
  *              can't hurt each other.
  * NOTES :
- * 
  * ARGS : 
- * 
  * RETURN :
- * 
  * AUTHOR :			Troy "Metroynome" Pruitt
  */
 int patchWhoHitMe(Player* player, int a1)
 {
 	int hurtPlayer = a1;
-	if (checkJuggernaught(player)) {
+	if (checkJuggernaut(player)) {
 		hurtPlayer = 0;
 
 	return ((int (*)(Player*, int))GetAddress(&vaWhoHitMe_Func))(player, hurtPlayer);
 }
 
 /*
- * NAME :		giveJuggernaught
- * 
+ * NAME :		giveJuggernaut
  * DESCRIPTION :
- * 			gives the player juggernaught
- * 
+ * 			gives the player juggernaut
  * NOTES :
- * 
  * ARGS : 
- * 
  * RETURN :
- * 
  * AUTHOR :			Troy "Metroynome" Pruitt
  */
-int checkJuggernaught(Player * player)
+int checkJuggernaut(Player * player)
 {
-    return WhoIsJuggernaught == player->mpIndex;
+    return WhoIsJuggernaut == player->mpIndex;
 }
 
 /*
- * NAME :		giveJuggernaught
- * 
+ * NAME :		giveJuggernaut
  * DESCRIPTION :
- * 			gives the player juggernaught
- * 
+ * 			gives the player juggernaut
  * NOTES :
- * 
  * ARGS : 
- * 
  * RETURN :
- * 
  * AUTHOR :			Troy "Metroynome" Pruitt
  */
-void giveJuggernaught(Player * player)
+void giveJuggernaut(Player * player)
 {
-    WhoIsJuggernaught = player->mpIndex;
+    WhoIsJuggernaut = player->mpIndex;
 	GameSettings * gameSettings = gameGetSettings();
 	if (!gameSettings)
 		return;
 
 	char buf[64];
-	sprintf(buf, JuggernaughtPopup, gameSettings->PlayerNames[player->mpIndex]);
+	sprintf(buf, JuggernautPopup, gameSettings->PlayerNames[player->mpIndex]);
 	uiShowPopup(player, buf, 3);
 }
 
@@ -223,8 +206,8 @@ void updateShield(Player* player)
 {
     // Modify shield vars
 	ShieldVars * shield = mobyGetShieldVars();
-	shield->mainColor = player->PlayerMoby->PrimaryColor;
-	shield->lightningColor = 0x20000000 | player->PlayerMoby->PrimaryColor;
+	shield->mainColor = player->pMoby->primaryColor;
+	shield->lightningColor = 0x20000000 |player->pMoby->primaryColor;
 	// shield->texture = 0x45;
 	// shield->outerCircleGlowRadius = 2.0;
 	// shield->animScale = 0;
@@ -232,16 +215,11 @@ void updateShield(Player* player)
 
 /*
  * NAME :		processPlayer
- * 
  * DESCRIPTION :
  * 			Process player.
- * 
  * NOTES :
- * 
  * ARGS : 
- * 
  * RETURN :
- * 
  * AUTHOR :			Troy "Metroynome" Pruitt
  */
 void processPlayer(Player * player)
@@ -251,7 +229,7 @@ void processPlayer(Player * player)
 
 	GameData * gameData = gameGetData();
 	DoCheats(player);
-	if (checkJuggernaught(player->mpIndex)) {
+	if (checkJuggernaut(player->mpIndex)) {
         // Check if player has shield, if not, enable.
 		if (!playerHasShield(player) && !playerIsDead(player) && !player->pSheepMoby) {
 			// if Local, run shield trigger, if not, run playerGiveShield function
@@ -271,17 +249,12 @@ void processPlayer(Player * player)
 
 /*
  * NAME :		getRandomPlayer
- * 
  * DESCRIPTION :
  * 			Returns a random survivor.
- * 
  * NOTES :
- * 
  * ARGS : 
  * 		seed :		Used to determine the random survivor.
- * 
  * RETURN :
- * 
  * AUTHOR :			Troy "Metroynome" Pruitt
  */
 Player * getRandomPlayer(u32 seed)
@@ -293,7 +266,7 @@ Player * getRandomPlayer(u32 seed)
 
 	while (counter < value) {
 		for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
-			if (player[i] && !checkJuggernaught(player[i])) {
+			if (player[i] && !checkJuggernaut(player[i])) {
 				++counter;
 				if (value == counter)
 					return player[i];
@@ -307,15 +280,11 @@ Player * getRandomPlayer(u32 seed)
 
 /*
  * NAME :		onPlayerKill
- * 
  * DESCRIPTION :
  * 			Triggers whenever a player is killed.
- * 			Handles who turns juggernaught next.
- * 
+ * 			Handles who turns juggernaut next.
  * ARGS : 
- * 
  * RETURN :
- * 
  * AUTHOR :			Troy "Metroynome" Pruitt
  */
 void onPlayerKill(char * fragMsg)
@@ -326,23 +295,18 @@ void onPlayerKill(char * fragMsg)
 	char killer = fragMsg[0];
 	char killed = fragMsg[2];
 
-	if (killer >= 0 && checkJuggernaught(killer) && killed >= 0 && !checkJuggernaught(killed))
-		WhoIsJuggernaught = killer;
+	if (killer >= 0 && checkJuggernaut(killer) && killed >= 0 && !checkJuggernaut(killed))
+		WhoIsJuggernaut = killer;
 }
 
 /*
  * NAME :		initialize
- * 
  * DESCRIPTION :
  * 			Initializes the gamemode.
- * 
  * NOTES :
  * 			This is called only once at the start.
- * 
  * ARGS : 
- * 
  * RETURN :
- * 
  * AUTHOR :			Troy "Metroynome" Pruitt
  */
 void initialize(void)
@@ -354,22 +318,19 @@ void initialize(void)
 
 	// hook into player kill event
 	HOOK_JAL(GetAddress(&vaOnPlayerKill_Hook), &onPlayerKill);
+
+	Initialized = 1;
 }
 
 
 /*
  * NAME :		gameStart
- * 
  * DESCRIPTION :
  * 			Infected game logic entrypoint.
- * 
  * NOTES :
  * 			This is called only when in game.
- * 
  * ARGS : 
- * 
  * RETURN :
- * 
  * AUTHOR :			Troy "Metroynome" Pruitt
  */
 void gameStart(struct GameModule * module, PatchConfig_t * config, PatchGameConfig_t * gameConfig, PatchStateContainer_t * gameState)
@@ -399,23 +360,23 @@ void gameStart(struct GameModule * module, PatchConfig_t * config, PatchGameConf
 			processPlayer(players[i]);
 
 			// Count
-			++playerCount;
-			if (isInfected(players[i]->mpIndex))
-				++infectedCount;
-			else
-				WinningTeam = players[i]->mpTeam;
+			// ++playerCount;
+			// if (isInfected(players[i]->mpIndex))
+			// 	++infectedCount;
+			// else
+			// 	WinningTeam = players[i]->mpTeam;
 		}
 	}
 
-    // Give random player Juggernaught at start of game
+    // Give random player Juggernaut at start of game
 	if (!gameHasEnded()) {
-		if (startJuggernaught == 0) {
-			// Infect first player after 10 seconds
+		if (startJuggernaut == 0) {
+			// Juggernaut first player after 3 seconds
 			if ((gameGetTime() - gameSettings->GameStartTime) > (3 * TIME_SECOND)) {
 				Player * p = getRandomPlayer(gameSettings->GameStartTime);
 				if (survivor) {
-					giveJuggernaught(p);
-					WhoIsJuggernaught[p->mpIndex] = 1;
+					giveJuggernaut(p);
+					WhoIsJuggernaut = p->mpIndex;
 				}
 			}
 		}
@@ -454,17 +415,12 @@ void setLobbyGameOptions(void)
 
 /*
  * NAME :		lobbyStart
- * 
  * DESCRIPTION :
  * 			Infected lobby logic entrypoint.
- * 
  * NOTES :
  * 			This is called only when in lobby.
- * 
  * ARGS : 
- * 
  * RETURN :
- * 
  * AUTHOR :			Troy "Metroynome" Pruitt
  */
 void lobbyStart(struct GameModule * module, PatchConfig_t * config, PatchGameConfig_t * gameConfig, PatchStateContainer_t * gameState)
@@ -482,17 +438,12 @@ void lobbyStart(struct GameModule * module, PatchConfig_t * config, PatchGameCon
 
 /*
  * NAME :		loadStart
- * 
  * DESCRIPTION :
  * 			Load logic entrypoint.
- * 
  * NOTES :
  * 			This is called only when the game has finished reading the level from the disc and before it has started processing the data.
- * 
  * ARGS : 
- * 
  * RETURN :
- * 
  * AUTHOR :			Troy "Metroynome" Pruitt
  */
 void loadStart(void)

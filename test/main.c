@@ -515,7 +515,7 @@ int main(void)
         // runB6HitVisualizer();
 		// v2_Setting(2, first);
 
-		betterHealthBoxes_Move();
+		// betterHealthBoxes_Move();
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
     	DebugInGame(p);
