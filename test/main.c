@@ -36,13 +36,14 @@ int first = 1;
 extern VariableAddress_t vaFlagUpdate_Func;
 extern VariableAddress_t vaGiveWeaponFunc;
 extern VariableAddress_t vaPlayerRespawnFunc;
+extern VariableAddress_t vaSpawnPointsPtr;
 
 void DebugInGame(Player* player)
 {
     if (playerPadGetButtonDown(player, PAD_LEFT) > 0) {
 		// Swap Teams
-		// int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
-		// playerSetTeam(player, SetTeam);
+		int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
+		playerSetTeam(player, SetTeam);
 	} else if (playerPadGetButtonDown(player, PAD_RIGHT) > 0) {
         // Hurt Player
         playerDecHealth(player, 1);
@@ -58,6 +59,9 @@ void DebugInGame(Player* player)
 		DEBUGsetGattlingTurretHealth();
 	} else if (playerPadGetButtonDown(player, PAD_L3) > 0) {
 		// Nothing Yet!
+		int id = 0x6b;
+		void * cuboid = (void*)(*(u32*)GetAddress(&vaSpawnPointsPtr) + id * 0x80 + 0x30);
+		((void (*)(u8, void*))0x0043bd98)(player->unk_24c9, cuboid);
 	} else if (playerPadGetButtonDown(player, PAD_R3) > 0) {
 		// int j;
 		// u8* slot = (u8*)(u32)player + 0x1a32;
@@ -347,13 +351,104 @@ void patchAFK(void)
 		if (!connection)
 			return;
 
-		netSendCustomAppMessage(netGetLobbyServerConnection(), NET_LOBBY_CLIENT_INDEX, CUSTOM_MSG_ID_CLIENT_AFK, 0, NULL);
+		// netSendCustomAppMessage(netGetLobbyServerConnection(), NET_LOBBY_CLIENT_INDEX, CUSTOM_MSG_ID_CLIENT_AFK, 0, NULL);
 		printf("\ni'm afk!");
 		isAFK = 1;
 	} else {
-		afk_time = gameTime + (TIME_SECOND * AFK_Timer);
+		afk_time = gameTime + (TIME_SECOND * AFK_Wait_Timer);
 		isAFK = 0;
 	}
+}
+
+
+struct HealthBoxIndexAndPosition {
+	u8 index;
+	float position[3];
+};
+typedef struct CompactHealthBoxReplacement {
+	u8 mapId;
+	struct HealthBoxIndexAndPosition move[4];
+} CompactHealthBoxReplacement_t;
+
+CompactHealthBoxReplacement_t betterHealthBoxesRules[] = {
+	{
+		.mapId = MAP_ID_BAKISI,
+		.move = {
+			{
+				.index = 0,
+				.position = {0, 0, 0}
+			},
+			{
+				.index = 3,
+				.position = {1, 1, 1}
+			},
+			{-1, {0, 0, 0} },
+			{-1, {0, 0, 0} },
+		}
+	}
+	// {
+	// 	.mapId = MAP_ID_HOVEN,
+	// }, {
+	// 	.mapId = MAP_ID_OUTPOST_X12,
+	// }, {
+	// 	.mapId = MAP_ID_KORGON,
+	// }, {
+	// 	.mapId = MAP_ID_METROPOLIS,
+	// }, {
+	// 	.mapId = MAP_ID_BLACKWATER_CITY,
+	// }, {
+	// 	.mapId = MAP_ID_COMMAND_CENTER,
+	// }, {
+	// 	.mapId = MAP_ID_BLACKWATER_DOCKS,
+	// }, {
+	// 	.mapId = MAP_ID_AQUATOS_SEWERS,
+	// }, {
+	// 	.mapId = MAP_ID_MARCADIA,
+	// }
+};
+
+const int betterHealthBoxesRulesCount = COUNT_OF(betterHealthBoxesRules);
+static int _betterHealthBoxes = 0;
+void betterHealthBoxes_Move(void)
+{
+	if (_betterHealthBoxes)
+		return;
+
+	int i, j = 0;
+	int mapId = gameGetSettings()->GameLevel;
+	struct CompactHealthBoxReplacement* rule = NULL;
+	for (i = 0; i < betterHealthBoxesRulesCount; ++i) {
+		if (betterHealthBoxesRules[i].mapId == mapId) {
+			rule = &betterHealthBoxesRules[i];
+			break;
+		}
+	}
+
+	if (rule) {
+		Moby* mobyStart = mobyListGetStart();
+		Moby* mobyEnd = mobyListGetEnd();
+		while (mobyStart < mobyEnd) {
+			if (mobyStart->oClass == MOBY_ID_HEALTH_BOX_MP) {
+				for (j = 0; j < 4; ++j) {
+					int index = rule->move[j].index;
+					if (index != -1) {
+						Moby * moby = mobyStart + index;
+						printf("POINT: 0x%08x\n", moby);
+						*(float*)(moby + 0x10) = rule->move[j].position[0];
+						printf("P0: 0x%08x\n", rule->move[j].position[0]);
+						*(float*)(moby + 0x14) = rule->move[j].position[1];
+						printf("P1: 0x%08x\n", rule->move[j].position[1]);
+						*(float*)(moby + 0x18) = rule->move[j].position[2];
+						printf("P2: 0x%08x\n", rule->move[j].position[2]);			
+					}
+				}
+				_betterHealthBoxes = 1;
+				break;
+			}
+			++mobyStart;
+		}
+	}
+	_betterHealthBoxes = 1;
 }
 
 int main(void)
@@ -378,7 +473,7 @@ int main(void)
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 
-		patchAFK();
+		// patchAFK();
 
 		// hypershotEquipBehavior();
 
@@ -387,7 +482,7 @@ int main(void)
 		// drawSomething(p->PlayerMoby);
 		
 		// base light follow player
-		// ((void (*)(Moby*))0x003F6670)(p->PlayerMoby);
+		// ((void (*)(Moby*))0x003F6670)(p->pMoby);
 
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
@@ -419,11 +514,13 @@ int main(void)
 		// patchCTFFlag();
         // runB6HitVisualizer();
 		// v2_Setting(2, first);
+
+		betterHealthBoxes_Move();
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
     	DebugInGame(p);
     } else {
-		DebugInMenus();
+		// DebugInMenus();
 	}
 
 	// StartBots();
