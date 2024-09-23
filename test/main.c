@@ -33,7 +33,8 @@ int SOUND_ME = 0;
 int SOUND_ME_FLAG = 3;
 int first = 1;
 
-extern VariableAddress_t vaFlagUpdate_Func;
+void patchCTFFlag();
+
 extern VariableAddress_t vaGiveWeaponFunc;
 extern VariableAddress_t vaPlayerRespawnFunc;
 extern VariableAddress_t vaSpawnPointsPtr;
@@ -491,7 +492,14 @@ int main(void)
 
 		// Test_Sprites(SCREEN_WIDTH * 0.3, SCREEN_HEIGHT * .50, 100);
 
-		// printf("\nState: %d", playerDeobfuscate(&p->state, 0, 0));
+		// Only print state if it's diferent from last state.
+		static int nowState = -1;
+		int currentState = playerDeobfuscate(&p->state, 0, 0);
+		if (currentState != nowState) {
+			nowState = currentState;
+			// printf("\nState: %d", nowState);
+		}
+
 		// printf("\nPrevious State: %d", playerDeobfuscate(&p->previousState, 0, 0));
 		// printf("\nPrePrevious State: %d", playerDeobfuscate(&p->prePreviousState, 0, 0));
 		// printf("\nState Type: %d", playerDeobfuscate(&p->stateType, 0, 0));
@@ -516,6 +524,7 @@ int main(void)
 		// v2_Setting(2, first);
 
 		// betterHealthBoxes_Move();
+		patchCTFFlag();
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
     	DebugInGame(p);

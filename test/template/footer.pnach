@@ -31,3 +31,8 @@ patch=1,EE,20139E68,extended,0c0499e0
 patch=1,EE,201264e8,extended,03e00008
 patch=1,EE,20126628,extended,03e00008
 patch=1,EE,20126608,extended,03e00008
+
+// bakisi jump pad go nowhere:
+// patch=1,EE,20413608,extended,24020001
+// bakisi change minTimeToFall
+// patch=1,EE,20521FB4,extended,24030777
