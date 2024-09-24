@@ -178,7 +178,7 @@ void customFlagLogic(Moby* flagMoby)
 			continue;
         // skip if player is on teleport pad
 		// AQuATOS BUG: player->ground.pMoby points to wrong area
-		if (player->ground.pMoby || player->ground.pMoby->oClass == MOBY_ID_TELEPORT_PAD)
+		if (player->ground.pMoby && player->ground.pMoby->oClass == MOBY_ID_TELEPORT_PAD)
 			continue;
 
 		// player must be within 2 units of flag
@@ -329,7 +329,7 @@ void customFlagLogic(Moby* flagMoby)
 
 	// 	// skip if player is on teleport pad
 	// 	// AQuATOS BUG: player->ground.pMoby points to wrong area
-	// 	if (player->ground.pMoby || player->ground.pMoby->oClass == MOBY_ID_TELEPORT_PAD)
+	// 	if (player->ground.pMoby && player->ground.pMoby->oClass == MOBY_ID_TELEPORT_PAD)
 	// 		continue;
 
 	// 	// player must be within 2 units of flag
