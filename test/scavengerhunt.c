@@ -81,34 +81,6 @@ VariableAddress_t vaOnPlayerKill_Func = {
 #endif
 };
 
-VariableAddress_t vaEmpty_TROY_IS_AMAZING = {
-#if UYA_PAL
-    .Lobby = 0,
-    .Bakisi = 0,
-    .Hoven = 0,
-    .OutpostX12 = 0,
-    .KorgonOutpost = 0,
-    .Metropolis = 0,
-    .BlackwaterCity = 0,
-    .CommandCenter = 0,
-    .BlackwaterDocks = 0,
-    .AquatosSewers = 0,
-    .MarcadiaPalace = 0,
-#else
-    .Lobby = 0,
-    .Bakisi = 0,
-    .Hoven = 0,
-    .OutpostX12 = 0,
-    .KorgonOutpost = 0,
-    .Metropolis = 0,
-    .BlackwaterCity = 0,
-    .CommandCenter = 0,
-    .BlackwaterDocks = 0,
-    .AquatosSewers = 0,
-    .MarcadiaPalace = 0,
-#endif
-};
-
 VariableAddress_t vaSpawnPart_059 = {
 #if UYA_PAL
     .Lobby = 0,
