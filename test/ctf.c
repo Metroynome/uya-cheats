@@ -6,6 +6,10 @@
 #include <libuya/interop.h>
 #include <libuya/stdio.h>
 #include <libuya/string.h>
+#include <libuya/graphics.h>
+#include <libuya/color.h>
+#include <libuya/random.h>
+#include <libuya/math.h>
 
 struct FlagPVars {
 /* 0x00 */ VECTOR BasePosition;
@@ -14,6 +18,10 @@ struct FlagPVars {
 /* 0x14 */ short Team;
 /*      */ char UNK_16[6];
 /* 0x1c */ int TimeFlagDropped;
+};
+
+struct flagParticles {
+	struct PartInstance* Particles[4];
 };
 
 typedef struct ClientRequestPickUpFlag {
@@ -29,8 +37,37 @@ enum CustomMessageId {
 int ctfLogic = 0;
 int grFlagHotspots = 0;
 
-extern VariableAddress_t vaFlagUpdate_Func;
+VariableAddress_t vaSpawnPart_059 = {
+#if UYA_PAL
+    .Lobby = 0,
+    .Bakisi = 0x004a0508,
+    .Hoven = 0x004a2620,
+    .OutpostX12 = 0x00497ef8,
+    .KorgonOutpost = 0x00495690,
+    .Metropolis = 0x004949e0,
+    .BlackwaterCity = 0x00492278,
+    .CommandCenter = 0x00492270,
+    .BlackwaterDocks = 0x00494af0,
+    .AquatosSewers = 0x00493df0,
+    .MarcadiaPalace = 0x00493770,
+#else
+    .Lobby = 0,
+    .Bakisi = 0x0049e150,
+    .Hoven = 0x004a01a8,
+    .OutpostX12 = 0x00495ac0,
+    .KorgonOutpost = 0x004932d8,
+    .Metropolis = 0x00492628,
+    .BlackwaterCity = 0x0048fe40,
+    .CommandCenter = 0x0048fff8,
+    .BlackwaterDocks = 0x00492838,
+    .AquatosSewers = 0x00491b78,
+    .MarcadiaPalace = 0x004914b8,
+#endif
+};
 
+extern VariableAddress_t vaFlagUpdate_Func;
+extern VariableAddress_t vaGetFrameTex;
+extern VariableAddress_t vaGetEffectTex;
 
 /*
  * NAME :		flagHandlePickup
@@ -122,6 +159,42 @@ void flagRequestPickup(Moby* flagMoby, int pIdx)
 	}
 }
 
+struct PartInstance * flagSpawnParticle(VECTOR position, u32 color, char opacity, int idx)
+{
+	return ((struct PartInstance* (*)(VECTOR, u32, char, u32, u32, int, int, int, float))GetAddress(&vaSpawnPart_059))(position, color, opacity, 53, 0, 2, 0, 0, 1.5 + (0.5 * idx));
+}
+
+void flagParticles(Moby *moby)
+{
+	const float rotSpeeds[] = { 0.05, 0.02, -0.03, -0.1 };
+	const int opacities[] = { 64, 32, 44, 51 };
+	VECTOR particlePosition;
+	int i;
+	struct flagParticles* pvars = (struct flagParticles*)moby->pVar;
+	if (!pvars)
+		return;
+
+	vector_copy(particlePosition, moby->position);
+	(float)particlePosition[0] -= .2;
+	(float)particlePosition[2] += 1.8;
+
+	// handle particles
+	// u32 color = colorLerp(0, 0x0000ffff, 1.0 / 4);
+	u32 color = (moby->oClass == MOBY_ID_CTF_RED_FLAG) ? 0x000000ff : 0x00ff0000;
+	color |= 0x80000000;
+	for (i = 0; i < 4; ++i) {
+		struct PartInstance * particle = pvars->Particles[i];
+		if (!particle) {
+			particle = flagSpawnParticle(particlePosition, color, 100, i);
+		}
+
+		// update
+		if (particle) {
+			particle->rot = (int)((gameGetTime() + (i * 100)) / (TIME_SECOND * rotSpeeds[i])) & 0xFF;
+		}
+	}
+}
+
 /*
  * NAME :		customFlagLogic
  * DESCRIPTION :
@@ -144,9 +217,12 @@ void customFlagLogic(Moby* flagMoby)
 	if (!flagMoby || !pvars)
 		return;
 
+	flagParticles(flagMoby);
+
     // if flag state is not 1 (being picked up) and if flag is returning to base
     if (flagMoby->state != 1 || flagIsReturning(flagMoby))
         return;
+
     // flag is being picked up
     if (flagIsBeingPickedUp(flagMoby))
         return;
@@ -167,15 +243,19 @@ void customFlagLogic(Moby* flagMoby)
         // Don't allow input from players whom are dead
         if (playerDeobfuscate(&player->stateType, 0, 0) == PLAYER_TYPE_DEATH)
             return;
+
         // skip player if they've only been alive for < 180ms
         if (player->timers.timeAlive < 180)
             return;
+
         // skip if player state is in vehicle and critterMode is on
 		if (player->camera && player->camera->camHeroData.critterMode)
 			continue;
+
     	// skip player if in vehicle
 		if (player->vehicle && playerDeobfuscate(&player->state, 0, 0) == PLAYER_STATE_VEHICLE)
 			continue;
+
         // skip if player is on teleport pad
 		// AQuATOS BUG: player->ground.pMoby points to wrong area
 		if (player->ground.pMoby && player->ground.pMoby->oClass == MOBY_ID_TELEPORT_PAD)
