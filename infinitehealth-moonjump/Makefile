@@ -7,7 +7,7 @@ EE_OBJS = main.o
 EE_LIBS = -luyantsc
 #EE_LIBS = -luyapal
 
-ADDRESS = 000F2000
+ADDRESS = 000FF000
 
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%)
 EE_INCS := -I../../include -I$(PS2SDK)/ports/include
