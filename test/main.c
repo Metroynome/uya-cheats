@@ -363,94 +363,118 @@ void patchAFK(void)
 
 
 struct HealthBoxIndexAndPosition {
-	u8 index;
-	float position[3];
+	int index;
+	float x;
+	float y;
+	float z;
 };
-typedef struct CompactHealthBoxReplacement {
+typedef struct CompactFlagReplacement {
 	u8 mapId;
 	struct HealthBoxIndexAndPosition move[4];
-} CompactHealthBoxReplacement_t;
+} CompactFlagReplacement_t;
 
-CompactHealthBoxReplacement_t betterHealthBoxesRules[] = {
+typedef struct HealthboxReplacement {
+	short mapId;
+	short index;
+	float x;
+	float z;
+	float y;
+} HealthboxReplacementt_t;
+
+HealthboxReplacementt_t betterHealthBoxesRules[] = {
 	{
 		.mapId = MAP_ID_BAKISI,
-		.move = {
-			{
-				.index = 0,
-				.position = {0, 0, 0}
-			},
-			{
-				.index = 3,
-				.position = {1, 1, 1}
-			},
-			{-1, {0, 0, 0} },
-			{-1, {0, 0, 0} },
-		}
-	}
-	// {
-	// 	.mapId = MAP_ID_HOVEN,
-	// }, {
-	// 	.mapId = MAP_ID_OUTPOST_X12,
-	// }, {
-	// 	.mapId = MAP_ID_KORGON,
-	// }, {
-	// 	.mapId = MAP_ID_METROPOLIS,
-	// }, {
-	// 	.mapId = MAP_ID_BLACKWATER_CITY,
-	// }, {
-	// 	.mapId = MAP_ID_COMMAND_CENTER,
-	// }, {
-	// 	.mapId = MAP_ID_BLACKWATER_DOCKS,
-	// }, {
-	// 	.mapId = MAP_ID_AQUATOS_SEWERS,
-	// }, {
-	// 	.mapId = MAP_ID_MARCADIA,
-	// }
+		.index = 0,
+		.x = 0,
+		.z = 0,
+		.y = 0
+	},
+	{MAP_ID_BAKISI, 1, 1, 1, 1},
+	{MAP_ID_BAKISI, -1, 449.23907, 375.7771, 207.75024},
 };
 
-const int betterHealthBoxesRulesCount = COUNT_OF(betterHealthBoxesRules);
 static int _betterHealthBoxes = 0;
 void betterHealthBoxes_Move(void)
 {
 	if (_betterHealthBoxes)
 		return;
 
-	int i, j = 0;
+	int j;
 	int mapId = gameGetSettings()->GameLevel;
-	struct CompactHealthBoxReplacement* rule = NULL;
-	for (i = 0; i < betterHealthBoxesRulesCount; ++i) {
-		if (betterHealthBoxesRules[i].mapId == mapId) {
-			rule = &betterHealthBoxesRules[i];
-			break;
-		}
-	}
-
-	if (rule) {
-		Moby* mobyStart = mobyListGetStart();
-		Moby* mobyEnd = mobyListGetEnd();
-		while (mobyStart < mobyEnd) {
-			if (mobyStart->oClass == MOBY_ID_HEALTH_BOX_MP) {
-				for (j = 0; j < 4; ++j) {
-					int index = rule->move[j].index;
-					if (index != -1) {
-						Moby * moby = mobyStart + index;
-						printf("POINT: 0x%08x\n", moby);
-						*(float*)(moby + 0x10) = rule->move[j].position[0];
-						printf("P0: 0x%08x\n", rule->move[j].position[0]);
-						*(float*)(moby + 0x14) = rule->move[j].position[1];
-						printf("P1: 0x%08x\n", rule->move[j].position[1]);
-						*(float*)(moby + 0x18) = rule->move[j].position[2];
-						printf("P2: 0x%08x\n", rule->move[j].position[2]);			
+	Moby* mobyStart = mobyListGetStart();
+	Moby* mobyEnd = mobyListGetEnd();
+	while (mobyStart < mobyEnd) {
+		if (mobyStart->oClass == MOBY_ID_HEALTH_BOX_MP) {
+			for (j = 0; j < COUNT_OF(betterHealthBoxesRules); ++j) {
+				if (mapId == betterHealthBoxesRules[j].mapId) {
+					int index = betterHealthBoxesRules[j].index;
+					Moby * moby = mobyStart + index;
+					if (index > -1) {
+						moby->position[0] = betterHealthBoxesRules[j].x;
+						moby->position[1] = betterHealthBoxesRules[j].z;
+						moby->position[2] = betterHealthBoxesRules[j].y;
+					} else if (index == -1) {
+						Moby* hb = mobySpawn(MOBY_ID_HEALTH_BOX_MP, 0x100);
+						if (hb) {
+							// memcpy(hb, &mobyStart, 0x100);
+							hb->position[0] = betterHealthBoxesRules[j].x;
+							hb->position[1] = betterHealthBoxesRules[j].z;
+							hb->position[2] = betterHealthBoxesRules[j].y;
+							hb->drawn = 1;
+							hb->drawDist = 0x0080;
+						}
 					}
 				}
-				_betterHealthBoxes = 1;
-				break;
 			}
-			++mobyStart;
+			break;
 		}
+		++mobyStart;
 	}
 	_betterHealthBoxes = 1;
 }
+
+// const int betterHealthBoxesRulesCount = COUNT_OF(betterHealthBoxesRules);
+// static int _betterHealthBoxes = 0;
+// void betterHealthBoxes_Move(void)
+// {
+// 	if (_betterHealthBoxes)
+// 		return;
+
+// 	int i, j = 0;
+// 	int mapId = gameGetSettings()->GameLevel;
+// 	struct CompactHealthBoxReplacement* rule = NULL;
+// 	for (i = 0; i < betterHealthBoxesRulesCount; ++i) {
+// 		if (betterHealthBoxesRules[i].mapId == mapId) {
+// 			rule = &betterHealthBoxesRules[i];
+// 			break;
+// 		}
+// 	}
+
+// 	if (rule) {
+// 		Moby* mobyStart = mobyListGetStart();
+// 		Moby* mobyEnd = mobyListGetEnd();
+// 		while (mobyStart < mobyEnd) {
+// 			if (mobyStart->oClass == MOBY_ID_HEALTH_BOX_MP) {
+// 				for (j = 0; j < COUNT_OF(rule->move); ++j) {
+// 					int index = rule->move[j].index;
+// 					if (index > -1) {
+// 						Moby * moby = mobyStart + index;
+// 						printf("POINT %d: 0x%08x\n", index, moby);
+// 						moby->position[0] = (float)rule->move[j].x;
+// 						printf("P0: %f\n", (float)moby->position[0]);
+// 						moby->position[1] = (float)rule->move[j].z;
+// 						printf("P1: %f\n", (float)moby->position[1]);
+// 						moby->position[2] = (float)rule->move[j].y;
+// 						printf("P2: %f\n", (float)moby->position[2]);			
+// 					}
+// 				}
+// 				break;
+// 			}
+// 			++mobyStart;
+// 		}
+// 	}
+// 	_betterHealthBoxes = 1;
+// }
 
 int main(void)
 {
@@ -523,7 +547,7 @@ int main(void)
         // runB6HitVisualizer();
 		// v2_Setting(2, first);
 
-		// betterHealthBoxes_Move();
+		betterHealthBoxes_Move();
 		patchCTFFlag();
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
