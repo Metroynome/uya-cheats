@@ -64,10 +64,25 @@ void DebugInGame(Player* player)
 		void * cuboid = (void*)(*(u32*)GetAddress(&vaSpawnPointsPtr) + id * 0x80 + 0x30);
 		((void (*)(u8, void*))0x0043bd98)(player->unk_24c9, cuboid);
 	} else if (playerPadGetButtonDown(player, PAD_R3) > 0) {
-		// int j;
-		// u8* slot = (u8*)(u32)player + 0x1a32;
-		// for(j = 0; j < 12; ++j)
-		// 	playerGiveWeaponUpgrade(player, playerDeobfuscate(&slot[j], 1, 1));
+		Moby* hbMoby = mobySpawn(MOBY_ID_HEALTH_BOX_MP, 0);
+		Moby* orbMoby = mobySpawn(MOBY_ID_HEALTH_ORB_MP, 0);
+		if (hbMoby) {
+			vector_copy(hbMoby->position, player->playerPosition);
+
+			hbMoby->updateDist = 0xFF;
+			hbMoby->drawn = 0x01;
+			hbMoby->drawDist = 0x0080;
+			hbMoby->opacity = 0x80;
+			hbMoby->state = 1;
+		}
+		if (orbMoby) {
+			vector_copy(orbMoby->position, hbMoby->position);
+			orbMoby->updateDist = 0xFF;
+			orbMoby->drawn = 0x01;
+			orbMoby->drawDist = 0x0080;
+			orbMoby->opacity = 0x80;
+			orbMoby->state = 1;	
+		}
 	}
 }
 
@@ -413,17 +428,21 @@ void betterHealthBoxes_Move(void)
 						moby->position[0] = betterHealthBoxesRules[j].x;
 						moby->position[1] = betterHealthBoxesRules[j].z;
 						moby->position[2] = betterHealthBoxesRules[j].y;
-					} else if (index == -1) {
-						Moby* hb = mobySpawn(MOBY_ID_HEALTH_BOX_MP, 0x100);
-						if (hb) {
-							// memcpy(hb, &mobyStart, 0x100);
-							hb->position[0] = betterHealthBoxesRules[j].x;
-							hb->position[1] = betterHealthBoxesRules[j].z;
-							hb->position[2] = betterHealthBoxesRules[j].y;
-							hb->drawn = 1;
-							hb->drawDist = 0x0080;
-						}
 					}
+					// else if (index == -1) {
+					// 	Moby* hbMoby = mobySpawn(MOBY_ID_HEALTH_BOX_MP, 0);
+					// 	if (hbMoby) {
+					// 		hbMoby->position[0] = betterHealthBoxesRules[j].x;
+					// 		hbMoby->position[1] = betterHealthBoxesRules[j].z;
+					// 		hbMoby->position[2] = betterHealthBoxesRules[j].y;
+					// 		hbMoby->pUpdate = moby->pUpdate;
+					// 		hbMoby->updateDist = 0xFF;
+					// 		hbMoby->drawn = 0x01;
+					// 		hbMoby->drawDist = 0x0080;
+					// 		hbMoby->opacity = 0x80;
+					// 		hbMoby->state = 1;
+					// 	}
+					// }
 				}
 			}
 			break;
