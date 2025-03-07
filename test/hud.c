@@ -17,13 +17,18 @@
 #include <libuya/gameplay.h>
 #include <libuya/map.h>
 
-typedef struct hudFunctions {
+typedef struct hud_vtable {
+    void (*hud_setup)();
+    void (*health)(int isShown, Player *player);
+    void (*mapAndScore)(int index, int a1);
+    int (*getGadgetId)();
+} hud_vtable_t;
+
+typedef struct hudInfo {
     int init;
-    u32 hudAddr;
-    u32 health;
-    u32 mapAndScore;
-} hudFunctions_t;
-hudFunctions_t HUD;
+    hud_vtable_t vtable;
+} hudInfo_t;
+hudInfo_t hudInfo;
 
 VariableAddress_t vaHudSetup_Hook = {
 #if UYA_PAL
@@ -53,9 +58,13 @@ VariableAddress_t vaHudSetup_Hook = {
 #endif
 };
 
-// hud_setup func: 0x005451c8
 void hudRun(void)
 {
+    if (runOriginalHUD) {
+        hudInfo.vtable.hud_setup();
+        return;
+    }
+
     int i = 0;
     int playerIndex = 0;
     int localCount = playerGetLocalCount();
@@ -70,23 +79,25 @@ void hudRun(void)
         // if paused
         if (player->pauseOn) {
             // Hide health
-            ((void(*)(u32, Player *))HUD.health)(0, player);
+            hudInfo.vtable.health(1, player);
         }
         // if not paused
         else {
-            // printf("\nHUD.health: %08x", HUD.health);
-            ((void(*)(int, u32))HUD.mapAndScore)(playerIndex, 10);
+            // printf("\nhudInfo.health: %08x", hudInfo.health);
+            hudInfo.vtable.mapAndScore(playerIndex, 10);
         }
     }
 }
-
+// hud_setup func: 0x005451c8
 void hudSetup(void)
 {
     // store original functions.  Converts JAL to address.
     u32 hook = GetAddress(&vaHudSetup_Hook);
-    HUD.hudAddr = JAL2ADDR(*(u32*)hook);
-    HUD.health = JAL2ADDR(*(u32*)(HUD.hudAddr + 0x60));
-    HUD.mapAndScore = JAL2ADDR(*(u32*)(HUD.hudAddr + 0x6B8));
+    hudInfo.vtable.hud_setup = JAL2ADDR(*(u32*)hook);
+    u32 start = (u32)hudInfo.vtable.hud_setup;
+    hudInfo.vtable.health = JAL2ADDR(*(u32*)(start + 0x60));
+    hudInfo.vtable.mapAndScore = JAL2ADDR(*(u32*)(start + 0x6b8));
+    hudInfo.vtable.getGadgetId = JAL2ADDR(*(u32*)(start + 0x7c));
 
     // hook our function
     HOOK_JAL(hook, &hudRun);
@@ -95,17 +106,17 @@ void hudSetup(void)
 void hudInit(void)
 {
     if (!isInGame()) {
-        // zero HUD struct if not in game.
-        if (HUD.init > 0)
-            memset(&HUD, 0, sizeof(hudFunctions_t));
+        // zero ui struct if not in game.
+        if (hudInfo.init > 0)
+            memset(&hudInfo, 0, sizeof(hudInfo_t));
         
         return;
     }
     
-    if (HUD.init == 0) {
+    if (hudInfo.init == 0) {
         hudSetup();
-        HUD.init = 1;
-    } else if (HUD.init == 1) {
+        hudInfo.init = 1;
+    } else if (hudInfo.init == 1) {
         hudRun();
     }
 }
