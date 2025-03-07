@@ -33,7 +33,8 @@ int SOUND_ME = 0;
 int SOUND_ME_FLAG = 3;
 int first = 1;
 
-void patchCTFFlag();
+void patchCTFFlag(void);
+void hudInit(void);
 
 extern VariableAddress_t vaGiveWeaponFunc;
 extern VariableAddress_t vaPlayerRespawnFunc;
@@ -509,6 +510,8 @@ int main(void)
 	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 0;
 	// }
 
+	hudInit();
+
     if (isInGame()) {
 		Player * p = playerGetFromSlot(0);
 		if (!p)
@@ -562,12 +565,12 @@ int main(void)
 		// printf("Collision: %d\n", CollHotspot());
         
 		// drawCollider(p->PlayerMoby);
-		// patchCTFFlag();
         // runB6HitVisualizer();
 		// v2_Setting(2, first);
 
-		betterHealthBoxes_Move();
-		patchCTFFlag();
+		// betterHealthBoxes_Move();
+		// patchCTFFlag();
+
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
     	DebugInGame(p);
