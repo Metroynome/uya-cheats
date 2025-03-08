@@ -510,7 +510,7 @@ int main(void)
 	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 0;
 	// }
 
-	hudInit();
+	hud();
 
     if (isInGame()) {
 		Player * p = playerGetFromSlot(0);

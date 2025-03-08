@@ -20,12 +20,25 @@
 typedef struct hud_vtable {
     void (*hud_setup)();
     void (*health)(int isShown, Player *player);
-    void (*mapAndScore)(int index, int a1);
     int (*getGadgetId)();
+    void (*ammo)(int a0, Player *player);
+    void (*vehiclePlayerArrows)(int isFirstArrowShown, int isSecondArrowShown);
+    void (*weaponLevel)(int a0, Player *player);
+    void (*quickSelect)(int unk_24c9, int ten);
+    void (*weapons)(int sprite, int weapon, int num, int isShown);
+    int (*checkMapScore)(int playerIndex);
+    void (*radar)(int unk_24c9, int ten);
+    void (*timer)(int playerIndex, int ten);
+    void (*mapAndScore)(int index, int a1);
+    void (*ctfAndSiege)(int ten, u32 CTF_BlueDivRed, u32 local_90);
+    void (*localPlayers_2)(int ten);
+    void (*localPlayers_3)(int ten);
+    void (*timeLeft)();
 } hud_vtable_t;
 
 typedef struct hudInfo {
-    int init;
+    short init;
+    short runOldHud;
     hud_vtable_t vtable;
 } hudInfo_t;
 hudInfo_t hudInfo;
@@ -60,7 +73,7 @@ VariableAddress_t vaHudSetup_Hook = {
 
 void hudRun(void)
 {
-    if (runOriginalHUD) {
+    if (hudInfo.runOldHud) {
         hudInfo.vtable.hud_setup();
         return;
     }
@@ -83,27 +96,39 @@ void hudRun(void)
         }
         // if not paused
         else {
-            // printf("\nhudInfo.health: %08x", hudInfo.health);
             hudInfo.vtable.mapAndScore(playerIndex, 10);
         }
     }
 }
 // hud_setup func: 0x005451c8
-void hudSetup(void)
+int hudInit(void)
 {
     // store original functions.  Converts JAL to address.
     u32 hook = GetAddress(&vaHudSetup_Hook);
-    hudInfo.vtable.hud_setup = JAL2ADDR(*(u32*)hook);
-    u32 start = (u32)hudInfo.vtable.hud_setup;
+    u32 start = JAL2ADDR(*(u32*)hook);
+    hudInfo.vtable.hud_setup = start;
     hudInfo.vtable.health = JAL2ADDR(*(u32*)(start + 0x60));
-    hudInfo.vtable.mapAndScore = JAL2ADDR(*(u32*)(start + 0x6b8));
     hudInfo.vtable.getGadgetId = JAL2ADDR(*(u32*)(start + 0x7c));
+    hudInfo.vtable.ammo = JAL2ADDR(*(u32*)(start + 0x140));
+    hudInfo.vtable.vehiclePlayerArrows = JAL2ADDR(*(u32*)(start + 0x174));
+    hudInfo.vtable.weaponLevel = JAL2ADDR(*(u32*)(start + 0x42c));
+    hudInfo.vtable.quickSelect = JAL2ADDR(*(u32*)(start + 0x454));
+    hudInfo.vtable.weapons = JAL2ADDR(*(u32*)(start + 0x470));
+    hudInfo.vtable.checkMapScore = JAL2ADDR(*(u32*)(start + 0x664));
+    hudInfo.vtable.radar = JAL2ADDR(*(u32*)(start + 0x68c));
+    hudInfo.vtable.timer = JAL2ADDR(*(u32*)(start + 0x6a8));
+    hudInfo.vtable.mapAndScore = JAL2ADDR(*(u32*)(start + 0x6b8));
+    hudInfo.vtable.ctfAndSiege = JAL2ADDR(*(u32*)(start + 0x950));
+    hudInfo.vtable.localPlayers_2 = JAL2ADDR(*(u32*)(start + 0x970));
+    hudInfo.vtable.localPlayers_3 = JAL2ADDR(*(u32*)(start + 0x990));
+    hudInfo.vtable.timeLeft = JAL2ADDR(*(u32*)(start + 0x9E4));
 
     // hook our function
     HOOK_JAL(hook, &hudRun);
+    return 1;
 }
 
-void hudInit(void)
+void hud(void)
 {
     if (!isInGame()) {
         // zero ui struct if not in game.
@@ -113,10 +138,8 @@ void hudInit(void)
         return;
     }
     
-    if (hudInfo.init == 0) {
-        hudSetup();
-        hudInfo.init = 1;
-    } else if (hudInfo.init == 1) {
-        hudRun();
-    }
+    if (hudInfo.init == 0)
+        hudInfo.init = hudInit();
+
+    hudRun();
 }
