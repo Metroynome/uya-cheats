@@ -25,12 +25,12 @@ typedef struct hud_frames {
 typedef struct hud_vtable {
     void (*hud_setup)();
     void (*health)(int isShown, Player *player);
-    int (*getGadgetId)(Player * player);
+    int (*getGadgetId)(Player *player);
     void (*ammo)(int ammoLeft, int amooMax, int isShown);
     void (*vehiclePlayerArrows)(int isFirstArrowShown, int isSecondArrowShown);
-    void (*weaponLevel)(int a0, Player *player);
-    void (*quickSelect)(int unk_24c9, int ten);
-    void (*weapons)(int sprite, int weapon, int num, int isShown);
+    void (*weaponLevel)(int level, Player *player);
+    void (*quickSelect)(int isShown, int ten);
+    void (*weapons)(int sprite, int level, int slot, int isShown);
     int (*checkMapScore)(int playerIndex);
     void (*radar)(int unk_24c9, int ten);
     void (*timer)(int playerIndex, int ten);
@@ -77,13 +77,18 @@ VariableAddress_t vaHudSetup_Hook = {
 #endif
 };
 
+int deobfuscate(int src)
+{
+    return playerDeobfuscate(src, DEOBFUSCATE_ADDRESS_WEAPON, DEOBFUSCATE_MODE_WEAPON);
+}
+
 void hudRun(void)
 {
     if (hudInfo.runOldHud) {
         hudInfo.vtable.hud_setup();
         return;
     }
-    int i = 0;
+    int quickSelectSlot = 0;
     int playerIndex = 0;
     int localCount = playerGetLocalCount();
     // Loop through each player
@@ -100,35 +105,36 @@ void hudRun(void)
             hudInfo.vtable.health(1, player);
         }
         // if not paused
-        else if (!player->pauseOn) {
+        else if (!player->pauseOn && handGadgetId != -1) {
             // hudInfo.vtable.mapAndScore(playerIndex, 10);
             GadgetDef * weapon = (handGadgetId) ? weaponGadgetList() : 0;
-            short mainWeapon = playerDeobfuscate(&player->quickSelect.Slot[0], 1, 1);
-            printf("\nhandgadgetId: %d", handGadgetId);
-            if (!player->vehicle && weapon != 0) {
-                int j = handGadgetId;
-                for (i; i < 3; ++i) {
-                    short weaponSlot = playerDeobfuscate(&player->quickSelect.Slot[i], 1, 1);
-                    int sprite = mainWeapon != 0 ? &weapon[j].sprite : 0;
-                    short ammo = mainWeapon != 0 ? playerDeobfuscate(&player->weaponAmmo.Slot[j], 1, 1) : 0;
-                    short ammoMax = weapon[j].ammoAmount;
-                    short exp = playerDeobfuscate(&player->weaponMeter.Slot[j], 1, 1);
-                    hudInfo.vtable.weapons(*(u16*)sprite, ammo, i, 0);
-                    if (i == 0) {
-                        printf("\nsprite: %08x %08x", &weapon[j].sprite, weapon[j].sprite);
-                        printf("\nammo: %08x %08x", &player->weaponAmmo.Slot[j], ammo);
-                        printf("\nammoMax: %08x %08x", &weapon[j].ammoAmount, weapon[j].ammoAmount);
-                        printf("\nexp: %08x %08x", &player->weaponMeter.Slot[j], exp);
+            short mainWeapon = deobfuscate(&player->quickSelect.Slot[0]);
+            int isWrench = handGadgetId == WEAPON_ID_WRENCH;
+            int isSwingshot = handGadgetId == WEAPON_ID_SWINGSHOT;
+            int hideQuickSelect = (isWrench || isSwingshot) ? 1 : 0;
+            if (!player->vehicle && weapon != 0 && !hideQuickSelect) {
+                for (quickSelectSlot; quickSelectSlot < 3; ++quickSelectSlot) {
+                    short weaponIndex = deobfuscate(&player->quickSelect.Slot[quickSelectSlot]);
+                    int sprite = 0;
+                    short ammo = 0, ammoMax = 0, exp = 0;
 
+                    if (mainWeapon > 0 && weaponIndex) {
+                        sprite = &weapon[weaponIndex].sprite;
+                        sprite = *(u16*)sprite;
+                        ammo = deobfuscate(&player->weaponAmmo.Slot[weaponIndex]);
+                        ammoMax = weapon[weaponIndex].ammoAmount;
+                        exp = deobfuscate(&player->weaponMeter.Slot[weaponIndex]);
+                    }
+                    if (quickSelectSlot == 0) {
                         if (handGadgetId != WEAPON_ID_MORPH)
                             hudInfo.vtable.ammo(ammo, ammoMax, 0);
                         if (handGadgetId != WEAPON_ID_HOLO)
                             hudInfo.vtable.weaponLevel(exp, player);
-                        
-                        hudInfo.vtable.quickSelect(0, 10);
                     }
+                    hudInfo.vtable.weapons(sprite, exp, quickSelectSlot, 0);
                 }
             }
+            hudInfo.vtable.quickSelect(hideQuickSelect, 10);
         }
     }
 }
