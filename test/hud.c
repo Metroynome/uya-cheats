@@ -27,7 +27,7 @@ typedef struct hud_vtable {
     void (*health)(int isShown, Player *player);
     int (*getGadgetId)(Player *player);
     void (*ammo)(int ammoLeft, int amooMax, int isShown);
-    void (*vehiclePlayerArrows)(int isFirstArrowShown, int isSecondArrowShown);
+    void (*vehiclePlayerArrows)(int sprite, int isFirstArrowShown, int isSecondArrowShown);
     void (*weaponLevel)(int level, Player *player);
     void (*quickSelect)(int isShown, int ten);
     void (*weapons)(int sprite, int level, int slot, int isShown);
@@ -107,33 +107,66 @@ void hudRun(void)
         // if not paused
         else if (!player->pauseOn && handGadgetId != -1) {
             // hudInfo.vtable.mapAndScore(playerIndex, 10);
-            GadgetDef * weapon = (handGadgetId) ? weaponGadgetList() : 0;
-            short mainWeapon = deobfuscate(&player->quickSelect.Slot[0]);
+            GadgetDef * weapon = weaponGadgetList();
             int isWrench = handGadgetId == WEAPON_ID_WRENCH;
             int isSwingshot = handGadgetId == WEAPON_ID_SWINGSHOT;
-            int hideQuickSelect = (isWrench || isSwingshot) ? 1 : 0;
-            if (!player->vehicle && weapon != 0 && !hideQuickSelect) {
+            Vehicle *inVehicle = player->vehicle;
+            int hideQuickSelect = (isWrench || isSwingshot) && !inVehicle == 1;
+            int sprite = 0;
+            if (weapon) {
                 for (quickSelectSlot; quickSelectSlot < 3; ++quickSelectSlot) {
-                    short weaponIndex = deobfuscate(&player->quickSelect.Slot[quickSelectSlot]);
-                    int sprite = 0;
+                    sprite = -1;
                     short ammo = 0, ammoMax = 0, exp = 0;
-
-                    if (mainWeapon > 0 && weaponIndex) {
+                    short weaponIndex = deobfuscate(&player->quickSelect.Slot[quickSelectSlot]);
+                    if (weaponIndex && !inVehicle) {
                         sprite = &weapon[weaponIndex].sprite;
                         sprite = *(u16*)sprite;
                         ammo = deobfuscate(&player->weaponAmmo.Slot[weaponIndex]);
                         ammoMax = weapon[weaponIndex].ammoAmount;
                         exp = deobfuscate(&player->weaponMeter.Slot[weaponIndex]);
                     }
+                    if (inVehicle) {
+                        int vType = inVehicle->vehicleType;
+                        ammo =  5;
+                        ammoMax = (vType == 1) ? 8 : 5;
+                        int vehSprite = (vType == 2) ? SPRITE_PLAYER_TURRET : SPRITE_TURBOSLIDER;
+                        if (vType == 1) {
+                            vehSprite = SPRITE_HOVERSHIP;
+                            int vState =  (player->vehicleState == 3 || player->vehicleState == 5) ? 0x3d4 : 0x3dc;
+                            ammo = *(int*)((u32)inVehicle->pMoby->pVar + (u32)vState);
+                        }
+                        if (quickSelectSlot == 0)
+                            sprite = vehSprite;
+
+                        hudInfo.vtable.health(10, player);
+                        hudInfo.vtable.vehiclePlayerArrows(vehSprite, inVehicle->pDriver != 0, inVehicle->pPassenger != 0);  
+                    }
                     if (quickSelectSlot == 0) {
-                        if (handGadgetId != WEAPON_ID_MORPH)
+                        if (handGadgetId != WEAPON_ID_MORPH || inVehicle)
                             hudInfo.vtable.ammo(ammo, ammoMax, 0);
                         if (handGadgetId != WEAPON_ID_HOLO)
                             hudInfo.vtable.weaponLevel(exp, player);
                     }
+
                     hudInfo.vtable.weapons(sprite, exp, quickSelectSlot, 0);
                 }
             }
+            // else if (inVehicle) {
+            //     int vType = inVehicle->vehicleType;
+            //     int sprite = (vType == 2) ?  SPRITE_PLAYER_TURRET : SPRITE_TURBOSLIDER;
+            //     short ammo = 5;
+            //     short ammoMax = (vType == 1) ? 8 : 5;
+            //     if (vType == 1) {
+            //         int vState =  (player->vehicleState == 3 || player->vehicleState == 5) ? 0x3d4 : 0x3dc;
+            //         ammo = *(int*)((u32)inVehicle->pMoby->pVar + (u32)vState);
+            //         sprite = SPRITE_HOVERSHIP;
+            //     }
+            //     hudInfo.vtable.health(10, player);
+            //     hudInfo.vtable.vehiclePlayerArrows(sprite, inVehicle->pDriver != 0, inVehicle->pPassenger != 0);                
+            //     hudInfo.vtable.ammo(ammo, ammoMax, 0);
+            //     hudInfo.vtable.weapons(sprite, 0, 0, 0);
+            //     hudInfo.vtable.weapons(-1, 0, 1, 0);
+            // }
             hudInfo.vtable.quickSelect(hideQuickSelect, 10);
         }
     }
