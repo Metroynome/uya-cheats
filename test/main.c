@@ -65,25 +65,25 @@ void DebugInGame(Player* player)
 		void * cuboid = (void*)(*(u32*)GetAddress(&vaSpawnPointsPtr) + id * 0x80 + 0x30);
 		((void (*)(u8, void*))0x0043bd98)(player->unk_24c9, cuboid);
 	} else if (playerPadGetButtonDown(player, PAD_R3) > 0) {
-		Moby* hbMoby = mobySpawn(MOBY_ID_HEALTH_BOX_MP, 0);
-		Moby* orbMoby = mobySpawn(MOBY_ID_HEALTH_ORB_MP, 0);
-		if (hbMoby) {
-			vector_copy(hbMoby->position, player->playerPosition);
+		// Moby* hbMoby = mobySpawn(MOBY_ID_HEALTH_BOX_MP, 0);
+		// Moby* orbMoby = mobySpawn(MOBY_ID_HEALTH_ORB_MP, 0);
+		// if (hbMoby) {
+		// 	vector_copy(hbMoby->position, player->playerPosition);
 
-			hbMoby->updateDist = 0xFF;
-			hbMoby->drawn = 0x01;
-			hbMoby->drawDist = 0x0080;
-			hbMoby->opacity = 0x80;
-			hbMoby->state = 1;
-		}
-		if (orbMoby) {
-			vector_copy(orbMoby->position, hbMoby->position);
-			orbMoby->updateDist = 0xFF;
-			orbMoby->drawn = 0x01;
-			orbMoby->drawDist = 0x0080;
-			orbMoby->opacity = 0x80;
-			orbMoby->state = 1;	
-		}
+		// 	hbMoby->updateDist = 0xFF;
+		// 	hbMoby->drawn = 0x01;
+		// 	hbMoby->drawDist = 0x0080;
+		// 	hbMoby->opacity = 0x80;
+		// 	hbMoby->state = 1;
+		// }
+		// if (orbMoby) {
+		// 	vector_copy(orbMoby->position, hbMoby->position);
+		// 	orbMoby->updateDist = 0xFF;
+		// 	orbMoby->drawn = 0x01;
+		// 	orbMoby->drawDist = 0x0080;
+		// 	orbMoby->opacity = 0x80;
+		// 	orbMoby->state = 1;	
+		// }
 	}
 }
 
