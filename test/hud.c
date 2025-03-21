@@ -91,6 +91,7 @@ void hudRun(void)
     int quickSelectSlot = 0;
     int playerIndex = 0;
     int localCount = playerGetLocalCount();
+    GameData *gameData = gameGetData();
     // Loop through each player
     for (playerIndex; playerIndex < localCount; ++playerIndex) {
         Player *player = playerGetFromSlot(playerIndex);
@@ -110,6 +111,7 @@ void hudRun(void)
         int isSwingshot = handGadgetId == WEAPON_ID_SWINGSHOT;
         Vehicle *inVehicle = player->vehicle;
         int hideQuickSelect = (isWrench || isSwingshot) && !inVehicle == 1;
+        
         // Quick Select and Vehicle HUD
         if (weapon && handGadgetId != -1) {
             for (quickSelectSlot; quickSelectSlot < 3; ++quickSelectSlot) {
@@ -149,14 +151,25 @@ void hudRun(void)
                 hudInfo.vtable.weapons(sprite, exp, quickSelectSlot, 0);
             }
         }
-        // Healthbar HUD
-        // pressing Triangle to show is done in HeroUpdate();  
-        if (playerPadGetButtonDown(player, PAD_L3) > 0 && player->hudHealthTimer < 1 && deobfuscate(&player->state) != PLAYER_STATE_VEHICLE) {
-            player->hudHealthTimer = 360;
-        } else {
+            // Healthbar HUD
+            // pressing Triangle to show is done in HeroUpdate(); 
+        if (player->hudHealthTimer == 0 && playerPadGetButtonDown(player, PAD_L3) != 0 && !inVehicle) {
+            #if UYA_PAL
+            int timer = 324; // 360 - 10% = 324
+            #else
+            int timer = 360;
+            #endif
+            player->hudHealthTimer = timer;
+        } else if (player->hudHealthTimer > 0) {
             hudInfo.vtable.health(player->hudHealthTimer, player);
             player->hudHealthTimer = 0;
         }
+        // if (!hudInfo.vtable.checkMapScore(playerIndex) == 2 && player->pPad->hudBitsOn & REVERSE_U16(PAD_R3) != 0) {
+                
+        //     // Timer HUD
+        //     if (gameData->timeEnd != -1)
+        //         hudInfo.vtable.timeLeft(playerIndex, 10);
+        // }
         hudInfo.vtable.quickSelect(hideQuickSelect, 10);
     }
 }
