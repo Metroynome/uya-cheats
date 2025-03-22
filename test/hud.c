@@ -17,6 +17,14 @@
 #include <libuya/gameplay.h>
 #include <libuya/map.h>
 
+#define MAPSCORE_BUTTON (0x001fc87d)
+
+enum MapScore_Button {
+    MAPSCORE_SELECT = 0,
+    MAPSCORE_R3 = 1,
+    MAPSCORE_BOTH = 2
+};
+
 typedef struct hud_frames {
     // 0: hidden, 1: shown, 2: always shown
     char weapons;
@@ -35,7 +43,7 @@ typedef struct hud_vtable {
     void (*radar)(int unk_24c9, int ten);
     void (*timer)(int playerIndex, int ten);
     void (*mapAndScore)(int index, int a1);
-    void (*ctfAndSiege)(int ten, u32 CTF_BlueDivRed, u32 local_90);
+    void (*ctfAndSiege)(int ten, void *blueTeamPoints, void *redTeamPoints);
     void (*localPlayers_2)(int ten);
     void (*localPlayers_3)(int ten);
     void (*timeLeft)();
@@ -88,6 +96,10 @@ void hudRun(void)
         hudInfo.vtable.hud_setup();
         return;
     }
+    float blueTeam;
+    int redTeam = 0;
+    float *blue = &blueTeam;
+    int *red = redTeam;
     int quickSelectSlot = 0;
     int playerIndex = 0;
     int localCount = playerGetLocalCount();
@@ -103,7 +115,7 @@ void hudRun(void)
             hudInfo.vtable.health(0, player);
             return;
         }
-        // hudInfo.vtable.mapAndScore(playerIndex, 10);
+        register int gp asm("gp");
         int handGadgetId = hudInfo.vtable.getGadgetId(player);
         int weaponPVar = 0;
         GadgetDef * weapon = weaponGadgetList();
@@ -151,25 +163,105 @@ void hudRun(void)
                 hudInfo.vtable.weapons(sprite, exp, quickSelectSlot, 0);
             }
         }
-            // Healthbar HUD
-            // pressing Triangle to show is done in HeroUpdate(); 
+        // Healthbar HUD
+        // pressing Triangle to show is done in HeroUpdate(); 
         if (player->hudHealthTimer == 0 && playerPadGetButtonDown(player, PAD_L3) != 0 && !inVehicle) {
             #if UYA_PAL
-            int timer = 324; // 360 - 10% = 324
+            player->hudHealthTimer = 324; // 360 - 10% = 324
             #else
-            int timer = 360;
+            player->hudHealthTimer = 360;
             #endif
-            player->hudHealthTimer = timer;
         } else if (player->hudHealthTimer > 0) {
             hudInfo.vtable.health(player->hudHealthTimer, player);
             player->hudHealthTimer = 0;
         }
-        // if (!hudInfo.vtable.checkMapScore(playerIndex) == 2 && player->pPad->hudBitsOn & REVERSE_U16(PAD_R3) != 0) {
-                
-        //     // Timer HUD
-        //     if (gameData->timeEnd != -1)
-        //         hudInfo.vtable.timeLeft(playerIndex, 10);
-        // }
+        int MapScoreButton = 0;
+        switch (*(u8*)MAPSCORE_BUTTON) {
+            case MAPSCORE_SELECT: MapScoreButton = player->pPad->hudBitsOn >> 10 & 1; break;
+            case MAPSCORE_R3: MapScoreButton = player->pPad->hudBitsOn >> 8 & 1; break;
+            case MAPSCORE_BOTH: MapScoreButton = (player->pPad->hudBitsOn & 0x5000U) != 0; break;
+        }
+        if (MapScoreButton == 0) {
+            int mapTimer = timeDecTimer(&player->LocalHero.mapTimer);
+            if (mapTimer == 2 && (player->pPad->hudBits & 0x400U) != 0) {
+                int showMapScore = hudInfo.vtable.checkMapScore(playerIndex);
+                hudInfo.vtable.mapAndScore(playerIndex, showMapScore ^ 1);
+            }
+        } else {
+            player->LocalHero.mapTimer = 10;
+            if ((player->pPad->hudBitsOn & 0x100U) != 0) {
+                int showMapScore = hudInfo.vtable.checkMapScore(playerIndex);
+                hudInfo.vtable.mapAndScore(playerIndex, showMapScore ^ 1);
+            }
+        }
+        int check = hudInfo.vtable.checkMapScore(playerIndex);
+        if (check == 0) {
+            hudInfo.vtable.radar(playerIndex, 10);
+            // Timer HUD
+            if (gameData->timeEnd != -1) {
+                hudInfo.vtable.timeLeft(playerIndex, 10);
+            }
+        } else {
+            hudInfo.vtable.mapAndScore(playerIndex, 10);
+        }
+        // Seige/CTF HUD
+        int gameModeHud = 1;
+        GameSettings *gs = gameGetSettings();
+        float blueScore = 0.0;
+        float redScore = 0.0;
+        if (gs->GameType == GAMERULE_SIEGE) {
+            // *test: value
+            // test: address
+            red = redTeam;
+            int *gp_e508 = (int *)(gp - 0x1af8);
+            int *gp_e4e8 = (int *)(gp - 0x1a18);
+            int *unk = gp_e508;
+            int end = 0x00246650;
+            int rawr;
+            int i = 0;
+            for (i; i < GAME_MAX_PLAYERS; ++i) {
+                float *prevBaseHealth = &gameData->allYourBaseGameData->prevHudHealth[i];
+                float *hudBaseHealth = &gameData->allYourBaseGameData->hudHealth[i];
+                if (*prevBaseHealth == *hudBaseHealth) {
+                    rawr = *unk;
+                } else {
+                    *unk = (int *)(gp - 0x1ad8);
+                    *prevBaseHealth = *hudBaseHealth;
+                    rawr = *unk;
+                }
+                if (rawr < 1) {
+                    rawr = *gp_e4e8;
+                } else if (*gp_e4e8 < 1) {
+                    *gp_e4e8 = *(int*)(gp - 0x1ad4);
+                    rawr = *gp_e4e8;
+                } else {
+                    rawr = *gp_e4e8;
+                }
+                *red = (float)((int)rawr / *(int*)(gp - 0x1ad4));
+                float prevHealth = gameData->allYourBaseGameData->prevHudHealth[i];
+                float totalBaseHealth = gameData->allYourBaseGameData->totalHudHealth[i]; 
+                *blue = prevHealth / totalBaseHealth;
+                if (1.0f < (prevHealth / totalBaseHealth)) {
+                    *blue = 1.0f;
+                }
+                if (0.0f > *blue) {
+                    *blue = 0.0f;
+                }
+                blue = blue + 1;
+                timeDecTimer(gp_e4e8);
+                red = red + 1;
+                timeDecTimer(gp_e508);
+                gp_e508 = gp_e508 + 1;
+                unk = unk + 1;
+            }
+        } else if (gs->GameType == GAMERULE_DM) {
+            gameModeHud = 0;
+        }
+        // Enable gamemode HUD
+        if (gameModeHud) {
+            if (redTeam == 0 || *(int*)(gp - 0x6ea0) == 2)
+                hudInfo.vtable.ctfAndSiege(10, &blueTeam, redTeam);
+        }
         hudInfo.vtable.quickSelect(hideQuickSelect, 10);
     }
 }
@@ -191,7 +283,7 @@ int hudInit(void)
     hudInfo.vtable.checkMapScore = JAL2ADDR(*(u32*)(start + 0x664));
     hudInfo.vtable.radar = JAL2ADDR(*(u32*)(start + 0x68c));
     hudInfo.vtable.timer = JAL2ADDR(*(u32*)(start + 0x6a8));
-    hudInfo.vtable.mapAndScore = JAL2ADDR(*(u32*)(start + 0x6b8));
+    hudInfo.vtable.mapAndScore = JAL2ADDR(*(u32*)(start + 0x62c));
     hudInfo.vtable.ctfAndSiege = JAL2ADDR(*(u32*)(start + 0x950));
     hudInfo.vtable.localPlayers_2 = JAL2ADDR(*(u32*)(start + 0x970));
     hudInfo.vtable.localPlayers_3 = JAL2ADDR(*(u32*)(start + 0x990));
