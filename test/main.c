@@ -65,6 +65,8 @@ void DebugInGame(Player* player)
 		void * cuboid = (void*)(*(u32*)GetAddress(&vaSpawnPointsPtr) + id * 0x80 + 0x30);
 		((void (*)(u8, void*))0x0043bd98)(player->unk_24c9, cuboid);
 	} else if (playerPadGetButtonDown(player, PAD_R3) > 0) {
+		// printf("\npZ: %f", player->cheatZ);
+		// printf("\npY: %f", player->cheatY);
 		// Moby* hbMoby = mobySpawn(MOBY_ID_HEALTH_BOX_MP, 0);
 		// Moby* orbMoby = mobySpawn(MOBY_ID_HEALTH_ORB_MP, 0);
 		// if (hbMoby) {
@@ -505,12 +507,12 @@ int main(void)
 	GameSettings * gameSettings = gameGetSettings();
 	GameOptions * gameOptions = gameGetOptions();
 	// if (gameOptions || gameSettings) {
-	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 0;
-	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 0;
-	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 0;
+		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 1;
+		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 1;
+		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 1;
 	// }
 
-	hud();
+	// hud();
 
     if (isInGame()) {
 		Player * p = playerGetFromSlot(0);
@@ -569,7 +571,7 @@ int main(void)
 		// v2_Setting(2, first);
 
 		// betterHealthBoxes_Move();
-		// patchCTFFlag();
+		runCTF();
 
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();

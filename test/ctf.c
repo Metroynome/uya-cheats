@@ -10,14 +10,22 @@
 #include <libuya/color.h>
 #include <libuya/random.h>
 #include <libuya/math.h>
+#include <libuya/game.h>
+#include <libuya/map.h>
+#include <libuya/team.h>
 
-struct FlagPVars {
-/* 0x00 */ VECTOR BasePosition;
-/* 0x10 */ short CarrierIdx;
-/* 0x12 */ short LastCarrierIdx;
-/* 0x14 */ short Team;
-/*      */ char UNK_16[6];
-/* 0x1c */ int TimeFlagDropped;
+struct flagPVars {
+/* 0x00 */ VECTOR basePos;
+/* 0x10 */ short carrierIdx;
+/* 0x12 */ short prevCarrierIdx;
+/* 0x14 */ short team;
+/* 0x16 */ char unk_16[2];
+/* 0x18 */ int captureCuboid; 
+/* 0x1c */ int timeFlagDropped;
+/* 0x20 */ int unk_20;
+/* 0x24 */ int unk_24;
+/* 0x28 */ float unk_28;
+/* 0x2c */ int unk_2c;
 };
 
 struct flagParticles {
@@ -84,7 +92,7 @@ void flagHandlePickup(Moby* flagMoby, int pIdx)
 	if (!player || !flagMoby)
 		return;
 	
-	struct FlagPVars* pvars = (struct FlagPVars*)flagMoby->pVar;
+	struct flagPVars* pvars = (struct flagPVars*)flagMoby->pVar;
 	if (!pvars)
 		return;
 
@@ -105,7 +113,7 @@ void flagHandlePickup(Moby* flagMoby, int pIdx)
 		return;
 
 	// Handle pickup/return
-	if (player->mpTeam == pvars->Team) {
+	if (player->mpTeam == pvars->team) {
 		flagReturnToBase(flagMoby, 0, pIdx);
 	} else {
 		flagPickup(flagMoby, pIdx);
@@ -133,7 +141,7 @@ void flagRequestPickup(Moby* flagMoby, int pIdx)
 	if (!player || !flagMoby)
 		return;
 	
-	struct FlagPVars* pvars = (struct FlagPVars*)flagMoby->pVar;
+	struct flagPVars* pvars = (struct flagPVars*)flagMoby->pVar;
 	if (!pvars)
 		return;
 
@@ -211,7 +219,7 @@ void customFlagLogic(Moby* flagMoby)
 	Player** players = playerGetAll();
 	int gameTime = gameGetTime();
 	GameOptions* gameOptions = gameGetOptions();
-	struct FlagPVars* pvars = (struct FlagPVars*)flagMoby->pVar;
+	struct flagPVars* pvars = (struct flagPVars*)flagMoby->pVar;
 
 	// if flag moby or pvars don't exist, stop.
 	if (!flagMoby || !pvars)
@@ -228,12 +236,12 @@ void customFlagLogic(Moby* flagMoby)
         return;
     
 	// return to base if flag has been idle for 40 seconds and not already at base.
-	if ((pvars->TimeFlagDropped + (TIME_SECOND * 40)) < gameTime && !flagIsAtBase(flagMoby) && !flagIsAtBase(flagMoby)) {
+	if ((pvars->timeFlagDropped + (TIME_SECOND * 40)) < gameTime && !flagIsAtBase(flagMoby) && !flagIsAtBase(flagMoby)) {
 		flagReturnToBase(flagMoby, 0, 0xff);
 		return;
 	}
 
-    if ((pvars->TimeFlagDropped + (TIME_SECOND * 1.5)) > gameTime)
+    if ((pvars->timeFlagDropped + (TIME_SECOND * 1.5)) > gameTime)
         return;
 
     for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
@@ -268,14 +276,14 @@ void customFlagLogic(Moby* flagMoby)
 			continue;
 
 		// player is on different team than flag and player isn't already holding flag
-		if (player->mpTeam != pvars->Team) {
+		if (player->mpTeam != pvars->team) {
 			if (!player->flagMoby) {
 				flagRequestPickup(flagMoby, i);
 				return;
 			}
 		} else {
 			// if player is on same team as flag and close enough to return it
-			vector_subtract(t, pvars->BasePosition, flagMoby->position);
+			vector_subtract(t, pvars->basePos, flagMoby->position);
 			float sqrDistanceToBase = vector_sqrmag(t);
 			if (sqrDistanceToBase > 0.1) {
 				flagRequestPickup(flagMoby, i);
@@ -285,10 +293,10 @@ void customFlagLogic(Moby* flagMoby)
 	}
 
     /* ===============1:1 Code: Doesn't work===========*/
-    // if ((flagMoby->state == 1 && !flagIsReturning(flagMoby)) && (!flagIsBeingPickedUp(flagMoby) && (pvars->TimeFlagDropped + (TIME_SECOND * 1.5)) < gameTime)) {
+    // if ((flagMoby->state == 1 && !flagIsReturning(flagMoby)) && (!flagIsBeingPickedUp(flagMoby) && (pvars->timeFlagDropped + (TIME_SECOND * 1.5)) < gameTime)) {
     //     FLAG_AT_BASE = 1;
     //     // Return to base if flag has been idle for 40 seconds
-    //     if ((pvars->TimeFlagDropped + (TIME_SECOND * 40)) < gameTime && !flagIsAtBase(flagMoby)) {
+    //     if ((pvars->timeFlagDropped + (TIME_SECOND * 40)) < gameTime && !flagIsAtBase(flagMoby)) {
     //         FLAG_AT_BASE = 0;
     //         flagReturnToBase(flagMoby, 0, 0xff);
     //     }
@@ -317,14 +325,14 @@ void customFlagLogic(Moby* flagMoby)
 	// 	                            float sqrDistance = vector_sqrmag(t);
 	// 	                            if (sqrDistance < (2 * 2)) {
     //                                     // player is on different team than flag and player isn't already holding flag
-    //                                     if (player->mpTeam != pvars->Team) {
+    //                                     if (player->mpTeam != pvars->team) {
     //                                         if (!player->flagMoby) {
     //                                             flagRequestPickup(flagMoby, player->mpIndex);
     //                                             return;
     //                                         }
     //                                     } else {
     //                                         // if player is on same team as flag and close enough to return it
-    //                                         vector_subtract(t, pvars->BasePosition, flagMoby->position);
+    //                                         vector_subtract(t, pvars->basePos, flagMoby->position);
     //                                         float sqrDistanceToBase = vector_sqrmag(t);
     //                                         if (sqrDistanceToBase < 0.1) {
     //                                             flagRequestPickup(flagMoby, player->mpIndex);
@@ -346,7 +354,7 @@ void customFlagLogic(Moby* flagMoby)
 	// 	return;
 
 	// // if flag pvars don't exist
-	// struct FlagPVars* pvars = (struct FlagPVars*)flagMoby->pVar;
+	// struct flagPVars* pvars = (struct flagPVars*)flagMoby->pVar;
 	// if (!pvars)
 	// 	return;
 
@@ -363,7 +371,7 @@ void customFlagLogic(Moby* flagMoby)
 	// 	return;
 
 	// // return to base if flag has been idle for 40 seconds
-	// if ((pvars->TimeFlagDropped + (TIME_SECOND * 40)) < gameTime && !flagIsAtBase(flagMoby)) {
+	// if ((pvars->timeFlagDropped + (TIME_SECOND * 40)) < gameTime && !flagIsAtBase(flagMoby)) {
 	// 	flagReturnToBase(flagMoby, 0, 0xFF);
 	// 	return;
 	// }
@@ -378,7 +386,7 @@ void customFlagLogic(Moby* flagMoby)
 	// }
 
 	// // wait 1.5 seconds for last carrier to be able to pick up again
-	// if ((pvars->TimeFlagDropped + 1500) > gameTime)
+	// if ((pvars->timeFlagDropped + 1500) > gameTime)
 	// 	return;
 
 	// for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
@@ -389,7 +397,7 @@ void customFlagLogic(Moby* flagMoby)
 	// 	// only allow actions by living players, and non-chargebooting players
 	// 	if ((playerIsDead(player) || playerGetHealth(player) <= 0) || (player->timers.IsChargebooting == 1 && (playerPadGetButton(player, PAD_R2) > 0) && player->timers.state > 55)){
 	// 		// if flag holder died, update flagIgnorePlayer time.
-	// 		if (pvars->LastCarrierIdx == player->mpIndex)
+	// 		if (pvars->LastcrrierIdx == player->mpIndex)
 	// 			flagIgnorePlayer = gameTime;
 
 	// 		continue;
@@ -419,14 +427,14 @@ void customFlagLogic(Moby* flagMoby)
 	// 		continue;
 
 	// 	// player is on different team than flag and player isn't already holding flag
-	// 	if (player->mpTeam != pvars->Team) {
+	// 	if (player->mpTeam != pvars->team) {
 	// 		if (!player->flagMoby) {
 	// 			flagRequestPickup(flagMoby, i);
 	// 			return;
 	// 		}
 	// 	} else {
 	// 		// if player is on same team as flag and close enough to return it
-	// 		vector_subtract(t, pvars->BasePosition, flagMoby->position);
+	// 		vector_subtract(t, pvars->basePos, flagMoby->position);
 	// 		float sqrDistanceToBase = vector_sqrmag(t);
 	// 		if (sqrDistanceToBase > 0.1) {
 	// 			flagRequestPickup(flagMoby, i);
@@ -524,4 +532,110 @@ void patchCTFFlag(void)
 		}
 		gm = (GuberMoby*)gm->Guber.Next;
 	}
+}
+
+enum flagIndex {
+	FLAG_RED = 0,
+	FLAG_BLUE = 1
+};
+
+typedef struct flagPositions {
+	short mapId;
+	short flag;
+	VECTOR pos;
+} flagPositions_t;
+
+flagPositions_t midFlag_Flags[] = {
+	{MAP_ID_HOVEN, FLAG_RED, 0, 0, 0}
+};
+
+typedef struct midFlagInfo {
+	int setup;
+	Moby *pRedFlag;
+	Moby *pBlueFlag;
+	short baseCuboid[2];
+} midFlagInfo_t;
+
+typedef struct ctfinfo {
+	midFlagInfo_t midFlag;
+} ctfInfo_t;
+ctfInfo_t ctf;
+
+void runMidFlag(void)
+{
+	// find and store flag moby address
+	if (ctf.midFlag.setup == 0) {
+		Moby *mobyStart = mobyListGetStart();
+		Moby *mobyEnd = mobyListGetEnd();
+		while (mobyStart < mobyEnd) {
+			switch (mobyStart->oClass) {
+				case MOBY_ID_CTF_RED_FLAG:
+					ctf.midFlag.pRedFlag = mobyStart;
+				case MOBY_ID_CTF_BLUE_FLAG:
+					ctf.midFlag.pBlueFlag = mobyStart;
+			}
+			++mobyStart;
+		}
+		ctf.midFlag.setup = 1;
+	}
+	Moby *redFlag = ctf.midFlag.pRedFlag;
+	Moby *blueFlag = ctf.midFlag.pBlueFlag;
+	VECTOR v;
+	VECTOR spawnFlag = {259.964, 253.611, 62.598, 0};
+	if ((Moby *)redFlag == 0)
+		return;
+	
+	// get flag pVars
+	struct flagPVars *red = (Moby *)redFlag->pVar;
+	struct flagPVars *blue = (Moby *)((u32)redFlag->pVar + 0x30);
+	// setup bases
+	if (ctf.midFlag.setup == 1) {
+		// save capture cuboids
+		ctf.midFlag.baseCuboid[0] = red->captureCuboid;
+		ctf.midFlag.baseCuboid[1] = blue->captureCuboid;
+		// swap base (this is where flag respawns)
+		vector_copy(red->basePos, spawnFlag);
+		// move flag at start of game
+		vector_copy(redFlag->position, spawnFlag);
+		// swap unk_28
+		red->unk_28 = blue->unk_28;
+
+		// make red flag glow
+		redFlag->primaryColor = 0xffffffff;
+		redFlag->lights = 0xffffffff;
+
+		// destroy blue flag
+		mobyDestroy(blueFlag);
+
+		ctf.midFlag.setup = 2;
+	}
+	// Flag Logic
+	// if flag not carried, set team to 3 so all teams can pick it up.
+	if (red->carrierIdx == -1 && red->team != 2) {
+		red->team = 2;
+		red->captureCuboid = -1;
+	}
+	// if carried, set red flag team to opposite of player team.
+	else if (red->carrierIdx > -1) {
+		Player *player = playerGetFromSlot(red->carrierIdx);
+		// blue team captures: 1, red team captures: 0
+		int mpTeam = !player->mpTeam;
+		red->team = mpTeam;
+		red->captureCuboid = ctf.midFlag.baseCuboid[mpTeam];
+	}
+}
+
+void runCTF(void) {
+
+	Player *player = playerGetFromSlot(0);
+	if (player->pauseOn == 0 && playerPadGetButtonDown(player, PAD_CIRCLE) > 0) {
+		printf("\nr+b: %08x, %08x", ctf.midFlag.pRedFlag, ctf.midFlag.pBlueFlag);
+		printf("\ngd: %08x", gameGetData()->CTFGameData);
+	}
+
+	GameSettings *gs = gameGetSettings();
+	if (gs->GameType != GAMERULE_CTF)
+		return;
+
+	runMidFlag();
 }
