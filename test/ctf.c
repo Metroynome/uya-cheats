@@ -13,6 +13,7 @@
 #include <libuya/game.h>
 #include <libuya/map.h>
 #include <libuya/team.h>
+#include <libuya/spawnpoint.h>
 
 struct flagPVars {
 /* 0x00 */ VECTOR basePos;
@@ -172,7 +173,7 @@ struct PartInstance * flagSpawnParticle(VECTOR position, u32 color, char opacity
 	return ((struct PartInstance* (*)(VECTOR, u32, char, u32, u32, int, int, int, float))GetAddress(&vaSpawnPart_059))(position, color, opacity, 53, 0, 2, 0, 0, 1.5 + (0.5 * idx));
 }
 
-void flagParticles(Moby *moby)
+void flagParticles(Moby *moby, u32 overrideColor)
 {
 	const float rotSpeeds[] = { 0.05, 0.02, -0.03, -0.1 };
 	const int opacities[] = { 64, 32, 44, 51 };
@@ -185,6 +186,7 @@ void flagParticles(Moby *moby)
 	vector_copy(particlePosition, moby->position);
 	(float)particlePosition[0] -= .2;
 	(float)particlePosition[2] += 1.8;
+	printf("\npartPos: %08x, %08x, %08x", (float)particlePosition[0], (float)particlePosition[1], (float)particlePosition[2]);
 
 	// handle particles
 	// u32 color = colorLerp(0, 0x0000ffff, 1.0 / 4);
@@ -225,7 +227,7 @@ void customFlagLogic(Moby* flagMoby)
 	if (!flagMoby || !pvars)
 		return;
 
-	flagParticles(flagMoby);
+	flagParticles(flagMoby, 0);
 
     // if flag state is not 1 (being picked up) and if flag is returning to base
     if (flagMoby->state != 1 || flagIsReturning(flagMoby))
@@ -534,6 +536,30 @@ void patchCTFFlag(void)
 	}
 }
 
+int findClosestSpawnPointToPosition(VECTOR position, float deadzone)
+{
+  // find closest spawn point
+  int bestIdx = -1;
+  int i;
+  float bestDist = 1000000;
+  float sqrDeadzone = deadzone * deadzone;
+  int spCount = spawnPointGetCount();
+  for (i = 0; i < spCount; ++i) {
+    if (!spawnPointIsPlayer(i)) continue;
+
+    struct SpawnPoint* sp = spawnPointGet(i);
+    VECTOR delta;
+    vector_subtract(delta, position, &sp->M0[12]);
+    float sqrDist = vector_sqrmag(delta);
+    if (sqrDist < bestDist && sqrDist >= sqrDeadzone) {
+      bestDist = sqrDist;
+      bestIdx = i;
+    }
+  }
+
+  return bestIdx;
+}
+
 enum flagIndex {
 	FLAG_RED = 0,
 	FLAG_BLUE = 1
@@ -588,27 +614,38 @@ void runMidFlag(void)
 	// get flag pVars
 	struct flagPVars *red = (Moby *)redFlag->pVar;
 	struct flagPVars *blue = (Moby *)((u32)redFlag->pVar + 0x30);
-	// setup bases
+	// setup bases and find center spawn for flag
 	if (ctf.midFlag.setup == 1) {
 		// save capture cuboids
 		ctf.midFlag.baseCuboid[0] = red->captureCuboid;
 		ctf.midFlag.baseCuboid[1] = blue->captureCuboid;
-		// swap base (this is where flag respawns)
-		vector_copy(red->basePos, spawnFlag);
-		// move flag at start of game
-		vector_copy(redFlag->position, spawnFlag);
 		// swap unk_28
 		red->unk_28 = blue->unk_28;
 
 		// make red flag glow
 		redFlag->primaryColor = 0xffffffff;
-		redFlag->lights = 0xffffffff;
 
-		// destroy blue flag
-		mobyDestroy(blueFlag);
+		// disable and hide blue flag
+		blueFlag->modeBits |= MOBY_MODE_BIT_DISABLED | MOBY_MODE_BIT_HIDDEN | MOBY_MODE_BIT_NO_UPDATE;
+
+		// determine ball spawn
+		// as closest player spawn
+		// to median of bases
+		VECTOR spMedianPosition = {0,0,0,0};
+		vector_add(spMedianPosition, spMedianPosition, red->basePos);
+		vector_add(spMedianPosition, spMedianPosition, blue->basePos);
+		vector_scale(spMedianPosition, spMedianPosition, 0.5);
+		int medianSpIdx = findClosestSpawnPointToPosition(spMedianPosition, 0);
+
+		// set spawn point position for center spawn, and base spawn
+		int centerSpawn = &spawnPointGet(medianSpIdx)->M0[12];
+		vector_copy(red->basePos, centerSpawn);
+		vector_copy(redFlag->position, centerSpawn);
+		redFlag->position[2] += .75;
 
 		ctf.midFlag.setup = 2;
 	}
+
 	// Flag Logic
 	// if flag not carried, set team to 3 so all teams can pick it up.
 	if (red->carrierIdx == -1 && red->team != 2) {

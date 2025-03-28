@@ -521,6 +521,7 @@ int main(void)
 
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
+		// gameGetLocalSettings()->Wide = 1;
 
 		// patchAFK();
 
