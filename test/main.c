@@ -22,13 +22,14 @@
 #include <libuya/collision.h>
 #include <libuya/guber.h>
 #include <libuya/sound.h>
+#include <libuya/music.h>
 
 #define TestMoby	(*(Moby**)0x00091004)
 VECTOR position;
 VECTOR rotation;
 
 int SPRITE_ME = 0;
-int EFFECT_ME = 21;
+int EFFECT_ME = 23;
 int SOUND_ME = 0;
 int SOUND_ME_FLAG = 3;
 int first = 1;
@@ -169,13 +170,17 @@ void Test_Sprites(float x, float y, float scale)
 
 void drawEffectQuad(VECTOR position, int texId, float scale)
 {
-	struct QuadDef quad;
+	QuadDef quad;
 	MATRIX m2;
 	VECTOR t;
-	VECTOR pTL = {0.5,0,0.5,1};
-	VECTOR pTR = {-0.5,0,0.5,1};
-	VECTOR pBL = {0.5,0,-0.5,1};
-	VECTOR pBR = {-0.5,0,-0.5,1};
+	// points: [x, z, y, r]?
+	VECTOR pTL = {1, 0, 1, 1};
+	VECTOR pTR = {-1, 0, 1, 1};
+	VECTOR pBL = {1, 0, -1, 1};
+	VECTOR pBR = {-1 ,0 , -1, 1};
+
+	// override texture id
+	texId = 20;
 
 	// determine color
 	u32 color = 0x80FFFFFF;
@@ -183,23 +188,24 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 	// set draw args
 	matrix_unit(m2);
 
-	// init
-	// gfxResetQuad(&quad);
+	// get texture
+	// QuadDef texture;
+	// ((void(*)(int, int, int, int))0x0045a220)(&quad, texId, 0, 0x80);
 
 	// color of each corner?
-	vector_copy(quad.VertexPositions[0], pTL);
-	vector_copy(quad.VertexPositions[1], pTR);
-	vector_copy(quad.VertexPositions[2], pBL);
-	vector_copy(quad.VertexPositions[3], pBR);
-	quad.VertexColors[0] = quad.VertexColors[1] = quad.VertexColors[2] = quad.VertexColors[3] = color;
-	quad.VertexUVs[0] = (struct UV){0,0};
-	quad.VertexUVs[1] = (struct UV){1,0};
-	quad.VertexUVs[2] = (struct UV){0,1};
-	quad.VertexUVs[3] = (struct UV){1,1};
-	quad.Clamp = 0;
-	quad.Tex0 = gfxGetEffectTex(texId, 1);
-	quad.Tex1 = 0xFF9000000260;
-	quad.Alpha = 0x8000000044;
+	vector_copy(quad.xzyw[0], pTL);
+	vector_copy(quad.xzyw[1], pTR);
+	vector_copy(quad.xzyw[2], pBL);
+	vector_copy(quad.xzyw[3], pBR);
+	quad.rgba[0] = quad.rgba[1] = quad.rgba[2] = quad.rgba[3] = color;
+	quad.uv[0] = (struct UV){0, 0};
+	quad.uv[1] = (struct UV){0, 1};
+	quad.uv[2] = (struct UV){1, 0};
+	quad.uv[3] = (struct UV){1, 1};
+	quad.clamp = 0;
+	quad.tex0 = gfxGetEffectTex(texId);
+	quad.tex1 = 0xff9000000260;
+	quad.alpha = 0x8000000044;
 
 	GameCamera* camera = cameraGetGameCamera(0);
 	if (!camera)
@@ -224,7 +230,7 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 	memcpy(&m2[12], position, sizeof(VECTOR));
 
 	// draw
-	gfxDrawQuad(&quad, m2, 1);
+	gfxDrawQuad(&quad, m2);
 }
 
 int ping(void)
@@ -498,6 +504,143 @@ void betterHealthBoxes_Move(void)
 // 	_betterHealthBoxes = 1;
 // }
 
+void testSpritesOrEffects(int SpriteOrEffect, int tex,float x, float y, float scale)
+{
+	float small = scale * 0.75;
+	float delta = (scale - small) / 2;
+	u64 sprite = gfxGetFrameTex(tex);
+	u64 effect = gfxGetEffectTex(tex);
+
+	u64 texture = (SpriteOrEffect) ? effect : sprite;
+
+	gfxSetupGifPaging(0);
+	// gfxDrawSprite(x+2, y+2, scale, scale, 0, 0, 32, 32, 0x40000000, dreadzoneSprite);
+	gfxDrawSprite(x, y, scale, scale, 0, 0, 32, 32, 0x80C0C0C0, texture);
+	// gfxDrawSprite(x+delta, y+delta, small, small, 0, 0, 32, 32, 0x80000040, dreadzoneSprite);
+	gfxDoGifPaging();
+}
+
+int debugTextures(void)
+{
+	static int SpriteOrEffect = 0;
+	static u64 texture;
+	Player *player = playerGetFromSlot(0);
+	if (playerPadGetButtonDown(player, PAD_L1 | PAD_UP) > 0)
+		SpriteOrEffect = !SpriteOrEffect;
+	if (playerPadGetButtonDown(player, PAD_L1 + PAD_RIGHT) > 0)
+		texture += 1;
+	if (playerPadGetButtonDown(player, PAD_L1 + PAD_LEFT) > 0)
+		texture -= 1;
+
+	testSpritesOrEffects(SpriteOrEffect, texture, SCREEN_WIDTH * 0.3, SCREEN_HEIGHT * .50, 100);
+}
+
+#define HBOLT_MOBY_OCLASS (MOBY_ID_TEST)
+#define HBOLT_PICKUP_RADIUS	 (3)
+#define HBOLT_PARTICLE_COLOR (0x0000ffff)
+#define HBOLT_SPRITE_COLOR (0x00ffffff)
+#define HBOLT_SCALE (1)
+
+struct HBoltPVar {
+	int DestroyAtTime;
+	struct PartInstance* Particles[4];
+};
+
+// void mobyPostDraw(Moby* moby)
+// {
+// 	struct QuadDef quad;
+// 	MATRIX m2;
+// 	VECTOR t;
+// 	int opacity = 0x80;
+// 	struct HBoltPVar* pvars = (struct HBoltPVar*)moby->pVar;
+// 	struct PartInstance * particle = pvars->Particles[0];
+// 	if (!pvars)
+// 		return;
+
+// 	// determine color
+// 	u32 color = HBOLT_SPRITE_COLOR;
+// 	u32 partColor = 0x80ff00ff;
+// 	float pulse = (1 + sinf(clampAngle((gameGetTime() / 1000.0) * 1.0))) * 0.5;
+// 	opacity = 0x20 + (pulse * 0x50);
+// 	opacity = opacity << 24;
+// 	color = opacity | (color & HBOLT_SPRITE_COLOR);
+// 	moby->primaryColor = color;
+
+// 	VECTOR pTL = {1, 0, 1, 1};
+// 	VECTOR pTR = {-1, 0, 1, 1};
+// 	VECTOR pBL = {1, 0, -1, 1};
+// 	VECTOR pBR = {-1 ,0 , -1, 1};
+// 	matrix_unit(m2);
+// 	vector_copy(quad.xzyw[0], pTL);
+// 	vector_copy(quad.xzyw[1], pTR);
+// 	vector_copy(quad.xzyw[2], pBL);
+// 	vector_copy(quad.xzyw[3], pBR);
+// 	quad.rgba[0] = quad.rgba[1] = quad.rgba[2] = quad.rgba[3] = color;
+// 	quad.uv[0] = (struct UV){0, 0};
+// 	quad.uv[1] = (struct UV){1, 0};
+// 	quad.uv[2] = (struct UV){0, 1};
+// 	quad.uv[3] = (struct UV){1, 1};
+// 	quad.clamp = 0;
+// 	quad.tex0 = 0;
+// 	quad.tex1 = 0;
+// 	quad.alpha = 0;
+// 	VECTOR pos;
+// 	vector_copy(pos, moby->position);
+// 	pos[1] += .5;
+// 	memcpy(&m2[12], &pos, sizeof(VECTOR));
+// 	static int texture = 53;
+// 	Player *player = playerGetFromSlot(0);
+// 	if (playerPadGetButtonDown(player, PAD_L1 + PAD_RIGHT) > 0)
+// 		texture += 1;
+// 	if (playerPadGetButtonDown(player, PAD_L1 + PAD_LEFT) > 0)
+// 		texture -= 1;
+// 	if (playerPadGetButtonDown(player, PAD_L1 + PAD_RIGHT) > 0 || playerPadGetButtonDown(player, PAD_L1 + PAD_LEFT) > 0)
+// 		printf("\n========\n tex: %d", texture);
+
+// 	// u32 hook = (u32)GetAddress(&vaReplace_GetEffectTexJAL) + 0x20;
+// 	// HOOK_JAL(hook, GetAddress(&vaGetFrameTex));
+// 	// gfxDrawBillboardQuad(HBOLT_SCALE + .05, 0, MATH_PI, moby->position, texture, opacity, 0);
+// 	// gfxDrawQuad(&quad, m2);
+// 	gfxDrawBillboardQuad(HBOLT_SCALE, 0.01, MATH_PI, moby->position, 20, color, 0);
+// 	// HOOK_JAL(hook, GetAddress(&vaGetEffectTex));
+
+// 	if (!particle) {
+// 		particle = mobySpawnParticle(moby->position, texture, partColor, 100, 1.5);
+// 	}
+// 	particle->tex = texture;
+// 	// if (particle) {
+// 	// 	particle->rot = (int)((gameGetTime() + (i * 100)) / (TIME_SECOND * rotSpeeds[i])) & 0xFF;
+// 	// }
+// }
+
+// void mobyUpdate(Moby* moby)
+// {
+// 	const float rotSpeeds[] = { 0.05, 0.02, -0.03, -0.1 };
+// 	const int opacities[] = { 64, 32, 44, 51 };
+// 	VECTOR t;
+// 	int i;
+// 	struct HBoltPVar* pvars = (struct HBoltPVar*)moby->pVar;
+// 	if (!pvars)
+// 		return;
+
+// 	gfxStickyFX(&mobyPostDraw, moby);
+// }
+
+// void mobyTestSpawn(VECTOR position)
+// {
+// 	Moby* moby = mobySpawn(HBOLT_MOBY_OCLASS, sizeof(struct HBoltPVar));
+// 	if (!moby) return;
+
+// 	moby->pUpdate = &mobyUpdate;
+// 	vector_copy(moby->position, position);
+// 	moby->updateDist = -1;
+// 	moby->drawn = 1;
+// 	moby->opacity = 0x00;
+// 	moby->drawDist = 0x00;
+// 	moby->lights = 0;
+// 	// soundPlayByOClass(1, 0, moby, MOBY_ID_OMNI_SHIELD);
+// }
+
 int main(void)
 {
 	((void (*)(void))0x00126780)();
@@ -506,11 +649,11 @@ int main(void)
 
 	GameSettings * gameSettings = gameGetSettings();
 	GameOptions * gameOptions = gameGetOptions();
-	// if (gameOptions || gameSettings) {
+	if (gameOptions || gameSettings || gameSettings->GameLoadStartTime > 0) {
 		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 1;
 		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 1;
 		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 1;
-	// }
+	}
 
 	// hud();
 
@@ -528,9 +671,14 @@ int main(void)
 		// hypershotEquipBehavior();
 
 		// gfxStickyFX(&PostDraw, p->PlayerMoby);
-		// drawEffectQuad(p->PlayerMoby->Position, 1, .5);
-		// drawSomething(p->PlayerMoby);
+		// drawEffectQuad(p->pMoby->position, 23, 1);
+		// drawSomething(p->pMoby);
 		
+		// cycle through sprite/effect textures
+		// debugTextures();
+		// if (playerPadGetButtonDown(p, PAD_R3) > 0)
+		// 	mobyTestSpawn(p->playerPosition);
+
 		// base light follow player
 		// ((void (*)(Moby*))0x003F6670)(p->pMoby);
 
@@ -576,7 +724,7 @@ int main(void)
 
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
-    	DebugInGame(p);
+    	// DebugInGame(p);
     } else {
 		// DebugInMenus();
 	}

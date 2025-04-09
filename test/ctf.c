@@ -14,20 +14,8 @@
 #include <libuya/map.h>
 #include <libuya/team.h>
 #include <libuya/spawnpoint.h>
-
-struct flagPVars {
-/* 0x00 */ VECTOR basePos;
-/* 0x10 */ short carrierIdx;
-/* 0x12 */ short prevCarrierIdx;
-/* 0x14 */ short team;
-/* 0x16 */ char unk_16[2];
-/* 0x18 */ int captureCuboid; 
-/* 0x1c */ int timeFlagDropped;
-/* 0x20 */ int unk_20;
-/* 0x24 */ int unk_24;
-/* 0x28 */ float unk_28;
-/* 0x2c */ int unk_2c;
-};
+#include <libuya/ui.h>
+#include <libuya/utils.h>
 
 struct flagParticles {
 	struct PartInstance* Particles[4];
@@ -46,38 +34,9 @@ enum CustomMessageId {
 int ctfLogic = 0;
 int grFlagHotspots = 0;
 
-VariableAddress_t vaSpawnPart_059 = {
-#if UYA_PAL
-    .Lobby = 0,
-    .Bakisi = 0x004a0508,
-    .Hoven = 0x004a2620,
-    .OutpostX12 = 0x00497ef8,
-    .KorgonOutpost = 0x00495690,
-    .Metropolis = 0x004949e0,
-    .BlackwaterCity = 0x00492278,
-    .CommandCenter = 0x00492270,
-    .BlackwaterDocks = 0x00494af0,
-    .AquatosSewers = 0x00493df0,
-    .MarcadiaPalace = 0x00493770,
-#else
-    .Lobby = 0,
-    .Bakisi = 0x0049e150,
-    .Hoven = 0x004a01a8,
-    .OutpostX12 = 0x00495ac0,
-    .KorgonOutpost = 0x004932d8,
-    .Metropolis = 0x00492628,
-    .BlackwaterCity = 0x0048fe40,
-    .CommandCenter = 0x0048fff8,
-    .BlackwaterDocks = 0x00492838,
-    .AquatosSewers = 0x00491b78,
-    .MarcadiaPalace = 0x004914b8,
-#endif
-};
-
 extern VariableAddress_t vaFlagUpdate_Func;
 extern VariableAddress_t vaGetFrameTex;
 extern VariableAddress_t vaGetEffectTex;
-
 /*
  * NAME :		flagHandlePickup
  * DESCRIPTION :
@@ -93,7 +52,7 @@ void flagHandlePickup(Moby* flagMoby, int pIdx)
 	if (!player || !flagMoby)
 		return;
 	
-	struct flagPVars* pvars = (struct flagPVars*)flagMoby->pVar;
+	flagPVars_t* pvars = (flagPVars_t*)flagMoby->pVar;
 	if (!pvars)
 		return;
 
@@ -142,7 +101,7 @@ void flagRequestPickup(Moby* flagMoby, int pIdx)
 	if (!player || !flagMoby)
 		return;
 	
-	struct flagPVars* pvars = (struct flagPVars*)flagMoby->pVar;
+	flagPVars_t* pvars = (flagPVars_t*)flagMoby->pVar;
 	if (!pvars)
 		return;
 
@@ -168,11 +127,6 @@ void flagRequestPickup(Moby* flagMoby, int pIdx)
 	}
 }
 
-struct PartInstance * flagSpawnParticle(VECTOR position, u32 color, char opacity, int idx)
-{
-	return ((struct PartInstance* (*)(VECTOR, u32, char, u32, u32, int, int, int, float))GetAddress(&vaSpawnPart_059))(position, color, opacity, 53, 0, 2, 0, 0, 1.5 + (0.5 * idx));
-}
-
 void flagParticles(Moby *moby, u32 overrideColor)
 {
 	const float rotSpeeds[] = { 0.05, 0.02, -0.03, -0.1 };
@@ -195,7 +149,7 @@ void flagParticles(Moby *moby, u32 overrideColor)
 	for (i = 0; i < 4; ++i) {
 		struct PartInstance * particle = pvars->Particles[i];
 		if (!particle) {
-			particle = flagSpawnParticle(particlePosition, color, 100, i);
+			particle = gfxSpawnParticle(particlePosition, 53, color, 100, 1.5 + (0.5 * i));;
 		}
 
 		// update
@@ -221,7 +175,7 @@ void customFlagLogic(Moby* flagMoby)
 	Player** players = playerGetAll();
 	int gameTime = gameGetTime();
 	GameOptions* gameOptions = gameGetOptions();
-	struct flagPVars* pvars = (struct flagPVars*)flagMoby->pVar;
+	flagPVars_t* pvars = (flagPVars_t*)flagMoby->pVar;
 
 	// if flag moby or pvars don't exist, stop.
 	if (!flagMoby || !pvars)
@@ -356,7 +310,7 @@ void customFlagLogic(Moby* flagMoby)
 	// 	return;
 
 	// // if flag pvars don't exist
-	// struct flagPVars* pvars = (struct flagPVars*)flagMoby->pVar;
+	// flagPVars_t* pvars = (flagPVars_t*)flagMoby->pVar;
 	// if (!pvars)
 	// 	return;
 
@@ -536,6 +490,79 @@ void patchCTFFlag(void)
 	}
 }
 
+VariableAddress_t vaflagEventUiPopup_Hook = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0x00430568,
+	.Hoven = 0x00431fc0,
+	.OutpostX12 = 0x00428ef0,
+	.KorgonOutpost = 0x00426a98,
+	.Metropolis = 0x00425df0,
+	.BlackwaterCity = 0x00421c58,
+	.CommandCenter = 0x004263e8,
+	.BlackwaterDocks = 0x00428c38,
+	.AquatosSewers = 0x00427f50,
+	.MarcadiaPalace = 0x004278b8,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x0042fae0,
+	.Hoven = 0x00431470,
+	.OutpostX12 = 0x004283b8,
+	.Metropolis = 0x00425368,
+	.BlackwaterCity = 0x00421188,
+	.CommandCenter = 0x00425a38,
+	.BlackwaterDocks = 0x00428270,
+	.AquatosSewers = 0x004275a0,
+	.MarcadiaPalace = 0x00426ef0,
+#endif
+};
+
+VariableAddress_t vaReplace_GetEffectTexJAL = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0x2045b2f0,
+	.Hoven = 0x2045ce70,
+	.OutpostX12 = 0x20453c70,
+	.KorgonOutpost = 0x20451830,
+	.Metropolis = 0x20450b70,
+	.BlackwaterCity = 0x2044e370,
+	.CommandCenter = 0x2044eff0,
+	.BlackwaterDocks = 0x20451870,
+	.AquatosSewers = 0x20450b70,
+	.MarcadiaPalace = 0x204504f0,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x2045a220,
+	.Hoven = 0x2045bce0,
+	.OutpostX12 = 0x20452b20,
+	.KorgonOutpost = 0x20450760,
+	.Metropolis = 0x2044faa0,
+	.BlackwaterCity = 0x2044d220,
+	.CommandCenter = 0x2044e060,
+	.BlackwaterDocks = 0x204508a0,
+	.AquatosSewers = 0x2044fbe0,
+	.MarcadiaPalace = 0x2044f520,
+#endif
+};
+
+typedef struct flagPositions {
+	short mapId;
+	VECTOR pos;
+} flagPositions_t;
+
+flagPositions_t midFlag_Flags[] = {
+	{MAP_ID_HOVEN, 0, 0, 0}
+};
+
+typedef struct midFlagInfo {
+	int setup;
+	Moby *pRedFlag;
+	Moby *pBlueFlag;
+	short baseCuboid[2];
+	PartInstance_t *particle;
+} midFlagInfo_t;
+midFlagInfo_t midFlag;
+
 int findClosestSpawnPointToPosition(VECTOR position, float deadzone)
 {
   // find closest spawn point
@@ -560,65 +587,119 @@ int findClosestSpawnPointToPosition(VECTOR position, float deadzone)
   return bestIdx;
 }
 
-enum flagIndex {
-	FLAG_RED = 0,
-	FLAG_BLUE = 1
-};
+void mobyPostDraw(Moby* moby)
+{
+	int opacity = 0x80;
+	u32 color = 0x00ffffff;
 
-typedef struct flagPositions {
-	short mapId;
-	short flag;
-	VECTOR pos;
-} flagPositions_t;
+	// float pulse = (1 + sinf(clampAngle((gameGetTime() / 1000.0) * 1.0))) * 0.5;
+	// opacity = 0x20 + (pulse * 0x50);
+	opacity = opacity << 24;
+	color = opacity | (color & 0x00ffffff);
+	moby->primaryColor = color;
 
-flagPositions_t midFlag_Flags[] = {
-	{MAP_ID_HOVEN, FLAG_RED, 0, 0, 0}
-};
+	u32 hook = (u32)GetAddress(&vaReplace_GetEffectTexJAL) + 0x20;
+	HOOK_JAL(hook, GetAddress(&vaGetFrameTex));
+	gfxDrawBillboardQuad(1 + .05, 0, MATH_PI, moby->position, SPRITE_FLAG, opacity, 0);
+	gfxDrawBillboardQuad(1, 0.01, MATH_PI, moby->position, SPRITE_FLAG, color, 0);
+	HOOK_JAL(hook, GetAddress(&vaGetEffectTex));
+}
 
-typedef struct midFlagInfo {
-	int setup;
-	Moby *pRedFlag;
-	Moby *pBlueFlag;
-	short baseCuboid[2];
-} midFlagInfo_t;
+void mobyUpdate(Moby* moby)
+{
+	gfxStickyFX(&mobyPostDraw, moby);
+}
 
-typedef struct ctfinfo {
-	midFlagInfo_t midFlag;
-} ctfInfo_t;
-ctfInfo_t ctf;
+void mobyTestSpawn(VECTOR position)
+{
+	Moby* moby = mobySpawn(MOBY_ID_TEST, 0x80);
+	if (!moby) return;
+
+	// update height to be above flag
+	VECTOR add = {0, 0, 3, 0};
+	vector_add(add, position, add);
+	vector_copy(moby->position, add);
+
+	moby->pUpdate = &mobyUpdate;
+	moby->updateDist = -1;
+	moby->drawn = 1;
+	moby->opacity = 0x00;
+	moby->drawDist = 0x00;	
+}
+
+void patchFlagUiPopup_Logic(short stringId, int seconds, int player)
+{
+	Moby *flag = midFlag.pRedFlag;
+	flagPVars_t *flagVars = flag->pVar;
+	Player *p = playerGetFromSlot(flagVars->carrierIdx);
+	char buff[64];
+	char *team[2] = {"Blue", "Red"};
+	GameSettings *gs = gameGetSettings();
+	int pIdx = p->mpIndex;
+	int pTeam = p->mpTeam;
+	switch (stringId) {
+		case 0x1411:
+		case 0x1412: {
+			snprintf(buff, 64, "%s has picked up the %s Team's Flag!", gs->PlayerNames[pIdx], (char*)team[!pTeam]);
+			break;
+		}
+		case 0x1413:
+		case 0x1414: {
+			snprintf(buff, 64, "%s has dropped the %s Team's Flag!", gs->PlayerNames[pIdx], (char*)team[!pTeam]);
+			break;		
+		}
+		default: {
+			strncpy(buff, uiMsgString(stringId), 64);
+			break;
+		}
+	}
+	// show mesage
+	uiShowPopup(player, buff, seconds);
+}
+
+void patchFlagUiPopup(void)
+{
+	flagPVars_t * flag = &midFlag.pRedFlag->pVar;
+	u32 hook = GetAddress(&vaflagEventUiPopup_Hook);
+
+	// stop original function nulling  flag carrierId
+	// *(u32*)(hook - 0x44) = 0;
+	// hook our function.
+	HOOK_JAL(hook, &patchFlagUiPopup_Logic);
+}
 
 void runMidFlag(void)
 {
 	// find and store flag moby address
-	if (ctf.midFlag.setup == 0) {
+	if (midFlag.setup == 0) {
 		Moby *mobyStart = mobyListGetStart();
 		Moby *mobyEnd = mobyListGetEnd();
 		while (mobyStart < mobyEnd) {
 			switch (mobyStart->oClass) {
 				case MOBY_ID_CTF_RED_FLAG:
-					ctf.midFlag.pRedFlag = mobyStart;
+					midFlag.pRedFlag = mobyStart;
 				case MOBY_ID_CTF_BLUE_FLAG:
-					ctf.midFlag.pBlueFlag = mobyStart;
+					midFlag.pBlueFlag = mobyStart;
 			}
 			++mobyStart;
 		}
-		ctf.midFlag.setup = 1;
+		midFlag.setup = 1;
 	}
-	Moby *redFlag = ctf.midFlag.pRedFlag;
-	Moby *blueFlag = ctf.midFlag.pBlueFlag;
+	Moby *redFlag = midFlag.pRedFlag;
+	Moby *blueFlag = midFlag.pBlueFlag;
 	VECTOR v;
 	VECTOR spawnFlag = {259.964, 253.611, 62.598, 0};
 	if ((Moby *)redFlag == 0)
 		return;
 	
 	// get flag pVars
-	struct flagPVars *red = (Moby *)redFlag->pVar;
-	struct flagPVars *blue = (Moby *)((u32)redFlag->pVar + 0x30);
+	flagPVars_t *red = (Moby *)redFlag->pVar;
+	flagPVars_t *blue = (Moby *)((u32)redFlag->pVar + 0x30);
 	// setup bases and find center spawn for flag
-	if (ctf.midFlag.setup == 1) {
+	if (midFlag.setup == 1) {
 		// save capture cuboids
-		ctf.midFlag.baseCuboid[0] = red->captureCuboid;
-		ctf.midFlag.baseCuboid[1] = blue->captureCuboid;
+		midFlag.baseCuboid[0] = red->captureCuboid;
+		midFlag.baseCuboid[1] = blue->captureCuboid;
 		// swap unk_28
 		red->unk_28 = blue->unk_28;
 
@@ -641,11 +722,18 @@ void runMidFlag(void)
 		int centerSpawn = &spawnPointGet(medianSpIdx)->M0[12];
 		vector_copy(red->basePos, centerSpawn);
 		vector_copy(redFlag->position, centerSpawn);
-		redFlag->position[2] += .75;
+		redFlag->position[2] += .25;
 
-		ctf.midFlag.setup = 2;
+		// spawn icon
+		// mobyTestSpawn(redFlag->position);
+
+		// hook flag event ui popup so we can use our own strings.
+		// patchFlagUiPopup();
+
+		midFlag.setup = 2;
 	}
 
+	Player *player;
 	// Flag Logic
 	// if flag not carried, set team to 3 so all teams can pick it up.
 	if (red->carrierIdx == -1 && red->team != 2) {
@@ -654,11 +742,21 @@ void runMidFlag(void)
 	}
 	// if carried, set red flag team to opposite of player team.
 	else if (red->carrierIdx > -1) {
-		Player *player = playerGetFromSlot(red->carrierIdx);
+		player = playerGetFromSlot(red->carrierIdx);
 		// blue team captures: 1, red team captures: 0
 		int mpTeam = !player->mpTeam;
 		red->team = mpTeam;
-		red->captureCuboid = ctf.midFlag.baseCuboid[mpTeam];
+		red->captureCuboid = midFlag.baseCuboid[mpTeam];
+	}
+	player = playerGetFromSlot(0);
+	// draw sprite for non-flag holders.
+	if (!player->flagMoby) {
+		VECTOR t;
+		vector_copy(t, redFlag->position);
+		t[2] += 3;
+		t[0] += .07;
+		u32 color = red->carrierIdx > -1 ? TEAM_COLORS[!red->team] : 0x00ffffff;
+		gfxHelperDrawSprite_WS(t, 32, 32, SPRITE_FLAG, 0x80000000 | color, TEXT_ALIGN_MIDDLECENTER);
 	}
 }
 
@@ -666,7 +764,7 @@ void runCTF(void) {
 
 	Player *player = playerGetFromSlot(0);
 	if (player->pauseOn == 0 && playerPadGetButtonDown(player, PAD_CIRCLE) > 0) {
-		printf("\nr+b: %08x, %08x", ctf.midFlag.pRedFlag, ctf.midFlag.pBlueFlag);
+		printf("\nr+b: %08x, %08x", midFlag.pRedFlag, midFlag.pBlueFlag);
 		printf("\ngd: %08x", gameGetData()->CTFGameData);
 	}
 
