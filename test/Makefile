@@ -7,8 +7,9 @@ EE_OBJS = functions.o main.o
 #EE_OBJS += bots.o
 #EE_OBJS += spectate.o
 #EE_OBJS += scavengerhunt.o
-EE_OBJS += ctf.o
+#EE_OBJS += ctf.o
 #EE_OBJS += hud.o
+EE_OBJS += siege.o
 
 EE_LIBS = -luyantsc
 #EE_LIBS = -luyapal

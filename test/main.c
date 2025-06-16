@@ -29,7 +29,7 @@ VECTOR position;
 VECTOR rotation;
 
 int SPRITE_ME = 0;
-int EFFECT_ME = 23;
+int EFFECT_ME = 1;
 int SOUND_ME = 0;
 int SOUND_ME_FLAG = 3;
 int first = 1;
@@ -109,17 +109,12 @@ void DebugInMenus(void)
 
 void InfiniteChargeboot(void)
 {
-	int i;
-	Player ** players = playerGetAll();
-	for (i = 0; i < GAME_MAX_PLAYERS; ++i)
-	{
-		Player * player = players[i];
-		if (!player)
-			continue;
+	Player *player = playerGetFromSlot(0);
+	if (!player)
+		return;
 
-		if (player->timers.IsChargebooting == 1 && playerPadGetButton(player, PAD_R2) > 0 && player->timers.state > 55)
-			player->timers.state = 55;
-	}
+	if (player->timers.noFpsCamTimer == 1 && playerPadGetButton(player, PAD_R2) > 0 && player->timers.state > 55)
+		player->timers.state = 55;
 }
 
 void InfiniteHealthMoonjump(void)
@@ -133,7 +128,7 @@ void InfiniteHealthMoonjump(void)
 
     if (_InfiniteHealthMoonjump_Init)
     {
-        Player * player = (Player*)PLAYER_STRUCT;
+        Player * player = playerGetFromSlot(0);
 		if (playerGetHealth(player) < 15)
         	playerSetHealth(player, 15);
 
@@ -179,9 +174,6 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 	VECTOR pBL = {1, 0, -1, 1};
 	VECTOR pBR = {-1 ,0 , -1, 1};
 
-	// override texture id
-	texId = 20;
-
 	// determine color
 	u32 color = 0x80FFFFFF;
 
@@ -203,7 +195,7 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 	quad.uv[2] = (struct UV){1, 0};
 	quad.uv[3] = (struct UV){1, 1};
 	quad.clamp = 0;
-	quad.tex0 = gfxGetEffectTex(texId);
+	quad.tex0 = gfxGetFrameTex(texId);
 	quad.tex1 = 0xff9000000260;
 	quad.alpha = 0x8000000044;
 
@@ -230,7 +222,9 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 	memcpy(&m2[12], position, sizeof(VECTOR));
 
 	// draw
+	gfxSetupGifPaging(0);
 	gfxDrawQuad(&quad, m2);
+	gfxDoGifPaging();
 }
 
 int ping(void)
@@ -515,8 +509,8 @@ void testSpritesOrEffects(int SpriteOrEffect, int tex,float x, float y, float sc
 
 	gfxSetupGifPaging(0);
 	// gfxDrawSprite(x+2, y+2, scale, scale, 0, 0, 32, 32, 0x40000000, dreadzoneSprite);
-	gfxDrawSprite(x, y, scale, scale, 0, 0, 32, 32, 0x80C0C0C0, texture);
-	// gfxDrawSprite(x+delta, y+delta, small, small, 0, 0, 32, 32, 0x80000040, dreadzoneSprite);
+	gfxDrawSprite(x, y, scale, scale, 0, 0, 32, 32, 0x80c0c0c0, texture);
+	gfxDrawSprite(x+delta, y+delta, scale, scale, 0, 0, 32, 32, 0x80ffffff, texture);
 	gfxDoGifPaging();
 }
 
@@ -671,7 +665,7 @@ int main(void)
 		// hypershotEquipBehavior();
 
 		// gfxStickyFX(&PostDraw, p->PlayerMoby);
-		// drawEffectQuad(p->pMoby->position, 23, 1);
+		// drawEffectQuad(p->pMoby->position, EFFECT_ME, 1);
 		// drawSomething(p->pMoby);
 		
 		// cycle through sprite/effect textures
@@ -694,20 +688,26 @@ int main(void)
 		int currentState = playerDeobfuscate(&p->state, 0, 0);
 		if (currentState != nowState) {
 			nowState = currentState;
+			// printf("\n------------------");
 			// printf("\nState: %d", nowState);
+			// printf("\n------------------");
 		}
 
-		// printf("\nPrevious State: %d", playerDeobfuscate(&p->previousState, 0, 0));
-		// printf("\nPrePrevious State: %d", playerDeobfuscate(&p->prePreviousState, 0, 0));
-		// printf("\nState Type: %d", playerDeobfuscate(&p->stateType, 0, 0));
-		// printf("\nPrevious Type: %d", playerDeobfuscate(&p->previousType, 0, 0));
-		// printf("\nPrePrevious Type: %d", playerDeobfuscate(&p->prePreviousType, 0, 0));
-		// printf("\nground: %x", (u32)((u32)&p->ground - (u32)PLAYER_STRUCT));
-		// printf("\nquickSelect: %x", (u32)((u32)&p->quickSelect - (u32)PLAYER_STRUCT));
-		// printf("\nloopingSounds: %x", (u32)((u32)&p->loopingSounds - (u32)PLAYER_STRUCT));
-		// printf("\nskinMoby3: %x", (u32)((u32)&p->skinMoby3 - (u32)PLAYER_STRUCT));
-		// printf("\nmtxFxActive: %x", (u32)((u32)&p->mtxFxActive - (u32)PLAYER_STRUCT));
-		// printf("\npnetplayer: %x", (u32)((u32)&p->pNetPlayer - (u32)PLAYER_STRUCT));
+		// if (playerPadGetButtonDown(p, PAD_DOWN) > 0) {
+			// printf("\n------------------");
+			// printf("\nPrevious State: %d", playerDeobfuscate(&p->previousState, 0, 0));
+			// printf("\nPrePrevious State: %d", playerDeobfuscate(&p->prePreviousState, 0, 0));
+			// printf("\nState Type: %d", playerDeobfuscate(&p->stateType, 0, 0));
+			// printf("\nPrevious Type: %d", playerDeobfuscate(&p->previousType, 0, 0));
+			// printf("\nPrePrevious Type: %d", playerDeobfuscate(&p->prePreviousType, 0, 0));
+			// printf("\nground: %08x", (u32)((u32)&p->ground - (u32)p));
+			// printf("\nhead: %08x", (u32)((u32)&p->head - (u32)p));
+			// printf("\nquickSelect: %08x", (u32)((u32)&p->quickSelect - (u32)p));
+			// printf("\nloopingSounds: %08x", (u32)((u32)&p->loopingSounds - (u32)p));
+			// printf("\nmtxFxActive: %08x", (u32)((u32)&p->mtxFxActive - (u32)p));
+			// printf("\npnetplayer: %08x", (u32)((u32)&p->pNetPlayer - (u32)p));
+			// printf("\n------------------");
+		// }
 
 		// float x = SCREEN_WIDTH * 0.3;
 		// float y = SCREEN_HEIGHT * 0.85;
@@ -720,7 +720,9 @@ int main(void)
 		// v2_Setting(2, first);
 
 		// betterHealthBoxes_Move();
-		runCTF();
+
+		// runCTF();
+		runSiege();
 
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();

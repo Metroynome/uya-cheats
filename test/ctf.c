@@ -490,7 +490,7 @@ void patchCTFFlag(void)
 	}
 }
 
-VariableAddress_t vaflagEventUiPopup_Hook = {
+VariableAddress_t vaFlagEventUiPopup_Hook = {
 #if UYA_PAL
 	.Lobby = 0,
 	.Bakisi = 0x00430568,
@@ -508,6 +508,7 @@ VariableAddress_t vaflagEventUiPopup_Hook = {
 	.Bakisi = 0x0042fae0,
 	.Hoven = 0x00431470,
 	.OutpostX12 = 0x004283b8,
+	.KorgonOutpost = 0x00426008,
 	.Metropolis = 0x00425368,
 	.BlackwaterCity = 0x00421188,
 	.CommandCenter = 0x00425a38,
@@ -546,12 +547,20 @@ VariableAddress_t vaReplace_GetEffectTexJAL = {
 };
 
 typedef struct flagPositions {
-	short mapId;
-	VECTOR pos;
+	int mapId;
+	float x;
+	float z;
+	float y;
 } flagPositions_t;
 
-flagPositions_t midFlag_Flags[] = {
-	{MAP_ID_HOVEN, 0, 0, 0}
+flagPositions_t midFlagPos[] = {
+	{MAP_ID_BAKISI, 402.324, 366.073, 200.466},
+	{MAP_ID_HOVEN, 259.964, 253.611, 62.598},
+	{MAP_ID_OUTPOST_X12, 427.247, 204.962, 108.406},
+	{MAP_ID_METROPOLIS, 755.314, 339.311, 337.703},
+	{MAP_ID_BLACKWATER_CITY, 219.817, 266.732, 87.722},
+	{MAP_ID_BLACKWATER_DOCKS, 211.819, 191.808, 99.281},
+	{MAP_ID_AQUATOS_SEWERS, 401.181, 336.686, 940.75}
 };
 
 typedef struct midFlagInfo {
@@ -559,7 +568,6 @@ typedef struct midFlagInfo {
 	Moby *pRedFlag;
 	Moby *pBlueFlag;
 	short baseCuboid[2];
-	PartInstance_t *particle;
 } midFlagInfo_t;
 midFlagInfo_t midFlag;
 
@@ -574,9 +582,9 @@ int findClosestSpawnPointToPosition(VECTOR position, float deadzone)
   for (i = 0; i < spCount; ++i) {
     if (!spawnPointIsPlayer(i)) continue;
 
-    struct SpawnPoint* sp = spawnPointGet(i);
+    Cuboid* sp = spawnPointGet(i);
     VECTOR delta;
-    vector_subtract(delta, position, &sp->M0[12]);
+    vector_subtract(delta, position, &sp->pos);
     float sqrDist = vector_sqrmag(delta);
     if (sqrDist < bestDist && sqrDist >= sqrDeadzone) {
       bestDist = sqrDist;
@@ -660,7 +668,7 @@ void patchFlagUiPopup_Logic(short stringId, int seconds, int player)
 void patchFlagUiPopup(void)
 {
 	flagPVars_t * flag = &midFlag.pRedFlag->pVar;
-	u32 hook = GetAddress(&vaflagEventUiPopup_Hook);
+	u32 hook = GetAddress(&vaFlagEventUiPopup_Hook);
 
 	// stop original function nulling  flag carrierId
 	// *(u32*)(hook - 0x44) = 0;
@@ -687,8 +695,6 @@ void runMidFlag(void)
 	}
 	Moby *redFlag = midFlag.pRedFlag;
 	Moby *blueFlag = midFlag.pBlueFlag;
-	VECTOR v;
-	VECTOR spawnFlag = {259.964, 253.611, 62.598, 0};
 	if ((Moby *)redFlag == 0)
 		return;
 	
@@ -697,35 +703,42 @@ void runMidFlag(void)
 	flagPVars_t *blue = (Moby *)((u32)redFlag->pVar + 0x30);
 	// setup bases and find center spawn for flag
 	if (midFlag.setup == 1) {
+		VECTOR spMedianPosition = {0, 0, 0, 0};
+		int centerSpawn = 0;
 		// save capture cuboids
 		midFlag.baseCuboid[0] = red->captureCuboid;
 		midFlag.baseCuboid[1] = blue->captureCuboid;
 		// swap unk_28
 		red->unk_28 = blue->unk_28;
-
 		// make red flag glow
 		redFlag->primaryColor = 0xffffffff;
-
 		// disable and hide blue flag
 		blueFlag->modeBits |= MOBY_MODE_BIT_DISABLED | MOBY_MODE_BIT_HIDDEN | MOBY_MODE_BIT_NO_UPDATE;
-
-		// determine ball spawn
-		// as closest player spawn
-		// to median of bases
-		VECTOR spMedianPosition = {0,0,0,0};
-		vector_add(spMedianPosition, spMedianPosition, red->basePos);
-		vector_add(spMedianPosition, spMedianPosition, blue->basePos);
-		vector_scale(spMedianPosition, spMedianPosition, 0.5);
-		int medianSpIdx = findClosestSpawnPointToPosition(spMedianPosition, 0);
-
-		// set spawn point position for center spawn, and base spawn
-		int centerSpawn = &spawnPointGet(medianSpIdx)->M0[12];
+		// check if flag spawn override.
+		int mapId = gameGetSettings()->GameLevel;
+		int i = 0;
+		for (i; i < COUNT_OF(midFlagPos); ++i) {
+			if (mapId == midFlagPos[i].mapId) {
+				spMedianPosition[0] = midFlagPos[i].x;
+				spMedianPosition[1] = midFlagPos[i].z;
+				spMedianPosition[2] = midFlagPos[i].y;
+				// set centerspawn pointer.
+				centerSpawn = &spMedianPosition;
+				break;
+			}
+		}
+		// if centerSpawn wasn't overided by manual coordinates, find center spawn.
+		if (centerSpawn == 0) {
+			vector_add(spMedianPosition, spMedianPosition, red->basePos);
+			vector_add(spMedianPosition, spMedianPosition, blue->basePos);
+			vector_scale(spMedianPosition, spMedianPosition, 0.5);
+			int medianSpIdx = findClosestSpawnPointToPosition(spMedianPosition, 0);
+			centerSpawn = &spawnPointGet(medianSpIdx)->pos;
+		}
+		// set flag spawn
 		vector_copy(red->basePos, centerSpawn);
 		vector_copy(redFlag->position, centerSpawn);
 		redFlag->position[2] += .25;
-
-		// spawn icon
-		// mobyTestSpawn(redFlag->position);
 
 		// hook flag event ui popup so we can use our own strings.
 		// patchFlagUiPopup();
@@ -748,15 +761,29 @@ void runMidFlag(void)
 		red->team = mpTeam;
 		red->captureCuboid = midFlag.baseCuboid[mpTeam];
 	}
+	// Sprite Logic
 	player = playerGetFromSlot(0);
+	int isPaused = player->pauseOn;
 	// draw sprite for non-flag holders.
 	if (!player->flagMoby) {
+		int i = red->carrierIdx;
+		u32 color = i > -1 ? TEAM_COLORS[!red->team] : 0x00ffffff;
 		VECTOR t;
-		vector_copy(t, redFlag->position);
-		t[2] += 3;
-		t[0] += .07;
-		u32 color = red->carrierIdx > -1 ? TEAM_COLORS[!red->team] : 0x00ffffff;
-		gfxHelperDrawSprite_WS(t, 32, 32, SPRITE_FLAG, 0x80000000 | color, TEXT_ALIGN_MIDDLECENTER);
+		// if not carried, set sprite to flag position.
+		if (i == -1) {
+			vector_copy(t, redFlag->position);
+			t[2] += 3;
+			t[0] += .07;
+		}
+		// if carried, set sprite to player position.
+		else {
+			player = playerGetFromSlot(i);
+			vector_copy(t, player->playerPosition);
+			t[2] += 2;
+			t[0] += .07;	
+		}
+		if (t != 0 && !isPaused)
+			gfxHelperDrawSprite_WS(t, 24, 24, SPRITE_FLAG, 0x80000000 | color, TEXT_ALIGN_MIDDLECENTER);
 	}
 }
 
