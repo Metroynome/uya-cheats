@@ -18,6 +18,7 @@
 #include <libuya/time.h>
 #include <libuya/gameplay.h>
 #include <libuya/map.h>
+#include <libuya/sound.h>
 
 #define TIMER_DEFAULT_TIME (30)
 #define TIMER_TEXT_SCALE (3)
@@ -25,12 +26,42 @@
 #define TIMER_BASE_COLOR2 (0x80808080)
 #define TIMER_HIGH_COLOR (0x80ffffff)
 
+// soundID ticking ideas:
+// 11, 103, 133,
+
 // last time second timer tick sound was played.
 int lastPlaySoundSecond = 0;
 int startTime = 0;
+int soundId = 0;
+SoundDef TimerTickSoundDef;
+
+// TimerTickSoundDef = {
+//     1000.0,
+//     1000.0,
+//     2000,
+//     2000,
+//     0,
+//     0,
+//     0,
+//     0x10,
+//     soundId, // 0xF4,
+//     3
+// };
 
 void runCustomTimer(void)
 {
+
+    TimerTickSoundDef.minRange = 1000.0;
+    TimerTickSoundDef.maxRange = 1000.0;
+    TimerTickSoundDef.minVolume = 2000;
+    TimerTickSoundDef.maxVolume = 2000;
+    TimerTickSoundDef.minPitch = 0;
+    TimerTickSoundDef.maxPitch = 0;
+    TimerTickSoundDef.loop = 0;
+    TimerTickSoundDef.flags = 0x10;
+    TimerTickSoundDef.index = soundId,
+    TimerTickSoundDef.bank_index = 0;
+
     int gameTime = gameGetTime();
     char timerBuf[16];
     char teamBuff[4];
@@ -62,7 +93,6 @@ void runCustomTimer(void)
             float dynamicScale = scale * (1.0 + (0.3 * x));
 
             // update color
-            // color = colorLerp(TIMER_BASE_COLOR1, TIMER_BASE_COLOR2, fabsf(sinf(gameTime * 10)));
             color = colorLerp(allNodesTeamColor, TIMER_HIGH_COLOR, x);
 
             // draw subtext
@@ -76,7 +106,8 @@ void runCustomTimer(void)
             // tick timer
             if (timeSecondsLeftFloor < lastPlaySoundSecond) {
                 lastPlaySoundSecond = timeSecondsLeftFloor;
-                soundMobyPlay(0, 0, playerGetFromSlot(0)->pMoby);
+                // soundMobyPlay(soundId, 0, playerGetFromSlot(0)->pMoby);
+                soundPlay(&TimerTickSoundDef, 0, playerGetFromSlot(0)->pMoby, 0, 1024);
             }
         }
     }
@@ -92,6 +123,19 @@ void runSiege()
 	GameSettings *gs = gameGetSettings();
 	if (gs->GameType != GAMETYPE_SIEGE)
 		return;
+
+    if (playerPadGetButtonDown(playerGetFromSlot(0), PAD_LEFT) > 0) {
+        soundId -= 1;
+        printf("\n-------------");
+        printf("\nsoundId: %d", soundId);
+        printf("\n-------------");
+    }
+    if (playerPadGetButtonDown(playerGetFromSlot(0),PAD_RIGHT) > 0) {
+        soundId += 1;
+        printf("\n-------------");
+        printf("\nsoundId: %d", soundId);
+        printf("\n-------------");
+    }
 
     runCustomTimer();
 }
