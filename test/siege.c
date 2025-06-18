@@ -26,90 +26,116 @@
 #define TIMER_BASE_COLOR2 (0x80808080)
 #define TIMER_HIGH_COLOR (0x80ffffff)
 
-// soundID ticking ideas:
-// 11, 103, 133,
+typedef struct TimerVars {
+    float timer_x;
+    float timer_y;
+    float timerScale;
+    float title_x;
+    float title_y;
+    float titleScale;
+    char title[32];
+    u32 colorBase;
+    u32 colorHigh;
+    int font;
+    int timeValue;
+    int timeStartTicking;
+    SoundDef *tickSound;
+    int startTime;
+    int lastPlayedTickSound;
+    short bDynamicScaleTime;
+    short status;
+} TimerVars_t;
 
-// last time second timer tick sound was played.
-int lastPlaySoundSecond = 0;
-int startTime = 0;
-int soundId = 0;
-SoundDef TimerTickSoundDef;
+SoundDef TimerTickSoundDef = {1000, 1000, 2000, 2000, 0, 0, 0, 0x10, 133, 0};
 
-// TimerTickSoundDef = {
-//     1000.0,
-//     1000.0,
-//     2000,
-//     2000,
-//     0,
-//     0,
-//     0,
-//     0x10,
-//     soundId, // 0xF4,
-//     3
-// };
+TimerVars_t allNodesTimer = {
+    .timer_x = SCREEN_WIDTH / 2,
+    .timer_y = SCREEN_HEIGHT * 0.2,
+    .timerScale = 3,
+    .title = "%s Team Wins In",
+    .title_x = SCREEN_WIDTH / 2,
+    .title_y = SCREEN_HEIGHT * 0.13,
+    .titleScale = 1,
+    .colorBase = 0x80ff0000,
+    .colorHigh = 0x80ffffff,
+    .font = FONT_DEMI,
+    .timeValue = 10,
+    .timeStartTicking = 5,
+    .tickSound = &TimerTickSoundDef,
+    .startTime = -1,
+    .lastPlayedTickSound = -1,
+    .bDynamicScaleTime = 1,
+    .status = -1
+};
 
-void runCustomTimer(void)
+TimerVars_t selectNodesTimer = {
+    .timer_x = SCREEN_WIDTH / 2,
+    .timer_y = SCREEN_HEIGHT * 0.7,
+    .timerScale = 1,
+    .title = 0,
+    .title_x = SCREEN_WIDTH / 2,
+    .title_y = SCREEN_HEIGHT * 0.63,
+    .titleScale = 1,
+    .colorBase = 0x80ffffff,
+    .colorHigh = 0,
+    .font = FONT_DEMI,
+    .timeValue = 30,
+    .timeStartTicking = -1,
+    .tickSound = 0,
+    .startTime = -1,
+    .lastPlayedTickSound = -1,
+    .bDynamicScaleTime = 0,
+    .status = -1
+};
+
+void runCustomTimer(TimerVars_t *timer)
 {
-
-    TimerTickSoundDef.minRange = 1000.0;
-    TimerTickSoundDef.maxRange = 1000.0;
-    TimerTickSoundDef.minVolume = 2000;
-    TimerTickSoundDef.maxVolume = 2000;
-    TimerTickSoundDef.minPitch = 0;
-    TimerTickSoundDef.maxPitch = 0;
-    TimerTickSoundDef.loop = 0;
-    TimerTickSoundDef.flags = 0x10;
-    TimerTickSoundDef.index = soundId,
-    TimerTickSoundDef.bank_index = 0;
-
     int gameTime = gameGetTime();
     char timerBuf[16];
-    char teamBuff[4];
 
-    if (1) {
+    if (timer->status == -1 || timer->status == 2)
+        return;
 
-        if (startTime <= gameTime) {
-            lastPlaySoundSecond = gameTime + (TIMER_DEFAULT_TIME * TIME_SECOND);
-            startTime = gameTime + (TIMER_DEFAULT_TIME * TIME_SECOND);
-        }
+    if (timer->status == 0) {
+        timer->startTime = gameTime + (timer->timeValue * TIME_SECOND);
+        timer->lastPlayedTickSound = gameTime + (timer->timeStartTicking * TIME_SECOND);
+    }
 
-        int timeLeft = (startTime) - (gameTime); // - SNDState.BombPlantedTicks);
-        float timeSecondsLeft = timeLeft / (float)TIME_SECOND;
-        float scale = TIMER_TEXT_SCALE;
-        u32 color = 0x80ffffff;
-        u32 allNodesTeamColor = 0x80000000 | TEAM_COLORS[playerGetFromSlot(0)->mpTeam];
-        int timeSecondsLeftFloor = (int)timeSecondsLeft;
-        float timeSecondsRounded = timeSecondsLeftFloor;
-        if ((timeSecondsLeft - timeSecondsRounded) > 0.5)
-            timeSecondsRounded += 1;
+    int timeLeft = (timer->startTime) - (gameTime);
+    float timeSecondsLeft = timeLeft / (float)TIME_SECOND;
+    float timerScale = timer->timerScale;
+    u32 timerColor = timer->colorBase;
+    // u32 allNodesTeamColor = 0x80000000 | TEAM_COLORS[playerGetFromSlot(0)->mpTeam];
+    int timeSecondsLeftFloor = (int)timeSecondsLeft;
+    float timeSecondsRounded = timeSecondsLeftFloor;
+    if ((timeSecondsLeft - timeSecondsRounded) > 0.5)
+        timeSecondsRounded += 1;
 
-        if (timeLeft <= 0) {
-            // set end
-            // setRoundOutcome(SND_OUTCOME_BOMB_DETONATED);
-        } else {
-            // update scale
+    if (timeLeft <= 0) {
+        timer->status = 2;
+    } else {
+        // draw subtext
+        if (strlen(timer->title) > 0)
+            gfxScreenSpaceText(timer->title_x, timer->title_y, timer->titleScale, timer->titleScale, timer->colorBase, timer->title, -1, 4, timer->font);
+
+        // draw timer
+        if (timer->bDynamicScaleTime) {
             float t = 1-fabsf(timeSecondsRounded - timeSecondsLeft);
             float x = powf(t, 15);
-            float dynamicScale = scale * (1.0 + (0.3 * x));
-
-            // update color
-            color = colorLerp(allNodesTeamColor, TIMER_HIGH_COLOR, x);
-
-            // draw subtext
-            // sprintf(teamBuf, "%s", winningTeam);
-            gfxScreenSpaceText(SCREEN_WIDTH/2, SCREEN_HEIGHT * 0.13, scale / 3, scale / 3, allNodesTeamColor, "Blue Team Wins in", -1, 4, FONT_DEMI);
-
-            // draw timer
-            sprintf(timerBuf, "%.02f", timeLeft / (float)TIME_SECOND);
-            gfxScreenSpaceText(SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.2, dynamicScale, dynamicScale, color, timerBuf, -1, 4, FONT_DEMI);
-
-            // tick timer
-            if (timeSecondsLeftFloor < lastPlaySoundSecond) {
-                lastPlaySoundSecond = timeSecondsLeftFloor;
-                // soundMobyPlay(soundId, 0, playerGetFromSlot(0)->pMoby);
-                soundPlay(&TimerTickSoundDef, 0, playerGetFromSlot(0)->pMoby, 0, 1024);
-            }
+            timerScale *= (1.0 + (0.3 * x));
+            timerColor = colorLerp(timer->colorBase, timer->colorHigh, x);
         }
+        sprintf(timerBuf, "%.02f", timeLeft / (float)TIME_SECOND);
+        gfxScreenSpaceText(timer->timer_x, timer->timer_y, timerScale, timerScale, timerColor, timerBuf, -1, 4, timer->font);
+
+        // tick timer
+        if (timer->tickSound != 0 && timeSecondsLeftFloor < timer->lastPlayedTickSound && timeSecondsLeftFloor < timer->timeStartTicking) {
+            timer->lastPlayedTickSound = timeSecondsLeftFloor;
+            soundPlay(timer->tickSound, 0, playerGetFromSlot(0)->pMoby, 0, 1024);
+        }
+
+        // set timer status
+        timer->status = 1;
     }
 }
 
@@ -124,18 +150,13 @@ void runSiege()
 	if (gs->GameType != GAMETYPE_SIEGE)
 		return;
 
-    if (playerPadGetButtonDown(playerGetFromSlot(0), PAD_LEFT) > 0) {
-        soundId -= 1;
-        printf("\n-------------");
-        printf("\nsoundId: %d", soundId);
-        printf("\n-------------");
-    }
-    if (playerPadGetButtonDown(playerGetFromSlot(0),PAD_RIGHT) > 0) {
-        soundId += 1;
-        printf("\n-------------");
-        printf("\nsoundId: %d", soundId);
-        printf("\n-------------");
-    }
+    if (allNodesTimer.status == -1)
+        allNodesTimer.status = 0;
 
-    runCustomTimer();
+    if (selectNodesTimer.status == -1)
+        selectNodesTimer.status = 0;
+    
+    runCustomTimer(&allNodesTimer);
+    runCustomTimer(&selectNodesTimer);
+
 }
