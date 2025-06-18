@@ -20,12 +20,6 @@
 #include <libuya/map.h>
 #include <libuya/sound.h>
 
-#define TIMER_DEFAULT_TIME (30)
-#define TIMER_TEXT_SCALE (3)
-#define TIMER_BASE_COLOR1 (0x80aabbcc)
-#define TIMER_BASE_COLOR2 (0x80808080)
-#define TIMER_HIGH_COLOR (0x80ffffff)
-
 typedef struct TimerVars {
     float timer_x;
     float timer_y;
@@ -88,7 +82,12 @@ TimerVars_t selectNodesTimer = {
     .status = -1
 };
 
-void runCustomTimer(TimerVars_t *timer)
+// short teamNodes[2] = {-1, -1};
+int maxNodeCount = -1;
+int gameOver = -1;
+int selectedNode = 1;
+
+void runTimer(TimerVars_t *timer)
 {
     int gameTime = gameGetTime();
     char timerBuf[16];
@@ -139,7 +138,85 @@ void runCustomTimer(TimerVars_t *timer)
     }
 }
 
-void runSiege()
+void runCheckNodes(void) {
+    int i;
+    GameOptions *gameOptions = gameGetOptions();
+    GameSettings *gameSettings = gameGetSettings();
+    GameData *gameData = gameGetData();
+    short nodes[2] = {0, 0};
+    char title[32];
+    // get number of nodes
+    if (maxNodeCount == -1) {
+        maxNodeCount = 0;
+        Moby* mobyStart = mobyListGetStart();
+        Moby* mobyEnd = mobyListGetEnd();
+        while (mobyStart < mobyEnd) {
+            if (mobyStart->oClass == MOBY_ID_SIEGE_NODE) {
+                ++maxNodeCount;
+            }
+            ++mobyStart;
+        }
+    }
+    // check which team each node is, and save it into nodes
+    for (i = 0; i < maxNodeCount; ++i) {
+        int nodesTeam = gameData->allYourBaseGameData->nodeTeam[i];
+        if (nodesTeam == 0 || nodesTeam == 1)
+            ++nodes[nodesTeam];
+    }
+    // check if team has all nodes and set timer title and color
+    int blue = nodes[0];
+    int red = nodes[1];
+    int blueTeamAll = blue == maxNodeCount && red == 0;
+    int redTeamAll = red == maxNodeCount && blue == 0;
+    int teamWithAllNodes = (blueTeamAll && !redTeamAll) ? 0 : (redTeamAll && !blueTeamAll) ? 1 : -1;
+    if (teamWithAllNodes > -1 && allNodesTimer.status == -1) {
+        char *whichTeam = !teamWithAllNodes ? "Blue" : "Red";
+        sprintf(title, "%s Team Wins In", whichTeam);
+        strncpy(allNodesTimer.title, title, 32);
+        allNodesTimer.colorBase = 0x80000000 | TEAM_COLORS[teamWithAllNodes];
+        allNodesTimer.status = 0;
+    } else if (teamWithAllNodes == -1 && allNodesTimer.status > -1){
+        strncpy(allNodesTimer.title, "", 32);
+        allNodesTimer.status = -1;
+    }
+    // check status of timer.  if finished, end game.
+    if (allNodesTimer.status == 2) {
+        if (gameOver == 1)
+            return;
+
+        gameData->winningTeam = teamWithAllNodes;
+        // gameEnd(2);
+        gameOver = 1;
+    } else {
+        runTimer(&allNodesTimer);
+    }
+
+    #ifdef DEBUG
+    // left/right: select node; up/down: set node to blue/red team
+    Player *player = playerGetFromSlot(0);
+    if (playerPadGetButtonDown(player, PAD_LEFT) > 0) {
+        if (selectedNode > 1)
+            --selectedNode;
+        else
+            selectedNode = maxNodeCount;
+    }
+    if (playerPadGetButtonDown(player, PAD_RIGHT) > 0) {
+        if (selectedNode < maxNodeCount)
+            ++selectedNode;
+        else
+            selectedNode = 1;
+    }
+    if (playerPadGetButtonDown(player, PAD_UP) > 0) {
+        gameData->allYourBaseGameData->nodeTeam[selectedNode - 1] = 0;
+    }
+    if (playerPadGetButtonDown(player, PAD_DOWN) > 0) {
+        gameData->allYourBaseGameData->nodeTeam[selectedNode - 1] = 1;
+    }
+    printf("\nm: %d, n: %d, t: %d, b: %d, r: %d, a: %d", maxNodeCount, selectedNode, gameData->allYourBaseGameData->nodeTeam[selectedNode - 1], nodes[0], nodes[1], teamWithAllNodes);
+    #endif
+}
+
+void runSiege(void)
 {
     Player *player = playerGetFromSlot(0);
 	if (player->pauseOn == 0 && playerPadGetButtonDown(player, PAD_CIRCLE) > 0) {
@@ -150,13 +227,16 @@ void runSiege()
 	if (gs->GameType != GAMETYPE_SIEGE)
 		return;
 
+    // checks if all nodes are owned by 1 team, if so, run end game timer.
+    // runCheckNodes();
+
     if (allNodesTimer.status == -1)
         allNodesTimer.status = 0;
 
     if (selectNodesTimer.status == -1)
         selectNodesTimer.status = 0;
     
-    runCustomTimer(&allNodesTimer);
-    runCustomTimer(&selectNodesTimer);
+    runTimer(&selectNodesTimer);
+    runTimer(&selectNodesTimer);
 
 }
