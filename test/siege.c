@@ -53,7 +53,7 @@ TimerVars_t allNodesTimer = {
     .colorBase = 0x80ff0000,
     .colorHigh = 0x80ffffff,
     .font = FONT_DEMI,
-    .timeValue = 10,
+    .timeValue = 120,
     .timeStartTicking = 5,
     .tickSound = &TimerTickSoundDef,
     .startTime = -1,
@@ -104,7 +104,6 @@ void runTimer(TimerVars_t *timer)
     float timeSecondsLeft = timeLeft / (float)TIME_SECOND;
     float timerScale = timer->timerScale;
     u32 timerColor = timer->colorBase;
-    // u32 allNodesTeamColor = 0x80000000 | TEAM_COLORS[playerGetFromSlot(0)->mpTeam];
     int timeSecondsLeftFloor = (int)timeSecondsLeft;
     float timeSecondsRounded = timeSecondsLeftFloor;
     if ((timeSecondsLeft - timeSecondsRounded) > 0.5)
@@ -124,7 +123,14 @@ void runTimer(TimerVars_t *timer)
             timerScale *= (1.0 + (0.3 * x));
             timerColor = colorLerp(timer->colorBase, timer->colorHigh, x);
         }
-        sprintf(timerBuf, "%.02f", timeLeft / (float)TIME_SECOND);
+        // sprintf(timerBuf, "%.02f", timeLeft / (float)TIME_SECOND);
+        int formatTime = timeLeft * (60.0 / TIME_SECOND);
+        if (timer->timeValue >= 60) {
+            sprintf(timerBuf, "%02i:%02i:%02i", (formatTime / 60) / 60, (formatTime / 60) % 60, ((formatTime % 60) * 100) / 60);
+        } else {
+            sprintf(timerBuf, "%02i:%02i", (formatTime / 60) % 60, ((formatTime % 60) * 100) / 60);
+        }
+        
         gfxScreenSpaceText(timer->timer_x, timer->timer_y, timerScale, timerScale, timerColor, timerBuf, -1, 4, timer->font);
 
         // tick timer
@@ -185,7 +191,7 @@ void runCheckNodes(void) {
             return;
 
         gameData->winningTeam = teamWithAllNodes;
-        // gameEnd(2);
+        gameEnd(2);
         gameOver = 1;
     } else {
         runTimer(&allNodesTimer);
@@ -228,15 +234,11 @@ void runSiege(void)
 		return;
 
     // checks if all nodes are owned by 1 team, if so, run end game timer.
-    // runCheckNodes();
-
-    if (allNodesTimer.status == -1)
-        allNodesTimer.status = 0;
+    runCheckNodes();
 
     if (selectNodesTimer.status == -1)
         selectNodesTimer.status = 0;
     
-    runTimer(&selectNodesTimer);
     runTimer(&selectNodesTimer);
 
 }
