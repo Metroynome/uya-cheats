@@ -44,17 +44,17 @@ SoundDef TimerTickSoundDef = {1000, 1000, 2000, 2000, 0, 0, 0, 0x10, 133, 0};
 
 TimerVars_t allNodesTimer = {
     .timer_x = SCREEN_WIDTH / 2,
-    .timer_y = SCREEN_HEIGHT * 0.2,
+    .timer_y = SCREEN_HEIGHT * 0.8,
     .timerScale = 3,
-    .title = "%s Team Wins In",
+    .title = "",
     .title_x = SCREEN_WIDTH / 2,
-    .title_y = SCREEN_HEIGHT * 0.13,
+    .title_y = SCREEN_HEIGHT * 0.73,
     .titleScale = 1,
     .colorBase = 0x80ff0000,
     .colorHigh = 0x80ffffff,
-    .font = FONT_DEMI,
+    .font = FONT_DEFAULT,
     .timeValue = 120,
-    .timeStartTicking = 5,
+    .timeStartTicking = 10,
     .tickSound = &TimerTickSoundDef,
     .startTime = -1,
     .lastPlayedTickSound = -1,
@@ -64,16 +64,16 @@ TimerVars_t allNodesTimer = {
 
 TimerVars_t selectNodesTimer = {
     .timer_x = SCREEN_WIDTH / 2,
-    .timer_y = SCREEN_HEIGHT * 0.7,
+    .timer_y = SCREEN_HEIGHT * 0.17,
     .timerScale = 1,
     .title = 0,
     .title_x = SCREEN_WIDTH / 2,
-    .title_y = SCREEN_HEIGHT * 0.63,
+    .title_y = SCREEN_HEIGHT * 0.1,
     .titleScale = 1,
-    .colorBase = 0x80ffffff,
+    .colorBase = 0x8060bfee,
     .colorHigh = 0,
-    .font = FONT_DEMI,
-    .timeValue = 30,
+    .font = FONT_DEFAULT,
+    .timeValue = 10,
     .timeStartTicking = -1,
     .tickSound = 0,
     .startTime = -1,
@@ -128,7 +128,7 @@ void runTimer(TimerVars_t *timer)
         if (timer->timeValue >= 60) {
             sprintf(timerBuf, "%02i:%02i:%02i", (formatTime / 60) / 60, (formatTime / 60) % 60, ((formatTime % 60) * 100) / 60);
         } else {
-            sprintf(timerBuf, "%02i:%02i", (formatTime / 60) % 60, ((formatTime % 60) * 100) / 60);
+            sprintf(timerBuf, "%02i.%02i", (formatTime / 60) % 60, ((formatTime % 60) * 100) / 60);
         }
         
         gfxScreenSpaceText(timer->timer_x, timer->timer_y, timerScale, timerScale, timerColor, timerBuf, -1, 4, timer->font);
@@ -218,8 +218,29 @@ void runCheckNodes(void) {
     if (playerPadGetButtonDown(player, PAD_DOWN) > 0) {
         gameData->allYourBaseGameData->nodeTeam[selectedNode - 1] = 1;
     }
-    printf("\nm: %d, n: %d, t: %d, b: %d, r: %d, a: %d", maxNodeCount, selectedNode, gameData->allYourBaseGameData->nodeTeam[selectedNode - 1], nodes[0], nodes[1], teamWithAllNodes);
+    // printf("\nm: %d, n: %d, t: %d, b: %d, r: %d, a: %d", maxNodeCount, selectedNode, gameData->allYourBaseGameData->nodeTeam[selectedNode - 1], nodes[0], nodes[1], teamWithAllNodes);
     #endif
+}
+
+void runSelectNodeTimer(void)
+{
+    Player *player = playerGetFromSlot(0);
+    int isDead = playerIsDead(player);
+    int status = selectNodesTimer.status;
+    int resTimer = playerGetRespawnTimer(player);
+    int state = playerGetState(player);
+    if (state == PLAYER_STATE_WAIT_FOR_RESURRECT && status == -1) {
+        selectNodesTimer.timeValue = 10;
+        selectNodesTimer.status = 0;
+    }
+    printf("\n%02i.%02i", (resTimer / 60) % 60, ((resTimer % 60) * 100) / 60);
+    if (status == 2 && resTimer <= 0) {
+        playerRespawn(player);
+        if (!isDead)
+            selectNodesTimer.status = -1;
+    } else {
+        runTimer(&selectNodesTimer);
+    }
 }
 
 void runSiege(void)
@@ -235,10 +256,13 @@ void runSiege(void)
 
     // checks if all nodes are owned by 1 team, if so, run end game timer.
     runCheckNodes();
+    runSelectNodeTimer();
 
-    if (selectNodesTimer.status == -1)
-        selectNodesTimer.status = 0;
+    // if (allNodesTimer.status == -1)
+    //     allNodesTimer.status = 0;
+
+    // if (selectNodesTimer.status == -1)
+    //     selectNodesTimer.status = 0;
     
-    runTimer(&selectNodesTimer);
-
+    // runTimer(&allNodesTimer);
 }
