@@ -643,10 +643,10 @@ int main(void)
 
 	GameSettings * gameSettings = gameGetSettings();
 	GameOptions * gameOptions = gameGetOptions();
-	if (gameOptions || gameSettings || gameSettings->GameLoadStartTime > 0) {
-		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 1;
+	if (gameSettings->GameLoadStartTime > 0) {
+		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 0;
 		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 1;
-		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 1;
+		// gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 1;
 	}
 
 	// hud();

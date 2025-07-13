@@ -40,6 +40,36 @@ typedef struct TimerVars {
     short status;
 } TimerVars_t;
 
+VariableAddress_t vaGB_UpdateGameController_MasterEndGame_Hook = {
+#if UYA_PAL
+	.Lobby = 0x0067063c,
+	.Bakisi = 0x00543fe4,
+	.Hoven = 0x005461ac,
+	.OutpostX12 = 0x0053ba84,
+	.KorgonOutpost = 0x0053916c,
+	.Metropolis = 0x0053856c,
+	.BlackwaterCity = 0x00535d54,
+	.CommandCenter = 0x005355ac,
+	.BlackwaterDocks = 0x00537e2c,
+	.AquatosSewers = 0x0053712c,
+	.MarcadiaPalace = 0x00536aac,
+#else
+	.Lobby = 0x0066dcec,
+	.Bakisi = 0x005416d4,
+	.Hoven = 0x005437dc,
+	.OutpostX12 = 0x005390f4,
+    .KorgonOutpost = 0x0053685c,
+	.Metropolis = 0x00535c5c,
+	.BlackwaterCity = 0x005333c4,
+	.CommandCenter = 0x00532df4,
+	.BlackwaterDocks = 0x00535634,
+	.AquatosSewers = 0x00534974,
+	.MarcadiaPalace = 0x005342b4,
+#endif
+};
+
+
+
 SoundDef TimerTickSoundDef = {1000, 1000, 2000, 2000, 0, 0, 0, 0x10, 133, 0};
 
 TimerVars_t allNodesTimer = {
@@ -233,7 +263,7 @@ void runSelectNodeTimer(void)
         selectNodesTimer.timeValue = 10;
         selectNodesTimer.status = 0;
     }
-    printf("\n%02i.%02i", (resTimer / 60) % 60, ((resTimer % 60) * 100) / 60);
+    // printf("\n%02i.%02i", (resTimer / 60) % 60, ((resTimer % 60) * 100) / 60);
     if (status == 2 && resTimer <= 0) {
         playerRespawn(player);
         if (!isDead)
@@ -241,6 +271,30 @@ void runSelectNodeTimer(void)
     } else {
         runTimer(&selectNodesTimer);
     }
+}
+
+void patchSiegeTimeUp_Logic(int reason)
+{
+    GameData *gameData = gameGetData();
+    // get base health
+    float blueHealth = gameData->allYourBaseGameData->hudHealth[0];
+    float redHealth = gameData->allYourBaseGameData->hudHealth[1];
+    // check who wins.  If both bases are same health, it's a tie, like normal.
+    if (blueHealth < redHealth || blueHealth > redHealth) {
+        gameData->winningTeam = blueHealth < redHealth;
+        reason = 2;
+    }
+    // if both teams have equal health, it's a tie.  reason = 1.
+    gameEnd(reason);
+}
+
+int patchedSiegeTimeup = 0;
+void patchSiegeTimeUp(void)
+{
+    if (!patchedSiegeTimeup)
+        HOOK_JAL(GetAddress(&vaGB_UpdateGameController_MasterEndGame_Hook), &patchSiegeTimeUp_Logic);
+
+    patchedSiegeTimeup = 1;
 }
 
 void runSiege(void)
@@ -257,6 +311,7 @@ void runSiege(void)
     // checks if all nodes are owned by 1 team, if so, run end game timer.
     runCheckNodes();
     runSelectNodeTimer();
+    patchSiegeTimeUp();
 
     // if (allNodesTimer.status == -1)
     //     allNodesTimer.status = 0;
