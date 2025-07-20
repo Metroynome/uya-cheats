@@ -641,13 +641,13 @@ int main(void)
 
 	uyaPreUpdate();
 
-	GameSettings * gameSettings = gameGetSettings();
-	GameOptions * gameOptions = gameGetOptions();
-	if (gameSettings->GameLoadStartTime > 0) {
-		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 0;
-		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 1;
-		// gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 1;
-	}
+	// GameSettings * gameSettings = gameGetSettings();
+	// GameOptions * gameOptions = gameGetOptions();
+	// if (gameSettings->GameLoadStartTime > 0) {
+	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 0;
+	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 1;
+	// 	// gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 1;
+	// }
 
 	// hud();
 
@@ -722,11 +722,11 @@ int main(void)
 		// betterHealthBoxes_Move();
 
 		// runCTF();
-		runSiege();
+		// runSiege();
 
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
-    	// DebugInGame(p);
+    	DebugInGame(p);
     } else {
 		// DebugInMenus();
 	}
