@@ -635,6 +635,74 @@ struct HBoltPVar {
 // 	// soundPlayByOClass(1, 0, moby, MOBY_ID_OMNI_SHIELD);
 // }
 
+
+
+	// switch (mode) {
+	// 	case DEOBFUSCATE_MODE_HEALTH: {
+	// 		stack.step = 5;
+	// 		stack.max = 0x28;
+	// 		stack.multiplyVar = 0xff;
+	// 		stack.randData = GetAddress(&vaPlayerObfuscateAddr);
+	// 		break;
+	// 	}
+	// 	case DEOBFUSCATE_MODE_WEAPON: {
+	// 		stack.step = 3;
+	// 		stack.max = 0x18;
+	// 		stack.multiplyVar = 0xd1;
+	// 		stack.randData = GetAddress(&vaPlayerObfuscateWeaponAddr);
+	// 		break;
+	// 	}
+	// 	case DEOBFUSCATE_MODE_TIMER: {
+	// 		stack.step = 3;
+	// 		stack.max = 0x18;
+	// 		stack.multiplyVar = 0xff;
+	// 		stack.randData = GetAddress(&vaPlayerObfuscateAddr);
+	// 		break;
+	// 	}
+	// }
+
+extern VariableAddress_t vaPlayerObfuscateAddr;
+extern VariableAddress_t vaPlayerObfuscateWeaponAddr;
+typedef struct deobfuscate {
+	char *randData;
+	int max;
+	int step;
+	int multiplyVal;
+	union {
+		int data[2];
+		struct {
+			int addr;
+			int val;
+		}
+	}
+} deobfuscate;
+int pDeob(int src, int addr, int mode)
+{
+	char *i = src;
+	// i = address, *i = data
+	if (!*i)
+		return 0;
+
+	deobfuscate stack;
+	u8 *data = &stack.data;
+	int n = 0;
+	int m = 0;
+	stack.max = 0x28;
+	stack.step = 5;
+	stack.multiplyVal = 0xff;
+    stack.randData = !addr ? GetAddress(&vaPlayerObfuscateAddr) : GetAddress(&vaPlayerObfuscateWeaponAddr);
+	int converted;
+	for (n; n < stack.max; n += stack.step) {
+		u32 offset = (u32)((int)i - (u32)*i & 7) + n;
+		*data = stack.randData[(*i + (offset & 7) * stack.multiplyVal)];
+        ++data;
+	}
+	stack.addr = (u32)(stack.addr) ^ (u32)i;
+	stack.val = (u32)((u32)stack.val ^ stack.addr);
+	converted = stack.val;
+	return converted;
+}
+
 int main(void)
 {
 	((void (*)(void))0x00126780)();
@@ -660,8 +728,10 @@ int main(void)
 		*(u32*)0x001A5A70 = 0;
 		// gameGetLocalSettings()->Wide = 1;
 
-		// patchAFK();
-
+		printf("\no: %d, n: %d", playerDeobfuscate(&p->state, 0, 0), pDeob(&p->state, 0, 0));
+		// printf("\no: %d, n: %d", playerDeobfuscate(&p->quickSelect.Slot[0], 1, 1), pDeob(&p->quickSelect.Slot[0], 1, 1));
+		// printf("\no: %d, n: %d", playerGetRespawnTimer(p), pDeob(&p->timers.resurrectWait, 2));
+		
 		// hypershotEquipBehavior();
 
 		// gfxStickyFX(&PostDraw, p->PlayerMoby);
