@@ -46,10 +46,12 @@ void DebugInGame(Player* player)
     if (playerPadGetButtonDown(player, PAD_LEFT) > 0) {
 		// Swap Teams
 		int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
-		playerSetTeam(player, SetTeam);
+		// playerSetTeam(player, SetTeam);
+		playerObfuscate(&player->hitPoints, 15, 0);
 	} else if (playerPadGetButtonDown(player, PAD_RIGHT) > 0) {
         // Hurt Player
-        playerDecHealth(player, 1);
+        // playerDecHealth(player, 1);
+		playerObfuscate(&player->hitPoints, 7, 0);
 	} else if (playerPadGetButtonDown(player, PAD_UP) > 0) {
 		// static int Occlusion = (Occlusion == 2) ? 0 : 2;
 		// gfxOcclusion(Occlusion);
@@ -707,30 +709,35 @@ int pDeob(int src, int mode)
 {
 	char *i = src;
 	// i = address, *i = data
-	if (!*i && mode == 0) return 0;
+	if (!*i && mode == 0)
+		return 0;
 
 	deobfuscate stack;
+	switch (mode) {
+		case 0: {
+			stack.max = 0x28;
+			stack.step = 5;
+			stack.multiplyVal = 0xff;
+			stack.randData = GetAddress(&vaPlayerObfuscateAddr);
+			break;
+		}
+		case 1: {
+			stack.max = 0x18;
+			stack.step = 3;
+			stack.multiplyVal = 0xd1;
+    		stack.randData = GetAddress(&vaPlayerObfuscateWeaponAddr);
+			break;
+		}
+		case 2: {
+			stack.max = 0x18;
+			stack.step = 3;
+			stack.multiplyVal = 0xff;
+    		stack.randData = GetAddress(&vaPlayerObfuscateAddr);
+			break;
+		}
+	}
 	u8 *data = &stack.data;
 	int n = 0;
-	if (mode == 0) {
-		stack.max = 0x28;
-		stack.step = 5;
-		stack.multiplyVal = 0xff;
-    	stack.randData = GetAddress(&vaPlayerObfuscateAddr);
-	}
-	if (mode == 1) {
-		stack.max = 0x18;
-		stack.step = 3;
-		stack.multiplyVal = 0xd1;
-    	stack.randData = GetAddress(&vaPlayerObfuscateWeaponAddr);
-	}
-	if (mode == 2) {
-		stack.max = 0x18;
-		stack.step = 3;
-		stack.multiplyVal = 0xff;
-    	stack.randData = GetAddress(&vaPlayerObfuscateAddr);
-	}
-	int converted;
 	for (n; n < stack.max; n += stack.step) {
 		u32 offset = (u32)((int)i - (u32)*i & 7) + n;
 		*data = stack.randData[(*i + (offset & 7) * stack.multiplyVal)];
@@ -745,6 +752,30 @@ int pDeob(int src, int mode)
 	} else if (mode == 2) {
 		return stack.val;
 	}
+	// all other modes, return -1
+	return -1;
+}
+
+void playerObfuscate(int src, u32 value, DeobfuscateMode_e mode)
+{
+	Deobfuscate_t stack;
+    float v = value;
+	char *i = src; // i: address, *i: value
+	char *data = &stack.data;
+    stack.randData = GetAddress(&vaPlayerObfuscateAddr);
+	stack.step = 5;
+	stack.max = 0x28;
+	stack.multiplyVal = 0xff;
+    u32 xord = *(u32*)(((u32)stack.randData - 0x1) + (((int)i * gameGetGSFrame()) % 0x1fe) * 4);
+	stack.addr = xord ^ (u32)i;
+    stack.val = xord ^ *(u32*)&v;
+    int n = 0;
+	int m = 0;
+    for (n; n < stack.max; n += stack.step) {
+        u32 offset = (u32)(((int)i - (u32)*i & 7) + n);
+        stack.randData[(*i + (offset & 7) * stack.multiplyVal)] = *data;
+        ++data;
+    }
 }
 
 int main(void)
@@ -772,9 +803,7 @@ int main(void)
 		*(u32*)0x001A5A70 = 0;
 		// gameGetLocalSettings()->Wide = 1;
 
-		printf("\no: %d, n: %d | wo: %d, wn: %d | to: %03d, tn: %03d", playerDeobfuscate(&p->state, 0, 0), pDeob(&p->state, 0), playerDeobfuscate(&p->quickSelect.Slot[0], 1, 1), pDeob(&p->quickSelect.Slot[0], 1), playerGetRespawnTimer(p), pDeob(&p->timers.resurrectWait, 2));
-		// printf("\no: %d, n: %d", playerDeobfuscate(&p->quickSelect.Slot[0], 1, 1), pDeob(&p->quickSelect.Slot[0], 1, 1));
-		// printf("\no: %d, n: %d", playerGetRespawnTimer(p), pDeob(&p->timers.resurrectWait, 2));
+		// printf("\no: %d, n: %d | wo: %d, wn: %d | to: %03d, tn: %03d", playerDeobfuscate(&p->state, 0), pDeob(&p->state, 0), playerDeobfuscate(&p->quickSelect.Slot[0], 1), pDeob(&p->quickSelect.Slot[0], 1), playerGetRespawnTimer(p), pDeob(&p->timers.resurrectWait, 2));
 		
 		// hypershotEquipBehavior();
 
@@ -799,7 +828,7 @@ int main(void)
 
 		// Only print state if it's diferent from last state.
 		static int nowState = -1;
-		int currentState = playerDeobfuscate(&p->state, 0, 0);
+		int currentState = playerDeobfuscate(&p->state, 0);
 		if (currentState != nowState) {
 			nowState = currentState;
 			// printf("\n------------------");
