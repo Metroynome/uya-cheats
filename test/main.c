@@ -676,7 +676,7 @@ typedef struct deobfuscate {
 		}
 	}
 } deobfuscate;
-int pDeob(int src, int addr, int mode)
+int pDeob_working(int src, int addr, int mode)
 {
 	char *i = src;
 	// i = address, *i = data
@@ -701,6 +701,42 @@ int pDeob(int src, int addr, int mode)
 	stack.val = (u32)((u32)stack.val ^ stack.addr);
 	converted = stack.val;
 	return converted;
+}
+
+int pDeob(int src, int addr, int mode)
+{
+	char *i = src;
+	// i = address, *i = data
+	// if (!*i) return 0;
+
+	deobfuscate stack;
+	u8 *data = &stack.data;
+	int n = 0;
+	if (mode == 0) {
+		stack.max = 0x28;
+		stack.step = 5;
+		stack.multiplyVal = 0xff;
+    	stack.randData = GetAddress(&vaPlayerObfuscateAddr);
+	}
+	if (mode == 1) {
+		stack.max = 0x18;
+		stack.step = 3;
+		stack.multiplyVal = 0xd1;
+    	stack.randData = GetAddress(&vaPlayerObfuscateWeaponAddr);
+	}
+	int converted;
+	for (n; n < stack.max; n += stack.step) {
+		u32 offset = (u32)((int)i - (u32)*i & 7) + n;
+		*data = stack.randData[(*i + (offset & 7) * stack.multiplyVal)];
+        ++data;
+	}
+	if (mode == 0) {
+		return (u32)((u32)stack.val ^ ((u32)(stack.addr) ^ (u32)i));
+	} else if (mode == 1) {
+        stack.addr = (u32)stack.addr ^ (u32)i;
+        stack.val = ((u32)stack.val ^ (u32)stack.addr) >> 0x10;
+        return (u32)stack.val & 0xff;
+	}
 }
 
 int main(void)
@@ -728,7 +764,7 @@ int main(void)
 		*(u32*)0x001A5A70 = 0;
 		// gameGetLocalSettings()->Wide = 1;
 
-		printf("\no: %d, n: %d", playerDeobfuscate(&p->state, 0, 0), pDeob(&p->state, 0, 0));
+		printf("\no: %d, n: %d | wo: %d, wn: %d", playerDeobfuscate(&p->state, 0, 0), pDeob(&p->state, 0, 0), playerDeobfuscate(&p->quickSelect.Slot[0], 1, 1), pDeob(&p->quickSelect.Slot[0], 1, 1));
 		// printf("\no: %d, n: %d", playerDeobfuscate(&p->quickSelect.Slot[0], 1, 1), pDeob(&p->quickSelect.Slot[0], 1, 1));
 		// printf("\no: %d, n: %d", playerGetRespawnTimer(p), pDeob(&p->timers.resurrectWait, 2));
 		
