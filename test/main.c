@@ -47,11 +47,11 @@ void DebugInGame(Player* player)
 		// Swap Teams
 		int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
 		// playerSetTeam(player, SetTeam);
-		playerObfuscate(&player->hitPoints, 15, 0);
+		playerObfuscate(&player->hitPoints, 15, 1);
 	} else if (playerPadGetButtonDown(player, PAD_RIGHT) > 0) {
         // Hurt Player
         // playerDecHealth(player, 1);
-		playerObfuscate(&player->hitPoints, 7, 0);
+		playerObfuscate(&player->hitPoints, 7, 1);
 	} else if (playerPadGetButtonDown(player, PAD_UP) > 0) {
 		// static int Occlusion = (Occlusion == 2) ? 0 : 2;
 		// gfxOcclusion(Occlusion);
@@ -762,15 +762,20 @@ void playerObfuscate(int src, u32 value, DeobfuscateMode_e mode)
     float v = value;
 	char *i = src; // i: address, *i: value
 	char *data = &stack.data;
-    stack.randData = GetAddress(&vaPlayerObfuscateAddr);
-	stack.step = 5;
-	stack.max = 0x28;
-	stack.multiplyVal = 0xff;
+	switch (mode) {
+		case 0: break; // state
+		case 1: { // health/hitPoints
+			stack.step = 5;
+			stack.max = 0x28;
+			stack.multiplyVal = 0xff;
+			stack.randData = GetAddress(&vaPlayerObfuscateAddr);
+			break;
+		};
+	}
     u32 xord = *(u32*)(((u32)stack.randData - 0x1) + (((int)i * gameGetGSFrame()) % 0x1fe) * 4);
 	stack.addr = xord ^ (u32)i;
     stack.val = xord ^ *(u32*)&v;
     int n = 0;
-	int m = 0;
     for (n; n < stack.max; n += stack.step) {
         u32 offset = (u32)(((int)i - (u32)*i & 7) + n);
         stack.randData[(*i + (offset & 7) * stack.multiplyVal)] = *data;
