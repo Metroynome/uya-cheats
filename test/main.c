@@ -703,11 +703,11 @@ int pDeob_working(int src, int addr, int mode)
 	return converted;
 }
 
-int pDeob(int src, int addr, int mode)
+int pDeob(int src, int mode)
 {
 	char *i = src;
 	// i = address, *i = data
-	// if (!*i) return 0;
+	if (!*i && mode == 0) return 0;
 
 	deobfuscate stack;
 	u8 *data = &stack.data;
@@ -724,18 +724,26 @@ int pDeob(int src, int addr, int mode)
 		stack.multiplyVal = 0xd1;
     	stack.randData = GetAddress(&vaPlayerObfuscateWeaponAddr);
 	}
+	if (mode == 2) {
+		stack.max = 0x18;
+		stack.step = 3;
+		stack.multiplyVal = 0xff;
+    	stack.randData = GetAddress(&vaPlayerObfuscateAddr);
+	}
 	int converted;
 	for (n; n < stack.max; n += stack.step) {
 		u32 offset = (u32)((int)i - (u32)*i & 7) + n;
 		*data = stack.randData[(*i + (offset & 7) * stack.multiplyVal)];
         ++data;
 	}
+	stack.addr = (u32)((u32)stack.val ^ ((u32)(stack.addr) ^ (u32)i));
+	stack.val = (u32)stack.addr >> 0x10;
 	if (mode == 0) {
-		return (u32)((u32)stack.val ^ ((u32)(stack.addr) ^ (u32)i));
+		return stack.addr;
 	} else if (mode == 1) {
-        stack.addr = (u32)stack.addr ^ (u32)i;
-        stack.val = ((u32)stack.val ^ (u32)stack.addr) >> 0x10;
-        return (u32)stack.val & 0xff;
+        return stack.val & 0xff;
+	} else if (mode == 2) {
+		return stack.val;
 	}
 }
 
@@ -764,7 +772,7 @@ int main(void)
 		*(u32*)0x001A5A70 = 0;
 		// gameGetLocalSettings()->Wide = 1;
 
-		printf("\no: %d, n: %d | wo: %d, wn: %d", playerDeobfuscate(&p->state, 0, 0), pDeob(&p->state, 0, 0), playerDeobfuscate(&p->quickSelect.Slot[0], 1, 1), pDeob(&p->quickSelect.Slot[0], 1, 1));
+		printf("\no: %d, n: %d | wo: %d, wn: %d | to: %03d, tn: %03d", playerDeobfuscate(&p->state, 0, 0), pDeob(&p->state, 0), playerDeobfuscate(&p->quickSelect.Slot[0], 1, 1), pDeob(&p->quickSelect.Slot[0], 1), playerGetRespawnTimer(p), pDeob(&p->timers.resurrectWait, 2));
 		// printf("\no: %d, n: %d", playerDeobfuscate(&p->quickSelect.Slot[0], 1, 1), pDeob(&p->quickSelect.Slot[0], 1, 1));
 		// printf("\no: %d, n: %d", playerGetRespawnTimer(p), pDeob(&p->timers.resurrectWait, 2));
 		
