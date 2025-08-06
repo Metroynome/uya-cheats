@@ -308,10 +308,9 @@ void modeInitTarget(SimulatedPlayer_t * sPlayer)
 
 void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 {
-	VECTOR delta;
-	VECTOR targetPos;
-	Player ** players = playerGetAll();
-	Player * player = players[0];
+	int i;
+	VECTOR delta, targetPos;
+	Player* player = playerGetFromSlot(0);
 	if (!sPlayer || !player || !sPlayer->Active)
 		return;
 
@@ -321,18 +320,31 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 	if (!pvar)
 		return;
 
-	// face player
-	// vector_subtract(delta, player->playerPosition, target->playerPosition);
-	// float len = vector_length(delta);
-	// float yaw = atan2f(delta[1] / len, delta[0] / len);
+	// set to lock-strafe
+	*(u8*)(0x001A5a34 + (sPlayer->Idx * 4)) = 1;
 	
-	// MATRIX m;
-	// matrix_unit(m);
-	// matrix_rotate_z(m, m, yaw);
+	// face player
+	vector_copy(delta, player->playerPosition);
+	delta[2] += 1;
+	vector_subtract(delta, delta, target->playerPosition);
+	float len = vector_length(delta);
+	float targetYaw = atan2f(delta[1] / len, delta[0] / len);
+	float targetPitch = asinf(-delta[2] / len);
+	sPlayer->Yaw = lerpfAngle(sPlayer->Yaw, targetYaw, 0.05);
+
+	MATRIX m;
+	matrix_unit(m);
+	matrix_rotate_y(m, m, targetPitch);
+	matrix_rotate_z(m, m, sPlayer->Yaw);
 	// memcpy(target->camera->uMtx, m, sizeof(VECTOR) * 3);
 	// vector_copy(target->fps.cameraDir, &m[4]);
 	// target->fps.vars.cameraY.rotation = sPlayer->Yaw;
-    
+
+	memcpy(target->camera->uMtx, player->camera->uMtx, sizeof(VECTOR) * 3);
+	memcpy(target->fps.cameraDir, player->fps.cameraDir, sizeof(VECTOR));
+    target->fps.vars.cameraY.rotation = player->fps.vars.cameraY.rotation;
+    target->fps.vars.cameraZ.rotation = player->fps.vars.cameraZ.rotation;
+
 	struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
 	int jumping = 0;
 	int Health = ((int)playerGetHealth(sPlayer->Player) <= 0);
@@ -451,7 +463,7 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 
 void targetUpdate(SimulatedPlayer_t *sPlayer)
 {
-	Player* player = (Player*)PLAYER_STRUCT;
+	Player* player = playerGetFromSlot(0);
 	int isOwner = gameAmIHost();
 	if (!sPlayer || !player || !sPlayer->Active)
 		return;
@@ -503,7 +515,7 @@ void onSimulateHeros(void)
 	int i;
 
 	// update local hero first
-	// Player * lPlayer = (Player*)PLAYER_STRUCT;
+	// Player * lPlayer = playerGetFromSlot(0);
 	// if (lPlayer) {
 	// 	PlayerVTable * pVTable = playerGetVTable(lPlayer);
 	// 	// HUD JAL: 004E3F14

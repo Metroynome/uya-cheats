@@ -252,7 +252,7 @@ void drawB6Visualizer(void)
 
 void renderB6Visualizer(Moby* m)
 {
-	gfxStickyFX(&drawB6Visualizer, m);
+	gfxRegistserDrawRoutine(&drawB6Visualizer, m);
 }
 void runB6HitVisualizer(void)
 {
@@ -617,7 +617,7 @@ struct HBoltPVar {
 // 	if (!pvars)
 // 		return;
 
-// 	gfxStickyFX(&mobyPostDraw, moby);
+// 	gfxRegistserDrawRoutine(&mobyPostDraw, moby);
 // }
 
 // void mobyTestSpawn(VECTOR position)
@@ -775,13 +775,15 @@ int main(void)
 		if (!p)
 			return 0;
 
+		// force lock-strafe (controller 1)
+		// *(u8*)0x001A5a34 = 1;
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 		// gameGetLocalSettings()->Wide = 1;
 		
 		// hypershotEquipBehavior();
 
-		// gfxStickyFX(&PostDraw, p->PlayerMoby);
+		// gfxRegistserDrawRoutine(&PostDraw, p->PlayerMoby);
 		// drawEffectQuad(p->pMoby->position, EFFECT_ME, 1);
 		// drawSomething(p->pMoby);
 		
@@ -848,7 +850,7 @@ int main(void)
 		// DebugInMenus();
 	}
 
-	// StartBots();
+	StartBots();
 
 	uyaPostUpdate();
 
