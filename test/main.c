@@ -252,7 +252,7 @@ void drawB6Visualizer(void)
 
 void renderB6Visualizer(Moby* m)
 {
-	gfxRegistserDrawRoutine(&drawB6Visualizer, m);
+	gfxRegistserDrawFunction(&drawB6Visualizer, m);
 }
 void runB6HitVisualizer(void)
 {
@@ -617,7 +617,7 @@ struct HBoltPVar {
 // 	if (!pvars)
 // 		return;
 
-// 	gfxRegistserDrawRoutine(&mobyPostDraw, moby);
+// 	gfxRegistserDrawFunction(&mobyPostDraw, moby);
 // }
 
 // void mobyTestSpawn(VECTOR position)
@@ -783,7 +783,7 @@ int main(void)
 		
 		// hypershotEquipBehavior();
 
-		// gfxRegistserDrawRoutine(&PostDraw, p->PlayerMoby);
+		// gfxRegistserDrawFunction(&PostDraw, p->PlayerMoby);
 		// drawEffectQuad(p->pMoby->position, EFFECT_ME, 1);
 		// drawSomething(p->pMoby);
 		

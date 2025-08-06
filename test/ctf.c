@@ -615,7 +615,7 @@ void mobyPostDraw(Moby* moby)
 
 void mobyUpdate(Moby* moby)
 {
-	gfxRegistserDrawRoutine(&mobyPostDraw, moby);
+	gfxRegistserDrawFunction(&mobyPostDraw, moby);
 }
 
 void mobyTestSpawn(VECTOR position)
