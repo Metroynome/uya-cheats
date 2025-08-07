@@ -190,12 +190,12 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 	vector_copy(quad.xzyw[2], pBL);
 	vector_copy(quad.xzyw[3], pBR);
 	quad.rgba[0] = quad.rgba[1] = quad.rgba[2] = quad.rgba[3] = color;
-	quad.uv[0] = (struct UV){0, 0};
-	quad.uv[1] = (struct UV){0, 1};
-	quad.uv[2] = (struct UV){1, 0};
-	quad.uv[3] = (struct UV){1, 1};
+	quad.uv[0] = (struct UV){0, 1};
+	quad.uv[1] = (struct UV){1, 1};
+	quad.uv[2] = (struct UV){0, 0};
+	quad.uv[3] = (struct UV){1, 0};
 	quad.clamp = 0;
-	quad.tex0 = gfxGetFrameTex(texId);
+	quad.tex0 = gfxGetEffectTex(texId);
 	quad.tex1 = 0xff9000000260;
 	quad.alpha = 0x8000000044;
 
@@ -223,7 +223,7 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 
 	// draw
 	gfxSetupGifPaging(0);
-	gfxDrawQuad(&quad, m2);
+	gfxDrawQuad(quad, m2);
 	gfxDoGifPaging();
 }
 
@@ -287,27 +287,31 @@ void drawCollider(Moby* moby)
 	int i,j = 0;
 	int x,y;
 	char buf[12];
-	Player * p = playerGetFromSlot(0);
 
-	const int steps = 10 * 2;
-	const float radius = 2;
+	const int steps = 5 * 2;
+	const float radius = 1;
 
 	for (i = 0; i < steps; ++i) {
 		for (j = 0; j < steps; ++j) {
 			float theta = (i / (float)steps) * MATH_TAU;
 			float omega = (j / (float)steps) * MATH_TAU;
 
-			vector_copy(pos, p->playerPosition);
+			vector_copy(pos, moby->position);
 			pos[0] += radius * sinf(theta) * cosf(omega);
 			pos[1] += radius * sinf(theta) * sinf(omega);
 			pos[2] += radius * cosf(theta);
 
-			vector_add(t, p->playerPosition, o);
+			vector_add(t, pos, o);
 
-			if (CollLine_Fix(pos, t, 1, NULL, 0)) {
-				vector_copy(t, CollLine_Fix_GetHitPosition());
-				drawEffectQuad(t, EFFECT_ME, 0.1);
+			if (gfxWorldSpaceToScreenSpace(pos, &x, &y)) {
+				gfxScreenSpaceText(x, y, 1, 1, 0x80ffffff, "+", -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
 			}
+
+			// if (CollLine_Fix(pos, t, 1, NULL, 0)) {
+			// 	vector_copy(t, CollLine_Fix_GetHitPosition());
+			// 	// drawEffectQuad(t, EFFECT_ME, 0.1);
+			// }
+			// drawEffectQuad(pos, EFFECT_ME, .1);
 		}
 	}
 }
@@ -661,97 +665,108 @@ struct HBoltPVar {
 	// 	}
 	// }
 
-extern VariableAddress_t vaPlayerObfuscateAddr;
-extern VariableAddress_t vaPlayerObfuscateWeaponAddr;
-typedef struct deobfuscate {
-	char *randData;
-	int max;
-	int step;
-	int multiplyVal;
-	union {
-		int data[2];
-		struct {
-			int addr;
-			int val;
-		}
-	}
-} deobfuscate;
-int pDeob_working(int src, int addr, int mode)
+void patchDisplayPlayerNames_Logic(Moby *this)
 {
-	char *i = src;
-	// i = address, *i = data
-	if (!*i)
-		return 0;
-
-	deobfuscate stack;
-	u8 *data = &stack.data;
-	int n = 0;
-	int m = 0;
-	stack.max = 0x28;
-	stack.step = 5;
-	stack.multiplyVal = 0xff;
-    stack.randData = !addr ? GetAddress(&vaPlayerObfuscateAddr) : GetAddress(&vaPlayerObfuscateWeaponAddr);
-	int converted;
-	for (n; n < stack.max; n += stack.step) {
-		u32 offset = (u32)((int)i - (u32)*i & 7) + n;
-		*data = stack.randData[(*i + (offset & 7) * stack.multiplyVal)];
-        ++data;
-	}
-	stack.addr = (u32)(stack.addr) ^ (u32)i;
-	stack.val = (u32)((u32)stack.val ^ stack.addr);
-	converted = stack.val;
-	return converted;
+	printf("\nPatched: %08x", this);
 }
 
-int pDeob(int src, int mode)
+void patchDisplayPlayerNames(void)
 {
-	char *i = src;
-	// i = address, *i = data
-	if (!*i && mode == 0)
-		return 0;
+	int numPatched = 0;
+	int i, j;
+	int drawCount = *(u32*)gfxGetRegisteredDrawCount();
+	if (drawCount == 0)
+		return;
 
-	deobfuscate stack;
-	switch (mode) {
-		case 0: {
-			stack.max = 0x28;
-			stack.step = 5;
-			stack.multiplyVal = 0xff;
-			stack.randData = GetAddress(&vaPlayerObfuscateAddr);
-			break;
-		}
-		case 1: {
-			stack.max = 0x18;
-			stack.step = 3;
-			stack.multiplyVal = 0xd1;
-    		stack.randData = GetAddress(&vaPlayerObfuscateWeaponAddr);
-			break;
-		}
-		case 2: {
-			stack.max = 0x18;
-			stack.step = 3;
-			stack.multiplyVal = 0xff;
-    		stack.randData = GetAddress(&vaPlayerObfuscateAddr);
-			break;
+	for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
+		Player *p = playerGetFromSlot(i);
+		if (!p)
+			continue;
+
+		for (j = 0; j <= drawCount; ++j) {
+			int *mList = gfxGetRegisteredDrawMobyList();
+			int *cList = gfxGetRegisteredDrawCalbackList();
+			if (p->pMoby == mList[j] && cList[j] != &patchDisplayPlayerNames_Logic) {
+				cList[j] = &patchDisplayPlayerNames_Logic;
+			}
 		}
 	}
-	u8 *data = &stack.data;
-	int n = 0;
-	for (n; n < stack.max; n += stack.step) {
-		u32 offset = (u32)((int)i - (u32)*i & 7) + n;
-		*data = stack.randData[(*i + (offset & 7) * stack.multiplyVal)];
-        ++data;
+}
+int *mobyList[64];
+int populateMobyList = 0;
+void runDrawCollider(void)
+{
+	if (!populateMobyList) {
+		Moby *mStart = mobyListGetStart();
+		Moby *mEnd = mobyListGetEnd();
+		int *list = &mobyList;
+		while (mStart < mEnd) {
+			switch(mStart->oClass) {
+				case MOBY_ID_TURBOSLIDER:
+				case MOBY_ID_HOVERSHIP:
+				case MOBY_ID_SKIN_RATCHET: {
+					*list = mStart;
+					++list;
+					++populateMobyList;
+				}
+			}
+			++mStart;
+		}
 	}
-	stack.addr = (u32)((u32)stack.val ^ ((u32)(stack.addr) ^ (u32)i));
-	stack.val = (u32)stack.addr >> 0x10;
-	if (mode == 0) {
-		return stack.addr;
-	} else if (mode == 1) {
-        return stack.val & 0xff;
-	} else if (mode == 2) {
-		return stack.val;
+	if (populateMobyList) {
+		int count = populateMobyList;
+		int i;
+		for (i = 0; i < count; ++i) {
+			drawCollider(mobyList[i]);
+		}
 	}
-	// all other modes, return -1
-	return -1;
+}
+
+void transform_vector(VECTOR out, mtx3 mtx, VECTOR in, VECTOR pos) {
+    out[0] = mtx.v0[0]*in[0] + mtx.v0[1]*in[1] + mtx.v0[2]*in[2] + pos[0];
+	out[1] = mtx.v1[0]*in[0] + mtx.v1[1]*in[1] + mtx.v1[2]*in[2] + pos[1];
+    out[2] = mtx.v2[0]*in[0] + mtx.v2[1]*in[1] + mtx.v2[2]*in[2] + pos[2];
+	out[3] = 1;
+}
+
+void drawCube(void)
+{
+	VECTOR worldCorners[8];
+	int x[8], y[8];
+	int i;
+	float hs = .5f;
+	VECTOR corners[8] = {
+        { -hs, -hs, -hs, 1.0f },
+        {  hs, -hs, -hs, 1.0f },
+        { -hs,  hs, -hs, 1.0f },
+        {  hs,  hs, -hs, 1.0f },
+        { -hs, -hs,  hs, 1.0f },
+        {  hs, -hs,  hs, 1.0f },
+        { -hs,  hs,  hs, 1.0f },
+        {  hs,  hs,  hs, 1.0f },
+    };
+	Player *p = playerGetFromSlot(0);
+	GameData *gd = gameGetData();
+	for (i = 0; i < 8; i++) {
+		// int index = gd->allYourBaseGameData->nodeResurrectionPts[i];
+		// Cuboid * cube = spawnPointGet(64);
+		// transform_vector(worldCorners[i], cube->matrix, corners[i], cube->pos);
+		// if (gfxWorldSpaceToScreenSpace(&worldCorners[i], &x[i], &y[i])) {
+		// 	gfxScreenSpaceText((float)x[i], (float)y[i], 1.5, 1.5, 0x80ffffff, "X", -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
+		// }
+		// show player box
+		transform_vector(worldCorners[i], p->pMoby->rMtx, corners[i], p->pMoby->position);
+		worldCorners[i][2] += 1;
+		if (gfxWorldSpaceToScreenSpace(&worldCorners[i], &x[i], &y[i])) {
+			char text[] = "X";
+			// int spacing = 5;
+			// int k, j;
+			// for (j = (int)y[0]; j < (int)y[2]; j += spacing) {
+			// 	gfxScreenSpaceText((float)x[0], (float)j, 1, 1, 0x80ffffff, text, -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
+			// }
+				gfxScreenSpaceText((float)x[i], (float)y[i], 1, 1, 0x80ffffff, text, -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
+		}
+	}
 }
 
 int main(void)
@@ -781,7 +796,7 @@ int main(void)
 		*(u32*)0x001A5A70 = 0;
 		// gameGetLocalSettings()->Wide = 1;
 		
-		// hypershotEquipBehavior();
+		// patchDisplayPlayerNames();
 
 		// gfxRegistserDrawFunction(&PostDraw, p->PlayerMoby);
 		// drawEffectQuad(p->pMoby->position, EFFECT_ME, 1);
@@ -830,11 +845,12 @@ int main(void)
 
 		// float x = SCREEN_WIDTH * 0.3;
 		// float y = SCREEN_HEIGHT * 0.85;
-		// gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, FONT_ALIGN_CENTER_CENTER);
+		// gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
 		
 		// printf("Collision: %d\n", CollHotspot());
         
-		// drawCollider(p->PlayerMoby);
+		// runDrawCollider();
+		drawCube();
         // runB6HitVisualizer();
 		// v2_Setting(2, first);
 
