@@ -722,6 +722,25 @@ void runDrawCollider(void)
 	}
 }
 
+#define cabs(x) ((x) < 0 ? -(x) : (x))
+
+void drawEdge(int x0, int y0, int x1, int y1) {
+    int dx = cabs(x1 - x0);
+    int dy = cabs(y1 - y0);
+    int steps = dx > dy ? dx : dy;
+    if (steps == 0) return;
+
+    float sx = (float)(x1 - x0) / steps;
+    float sy = (float)(y1 - y0) / steps;
+
+    int i, x = x0, y = y0;
+    for (i = 0; i <= steps; i++) {
+		gfxScreenSpaceText((float)x, (float)y, 1, 1, 0x80ffffff, "-", -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
+        x += sx;
+        y += sy;
+    }
+}
+
 void transform_vector(VECTOR out, mtx3 mtx, VECTOR in, VECTOR pos) {
     out[0] = mtx.v0[0]*in[0] + mtx.v0[1]*in[1] + mtx.v0[2]*in[2] + pos[0];
 	out[1] = mtx.v1[0]*in[0] + mtx.v1[1]*in[1] + mtx.v1[2]*in[2] + pos[1];
@@ -732,16 +751,16 @@ void transform_vector(VECTOR out, mtx3 mtx, VECTOR in, VECTOR pos) {
 void drawCube(void)
 {
 	VECTOR worldCorners[8];
-	int x[8], y[8];
+	int x[8], y[8], passed[8];
 	int i;
 	float hs = .5f;
 	VECTOR corners[8] = {
         { -hs, -hs, -hs, 1.0f },
         {  hs, -hs, -hs, 1.0f },
-        { -hs,  hs, -hs, 1.0f },
-        {  hs,  hs, -hs, 1.0f },
-        { -hs, -hs,  hs, 1.0f },
-        {  hs, -hs,  hs, 1.0f },
+        { -hs,  -hs, hs, 1.0f },
+        {  hs,  -hs, hs, 1.0f },
+        { -hs, hs,  -hs, 1.0f },
+        {  hs, hs,  -hs, 1.0f },
         { -hs,  hs,  hs, 1.0f },
         {  hs,  hs,  hs, 1.0f },
     };
@@ -749,7 +768,7 @@ void drawCube(void)
 	GameData *gd = gameGetData();
 	for (i = 0; i < 8; i++) {
 		// int index = gd->allYourBaseGameData->nodeResurrectionPts[i];
-		// Cuboid * cube = spawnPointGet(64);
+		// Cuboid * cube = spawnPointGet(index);
 		// transform_vector(worldCorners[i], cube->matrix, corners[i], cube->pos);
 		// if (gfxWorldSpaceToScreenSpace(&worldCorners[i], &x[i], &y[i])) {
 		// 	gfxScreenSpaceText((float)x[i], (float)y[i], 1.5, 1.5, 0x80ffffff, "X", -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
@@ -757,16 +776,25 @@ void drawCube(void)
 		// show player box
 		transform_vector(worldCorners[i], p->pMoby->rMtx, corners[i], p->pMoby->position);
 		worldCorners[i][2] += 1;
+		passed[i] = 0;
 		if (gfxWorldSpaceToScreenSpace(&worldCorners[i], &x[i], &y[i])) {
-			char text[] = "X";
-			// int spacing = 5;
-			// int k, j;
-			// for (j = (int)y[0]; j < (int)y[2]; j += spacing) {
-			// 	gfxScreenSpaceText((float)x[0], (float)j, 1, 1, 0x80ffffff, text, -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
-			// }
-				gfxScreenSpaceText((float)x[i], (float)y[i], 1, 1, 0x80ffffff, text, -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
+			passed[i] = 1;
 		}
 	}
+
+    // Draw edges
+    int edges[12][2] = {
+        {0,1}, {1,3}, {3,2}, {2,0}, // bottom
+        {4,5}, {5,7}, {7,6}, {6,4}, // top
+        {0,4}, {1,5}, {2,6}, {3,7}  // verticals
+    };
+
+    for (i = 0; i < 12; i++) {
+        int a = edges[i][0];
+        int b = edges[i][1];
+		if (passed[a] && passed[b])
+        	drawEdge(x[a], y[a], x[b], y[b]);
+    }
 }
 
 int main(void)
