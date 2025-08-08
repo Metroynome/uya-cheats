@@ -168,7 +168,6 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 	QuadDef quad;
 	MATRIX m2;
 	VECTOR t;
-	// points: [x, z, y, r]?
 	VECTOR pTL = {1, 0, 1, 1};
 	VECTOR pTR = {-1, 0, 1, 1};
 	VECTOR pBL = {1, 0, -1, 1};
@@ -181,8 +180,8 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 	matrix_unit(m2);
 
 	// get texture
-	// QuadDef texture;
-	// ((void(*)(int, int, int, int))0x0045a220)(&quad, texId, 0, 0x80);
+	QuadDef texture;
+	((void(*)(QuadDef *, u64, int, int))0x0045a220)(&texture, texId, 0, 0x80);
 
 	// color of each corner?
 	vector_copy(quad.xzyw[0], pTL);
@@ -190,14 +189,14 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 	vector_copy(quad.xzyw[2], pBL);
 	vector_copy(quad.xzyw[3], pBR);
 	quad.rgba[0] = quad.rgba[1] = quad.rgba[2] = quad.rgba[3] = color;
-	quad.uv[0] = (struct UV){0, 1};
-	quad.uv[1] = (struct UV){1, 1};
-	quad.uv[2] = (struct UV){0, 0};
-	quad.uv[3] = (struct UV){1, 0};
-	quad.clamp = 0;
-	quad.tex0 = gfxGetEffectTex(texId);
-	quad.tex1 = 0xff9000000260;
-	quad.alpha = 0x8000000044;
+	quad.uv[0] = (struct UV){0, 0};
+	quad.uv[1] = (struct UV){0, 1};
+	quad.uv[2] = (struct UV){5, 0};
+	quad.uv[3] = (struct UV){5, 1};
+	quad.clamp = texture.clamp;
+	quad.tex0 = texture.tex0;// gfxGetEffectTex(texId);
+	quad.tex1 = texture.tex1; // 0xff9000000260;
+	quad.alpha = texture.alpha; // 0x8000000044;
 
 	GameCamera* camera = cameraGetGameCamera(0);
 	if (!camera)
@@ -347,40 +346,6 @@ void drawSomething(Moby* moby)
 		}
 	}
 	drawEffectQuad(pos, EFFECT_ME, 2);
-}
-
-void patchAFK(void)
-{
-	int isAFK = 0;
-	// netInstallCustomMsgHandler(CUSTOM_MSG_ID_PLAYER_AFK, &onClientAFKRemote);
-	int AFK_Wait_Timer = 10; // in Minutes
-	int gameTime = gameGetTime();
-	static int afk_time = 0;
-	if (afk_time == 0)
-		afk_time = gameTime + (AFK_Wait_Timer * TIME_MINUTE);
-
-	PAD * src = (PAD*)((u32)P1_PAD - 0x80);
-	// if no buttons/analogs are pressed
-	if (src->handsOff && src->handsOffStick) {
-		// if is already AFK, return.
-		if (isAFK)
-			return;
-
-		// if time left to go afk is greater than the game time, then not afk yet, return.
-		if (afk_time > gameTime)
-			return;
-
-		void* connection = netGetLobbyServerConnection();
-		if (!connection)
-			return;
-
-		// netSendCustomAppMessage(netGetLobbyServerConnection(), NET_LOBBY_CLIENT_INDEX, CUSTOM_MSG_ID_CLIENT_AFK, 0, NULL);
-		printf("\ni'm afk!");
-		isAFK = 1;
-	} else {
-		afk_time = gameTime + (TIME_SECOND * AFK_Wait_Timer);
-		isAFK = 0;
-	}
 }
 
 
@@ -722,11 +687,9 @@ void runDrawCollider(void)
 	}
 }
 
-#define cabs(x) ((x) < 0 ? -(x) : (x))
-
 void drawEdge(int x0, int y0, int x1, int y1) {
-    int dx = cabs(x1 - x0);
-    int dy = cabs(y1 - y0);
+    int dx = abs(x1 - x0);
+    int dy = abs(y1 - y0);
     int steps = dx > dy ? dx : dy;
     if (steps == 0) return;
 
@@ -735,9 +698,29 @@ void drawEdge(int x0, int y0, int x1, int y1) {
 
     int i, x = x0, y = y0;
     for (i = 0; i <= steps; i++) {
-		gfxScreenSpaceText((float)x, (float)y, 1, 1, 0x80ffffff, "-", -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
-        x += sx;
+		// gfxScreenSpaceText((float)x, (float)y, 1, 1, 0x80ffffff, "-", -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
+        gfxDrawSprite((float)x, (float)y, 15, 15, 0, 0, 32, 32, 0x80ffffff, gfxGetFrameTex(SPRITE_FLAG));
+		x += sx;
         y += sy;
+    }
+}
+
+void drawFace(int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3) {
+    int steps = 1; // Adjust resolution (more = smoother)
+	int i;
+    for (i = 0; i <= steps; i++) {
+        float t = (float)i / steps;
+
+        // Interpolate left edge (from A to D)
+        float lx = x0 + (x3 - x0) * t;
+        float ly = y0 + (y3 - y0) * t;
+
+        // Interpolate right edge (from B to C)
+        float rx = x1 + (x2 - x1) * t;
+        float ry = y1 + (y2 - y1) * t;
+
+        // Draw horizontal line from left to right
+        drawEdge((int)lx, (int)ly, (int)rx, (int)ry);
     }
 }
 
@@ -764,37 +747,75 @@ void drawCube(void)
         { -hs,  hs,  hs, 1.0f },
         {  hs,  hs,  hs, 1.0f },
     };
+	mtx3 customMatrix = {
+		{10, 0, 0, 0},
+		{0, 10, 0, 0},
+		{0, 0, 10, 0}
+	};
+
 	Player *p = playerGetFromSlot(0);
 	GameData *gd = gameGetData();
 	for (i = 0; i < 8; i++) {
-		// int index = gd->allYourBaseGameData->nodeResurrectionPts[i];
-		// Cuboid * cube = spawnPointGet(index);
-		// transform_vector(worldCorners[i], cube->matrix, corners[i], cube->pos);
-		// if (gfxWorldSpaceToScreenSpace(&worldCorners[i], &x[i], &y[i])) {
-		// 	gfxScreenSpaceText((float)x[i], (float)y[i], 1.5, 1.5, 0x80ffffff, "X", -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
-		// }
-		// show player box
-		transform_vector(worldCorners[i], p->pMoby->rMtx, corners[i], p->pMoby->position);
-		worldCorners[i][2] += 1;
-		passed[i] = 0;
+		int index = gd->allYourBaseGameData->nodeResurrectionPts[5];
+		Cuboid * cube = spawnPointGet(index);
+		transform_vector(worldCorners[i], customMatrix, corners[i], cube->pos);
+		// offset the Y by halfing matrix Y.
+		worldCorners[i][2] += customMatrix.v2[2] * .5;
 		if (gfxWorldSpaceToScreenSpace(&worldCorners[i], &x[i], &y[i])) {
-			passed[i] = 1;
+			gfxScreenSpaceText((float)x[i], (float)y[i], 1.5, 1.5, 0x80ffffff, "X", -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
 		}
+		// show player box
+		// transform_vector(worldCorners[i], p->pMoby->rMtx, corners[i], p->pMoby->position);
+		// drawEffectQuad(worldCorners[i], 0x58, .25);
+		// worldCorners[i][2] += 1;
+		// passed[i] = 0;
+		// gfxWorldSpaceToScreenSpace(&worldCorners[i], &x[i], &y[i]);
 	}
 
     // Draw edges
     int edges[12][2] = {
-        {0,1}, {1,3}, {3,2}, {2,0}, // bottom
-        {4,5}, {5,7}, {7,6}, {6,4}, // top
-        {0,4}, {1,5}, {2,6}, {3,7}  // verticals
+        {0,1}, {1,4}, {4,5}, {5,0}, // bottom
+        {2,3}, {3,6}, {6,7}, {7,6}, // top
+        {0,2}, {1,3}, {4,6}, {5,7}  // verticals
     };
 
-    for (i = 0; i < 12; i++) {
-        int a = edges[i][0];
-        int b = edges[i][1];
-		if (passed[a] && passed[b])
-        	drawEdge(x[a], y[a], x[b], y[b]);
-    }
+    // for (i = 0; i < 12; i++) {
+    //     int a = edges[i][0];
+    //     int b = edges[i][1];
+	// 	// if (passed[a] && passed[b])
+    //     	drawEdge(x[a], y[a], x[b], y[b]);
+    // }
+
+	// draw faces
+	// int faces[6][4] = {
+	// 	{0, 1, 4, 5}, // Bottom
+	// 	{2, 3, 6, 7}, // Top
+	// 	{0, 1, 2, 3}, // Front
+	// 	{4, 5, 6, 7}, // Back
+	// 	{0, 4, 2, 6}, // Left
+	// 	{1, 5, 2, 7}  // Right
+	// };
+	// gfxSetupGifPaging(0);
+	// for (i = 2; i < 6; i++) {
+    //     int a = faces[i][0];
+    //     int b = faces[i][1];
+    //     int c = faces[i][2];
+    //     int d = faces[i][3];
+    //     // drawFace(x[a], y[a], x[b], y[b], x[c], y[c], x[d], y[d]);
+	// 	int cx = (x[a] + x[b] + x[c] + x[d]) * .25;
+	// 	int cy = (y[a] + y[b] + y[c] + y[d]) * .25;
+	// 	gfxScreenSpaceQuad(&r, 0x40ffffff, 0x80ffff, 0x80ff0000, 0x80ff0000);
+    //     gfxDrawSprite((float)cx, (float)cy, 25, 25, 0, 0, 32, 32, 0x80ffffff, gfxGetFrameTex(SPRITE_FLAG));
+    // }
+	// drawFace(x[0], y[0], x[1], y[1], x[0], y[0], x[1], y[1]);
+	// gfxDoGifPaging();
+
+	// draw corner numbers
+	// for (i = 0; i < 8; ++i) {
+	// 	char text[4];
+	// 	sprintf(text, "%i", i);
+	// 	gfxScreenSpaceText((float)x[i], (float)y[i], 1, 1, 0x800000ff, text, -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);	
+	// }
 }
 
 int main(void)
@@ -812,6 +833,7 @@ int main(void)
 	// }
 
 	// hud();
+	secret();
 
     if (isInGame()) {
 		Player * p = playerGetFromSlot(0);
@@ -878,7 +900,7 @@ int main(void)
 		// printf("Collision: %d\n", CollHotspot());
         
 		// runDrawCollider();
-		drawCube();
+		// drawCube();
         // runB6HitVisualizer();
 		// v2_Setting(2, first);
 

@@ -9,7 +9,8 @@ EE_OBJS += bots.o
 #EE_OBJS += scavengerhunt.o
 #EE_OBJS += ctf.o
 #EE_OBJS += hud.o
-EE_OBJS += siege.o
+#EE_OBJS += siege.o
+EE_OBJS += secret.o
 
 EE_LIBS = -luyantsc
 #EE_LIBS = -luyapal
