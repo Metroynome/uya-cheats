@@ -30,6 +30,8 @@
 #define HBOLT_SPRITE_COLOR          (0x00ffffff)
 #define HBOLT_SCALE                 (0.5)
 
+#define DRAW_SCALE                  (0.5)
+
 int spawned = 0;
 
 struct HBoltPVar {
@@ -37,36 +39,22 @@ struct HBoltPVar {
     PartInstance_t* Particles[4];
 };
 
-mtx3 tempMatrix = {
+mtx4 tempMatrix = {
     {15, 0, 0, 0},
     {0, 15, 0, 0},
-    {0, 0, 5, 0}
+    {0, 0, 5, 0},
+    {402.324, 366.073, 201.466, 1}
 };
 
 VECTOR corners[8] = {
-    {-.5, -.5, -.5, 1},
-    { .5, -.5, -.5, 1},
-    {-.5, -.5,  .5, 1},
-    { .5, -.5,  .5, 1},
-    {-.5,  .5, -.5, 1},
-    { .5,  .5, -.5, 1},
-    {-.5,  .5,  .5, 1},
-    { .5,  .5,  .5, 1},
-};
-
-int edges[12][2] = {
-    {0, 1}, {1, 3}, {3, 2}, {2, 0}, // Front
-    {4, 5}, {5, 7}, {7, 6}, {6, 4}, // Back
-    {0, 4}, {1, 5}, {2, 6}, {3, 7}  // Z
-};
-
-int faces[6][4] = {
-    {0, 1, 4, 5}, // Bottom
-    {2, 3, 6, 7}, // Top
-    {0, 1, 2, 3}, // Front
-    {4, 5, 6, 7}, // Back
-    {0, 4, 2, 6}, // Left
-    {1, 5, 2, 7}  // Right
+    {-DRAW_SCALE, -DRAW_SCALE, -DRAW_SCALE, 1},
+    { DRAW_SCALE, -DRAW_SCALE, -DRAW_SCALE, 1},
+    {-DRAW_SCALE, -DRAW_SCALE,  DRAW_SCALE, 1},
+    { DRAW_SCALE, -DRAW_SCALE,  DRAW_SCALE, 1},
+    {-DRAW_SCALE,  DRAW_SCALE, -DRAW_SCALE, 1},
+    { DRAW_SCALE,  DRAW_SCALE, -DRAW_SCALE, 1},
+    {-DRAW_SCALE,  DRAW_SCALE,  DRAW_SCALE, 1},
+    { DRAW_SCALE,  DRAW_SCALE,  DRAW_SCALE, 1},
 };
 
 void drawLine(VECTOR pointA, VECTOR pointB)
@@ -74,19 +62,15 @@ void drawLine(VECTOR pointA, VECTOR pointB)
     int i, k;
     VECTOR edge;
     float x0, x1, y0, y1, z0, z1;
-    x0 = pointA[0];
-    y0 = pointA[2];
-    z0 = pointA[1];
-    x1 = pointB[0];
-    y1 = pointB[2];
-    z1 = pointB[1];
+    x0 = pointA[0], y0 = pointA[2], z0 = pointA[1];
+    x1 = pointB[0], y1 = pointB[2], z1 = pointB[1];
 
     // do logic
     float dx = fabsf(x1 - x0);
     float dy = fabsf(y1 - y0);
     float dz = fabsf(z1 - z0);
     float stepsf = maxf(maxf(dx, dy), dz);
-    int steps = (int)(stepsf + 0.9999f);              // at least 1 if any delta > 0
+    int steps = (int)(stepsf + 0.9999f);
     if (steps == 0) return;
 
     float sx = (x1 - x0) / steps;
@@ -95,24 +79,41 @@ void drawLine(VECTOR pointA, VECTOR pointB)
 
     vector_copy(edge, pointA);
     for (k = 0; k <= steps; ++k) {
-        gfxDrawBillboardQuad(.5, .5, MATH_PI, edge, 4, 0x80000000 | HBOLT_SPRITE_COLOR, 0);
+        gfxDrawBillboardQuad(.5, .5, MATH_PI, edge, 24, 0x40000000 | HBOLT_SPRITE_COLOR, 0);
         vector_add(edge, edge, (VECTOR){sx, sz, sy, 0});
     }
 }
 
-
-void circleMe(VECTOR center, mtx3 matrix, int segments)
+void faceMe(VECTOR point[8])
 {
-    float radius = matrix.v0[0];
+    int faces[6][4] = {
+        {2, 3, 6, 7}, // Top
+        {0, 1, 4, 5}, // Bottom
+        {0, 1, 2, 3}, // Front
+        {4, 5, 6, 7}, // Back
+        {0, 4, 2, 6}, // Left
+        {1, 5, 2, 7}  // Right
+    };
+    int i;
+    for (i = 2; i < 6; i++) {
+        float x = point[faces[i][0]][0] + point[faces[i][1]][0] + point[faces[i][2]][0] + point[faces[i][3]][0];
+        float z = point[faces[i][0]][1] + point[faces[i][1]][1] + point[faces[i][2]][1] + point[faces[i][3]][1];
+        float y = point[faces[i][0]][2] + point[faces[i][1]][2] + point[faces[i][2]][2] + point[faces[i][3]][2];
+        gfxDrawBillboardQuad(6, 1, MATH_PI, (VECTOR){x * 0.25, z * 0.25, y * 0.25, 1}, 24, 0x40000000 | HBOLT_SPRITE_COLOR, 0);
+    }
+}
+
+void circleMe(mtx4 matrix, int segments)
+{
+    float radius = matrix.v0[0] * .5;
     if (segments < 6) segments = 16;
-    float step = (2.0f * MATH_PI) / segments;
+    float step = (2 * MATH_PI) / segments;
 
     VECTOR prev, first;
     int i;
     for (i = 0; i <= segments; ++i) {
-        float a = i * step;
-
-        VECTOR p = {center[0] + radius * cosf(a), center[1] + radius * sinf(a), center[2], 1};
+        float a = (i * step) - MATH_PI;
+        VECTOR p = {matrix.v3[0] + radius * cosf(a), matrix.v3[1] + radius * sinf(a), matrix.v3[2], 1};
         if (i == 0) {
             vector_copy(first, p);
         } else {
@@ -125,10 +126,21 @@ void circleMe(VECTOR center, mtx3 matrix, int segments)
 
 void edgeMe(VECTOR corner[8])
 {
+    int edges[2][12][2] = {
+        {
+            {2, 3}, {3, 7}, {7, 6}, {6, 2}, // Top
+            {0, 1}, {1, 5}, {5, 4}, {4, 0}, // Bottom
+            {0, 2}, {1, 3}, {4, 6}, {5, 7}  // Verticals
+        }, {
+            {0, 1}, {1, 3}, {3, 2}, {2, 0}, // Front
+            {4, 5}, {5, 7}, {7, 6}, {6, 4}, // Back
+            {0, 4}, {1, 5}, {2, 6}, {3, 7}  // Z
+        }
+    };
     int i;
     for (i = 0; i < 12; ++i) {
-        int a = edges[i][0];
-        int b = edges[i][1];
+        int a = edges[0][i][0];
+        int b = edges[0][i][1];
         drawLine(corner[a], corner[b]);
     }
 }
@@ -138,11 +150,23 @@ void drawTheThingJulie(Moby *moby)
 	VECTOR worldCorners[8];
 	int i;
 	for (i = 0; i < 8; i++) {
-		transform_vector(worldCorners[i], tempMatrix, corners[i], moby->position);
+        vector_transform(worldCorners[i], corners[i], (MATRIX*)&tempMatrix);
 		worldCorners[i][2] += tempMatrix.v2[2] * .5;
     }
     // edgeMe(worldCorners);
-    circleMe(moby->position, tempMatrix, 36);
+    faceMe(worldCorners);
+    VECTOR pos;
+    // float y = moby->position[2];
+    // if (yMove == 0) {
+    //     yMove = y;
+    // } else if (yMove < y + 5) {
+    //     yMove += .5;
+    // } else if (yMove > y + 5){
+    //     yMove = y;
+    // }
+    // vector_copy(pos, moby->position);
+    // vector_add(pos, pos, (VECTOR){0, 0, yMove, 0});
+    // circleMe(tempMatrix, 36);
 }
 
 void postDraw(Moby *moby)
@@ -252,7 +276,7 @@ void spawn(VECTOR position)
 void runUltimateSecret(void)
 {
     if (!spawned) {
-        spawn((VECTOR){402.324, 366.073, 201.466, 1});
+        spawn(tempMatrix.v3);
         spawned = 1;
     }
 }
