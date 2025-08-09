@@ -69,52 +69,67 @@ int faces[6][4] = {
     {1, 5, 2, 7}  // Right
 };
 
-void faceMe(VECTOR *corner)
-{
-    int i;
-    // Front and Back
-    for (i = 2; i < 3; i++) {
-        int a = faces[i][0];
-        int b = faces[i][1];
-        int c = faces[i][2];
-        int d = faces[i][3];
-        edgeMe(corner[a], corner[b], corner[c], corner[d]);
-    }
-}
-
-void edgeMe(VECTOR corner[8])
+void drawLine(VECTOR pointA, VECTOR pointB)
 {
     int i, k;
     VECTOR edge;
     float x0, x1, y0, y1, z0, z1;
-    // only front and back
+    x0 = pointA[0];
+    y0 = pointA[2];
+    z0 = pointA[1];
+    x1 = pointB[0];
+    y1 = pointB[2];
+    z1 = pointB[1];
+
+    // do logic
+    float dx = fabsf(x1 - x0);
+    float dy = fabsf(y1 - y0);
+    float dz = fabsf(z1 - z0);
+    float stepsf = maxf(maxf(dx, dy), dz);
+    int steps = (int)(stepsf + 0.9999f);              // at least 1 if any delta > 0
+    if (steps == 0) return;
+
+    float sx = (x1 - x0) / steps;
+    float sy = (y1 - y0) / steps;
+    float sz = (z1 - z0) / steps;
+
+    vector_copy(edge, pointA);
+    for (k = 0; k <= steps; ++k) {
+        gfxDrawBillboardQuad(.5, .5, MATH_PI, edge, 4, 0x80000000 | HBOLT_SPRITE_COLOR, 0);
+        vector_add(edge, edge, (VECTOR){sx, sz, sy, 0});
+    }
+}
+
+
+void circleMe(VECTOR center, mtx3 matrix, int segments)
+{
+    float radius = matrix.v0[0];
+    if (segments < 6) segments = 16;
+    float step = (2.0f * MATH_PI) / segments;
+
+    VECTOR prev, first;
+    int i;
+    for (i = 0; i <= segments; ++i) {
+        float a = i * step;
+
+        VECTOR p = {center[0] + radius * cosf(a), center[1] + radius * sinf(a), center[2], 1};
+        if (i == 0) {
+            vector_copy(first, p);
+        } else {
+            drawLine(prev, p);
+        }
+        vector_copy(prev, p);
+    }
+    drawLine(first, prev);
+}
+
+void edgeMe(VECTOR corner[8])
+{
+    int i;
     for (i = 0; i < 12; ++i) {
         int a = edges[i][0];
         int b = edges[i][1];
-        x0 = corner[a][0];
-        y0 = corner[a][2];
-        z0 = corner[a][1];
-        x1 = corner[b][0];
-        y1 = corner[b][2];
-        z1 = corner[b][1];
-
-        // do logic
-        float dx = fabsf(x1 - x0);
-        float dy = fabsf(y1 - y0);
-        float dz = fabsf(z1 - z0);
-        float stepsf = maxf(maxf(dx, dy), dz);
-        int steps = (int)(stepsf + 0.9999f);              // at least 1 if any delta > 0
-        if (steps == 0) continue;
-
-        float sx = (x1 - x0) / steps;
-        float sy = (y1 - y0) / steps;
-        float sz = (z1 - z0) / steps;
-
-        vector_copy(edge, (VECTOR){x0, z0, y0, 1});
-        for (k = 0; k <= steps; ++k) {
-            gfxDrawBillboardQuad(.5, .5, MATH_PI, edge, 4, 0x80000000 | HBOLT_SPRITE_COLOR, 0);
-            vector_add(edge, edge, (VECTOR){sx, sz, sy, 0});
-        }
+        drawLine(corner[a], corner[b]);
     }
 }
 
@@ -126,7 +141,8 @@ void drawTheThingJulie(Moby *moby)
 		transform_vector(worldCorners[i], tempMatrix, corners[i], moby->position);
 		worldCorners[i][2] += tempMatrix.v2[2] * .5;
     }
-    edgeMe(worldCorners);
+    // edgeMe(worldCorners);
+    circleMe(moby->position, tempMatrix, 36);
 }
 
 void postDraw(Moby *moby)
