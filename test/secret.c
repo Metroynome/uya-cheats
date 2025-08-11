@@ -57,15 +57,46 @@ VECTOR corners[8] = {
     { DRAW_SCALE,  DRAW_SCALE,  DRAW_SCALE, 1},
 };
 
+void testEffectQuad(float scale, MATRIX position, int texId, int color, int drawStyle)
+{
+	QuadDef quad;
+	VECTOR t;
+	VECTOR pTL = {1, 0, 1, 1};
+	VECTOR pTR = {-1, 0, 1, 1};
+	VECTOR pBL = {1, 0, -1, 1};
+	VECTOR pBR = {-1 ,0 , -1, 1};
+
+    // get texture info (tex0, tex1, clamp, alpha)
+    gfxSetupEffectTex(&quad, texId, drawStyle, 0x80);
+
+	vector_copy(quad.point[0], pBL);
+	vector_copy(quad.point[1], pBR);
+	vector_copy(quad.point[2], pTL);
+	vector_copy(quad.point[3], pTR);
+	quad.rgba[0] = quad.rgba[1] = quad.rgba[2] = quad.rgba[3] = color;
+	quad.uv[0] = (UV_t){0, 0};
+	quad.uv[1] = (UV_t){0, 1};
+	quad.uv[2] = (UV_t){1, 0};
+	quad.uv[3] = (UV_t){1, 1};
+
+
+	t[0] = t[1] = t[2] = scale;
+	t[3] = 1;
+	matrix_scale(position, position, t);
+
+	// position
+	gfxDrawQuad(quad, position);
+}
+
 void drawLine(VECTOR pointA, VECTOR pointB)
 {
     int i, k;
+    MATRIX rotPos;
     VECTOR edge;
     float x0, x1, y0, y1, z0, z1;
     x0 = pointA[0], y0 = pointA[2], z0 = pointA[1];
     x1 = pointB[0], y1 = pointB[2], z1 = pointB[1];
 
-    // do logic
     float dx = fabsf(x1 - x0);
     float dy = fabsf(y1 - y0);
     float dz = fabsf(z1 - z0);
@@ -77,10 +108,24 @@ void drawLine(VECTOR pointA, VECTOR pointB)
     float sy = (y1 - y0) / steps;
     float sz = (z1 - z0) / steps;
 
+    // do rotation
+    // setup matrix (rot + pos)
+    matrix_unit(rotPos);
+    if (dx >= dy && dx >= dz) {
+        matrix_rotate_x(rotPos, rotPos, 1);
+    } else if (dy >= dx && dy >= dz) {
+        matrix_rotate_y(rotPos, rotPos, 1);
+    } else {
+        matrix_rotate_z(rotPos, rotPos, 1);;
+    }
+
     vector_copy(edge, pointA);
+    memcpy(&rotPos[12], edge, sizeof(VECTOR));
     for (k = 0; k <= steps; ++k) {
-        gfxDrawBillboardQuad(.5, .5, MATH_PI, edge, 24, 0x40000000 | HBOLT_SPRITE_COLOR, 0);
+        // gfxDrawBillboardQuad(.5, .5, MATH_PI, edge, 24, 0x80000000 | HBOLT_SPRITE_COLOR, 0);
+        testEffectQuad(1, rotPos, 24, 0x40ffffff, 0);
         vector_add(edge, edge, (VECTOR){sx, sz, sy, 0});
+        memcpy(&rotPos[12], edge, sizeof(VECTOR));
     }
 }
 
@@ -95,11 +140,23 @@ void faceMe(VECTOR point[8])
         {1, 5, 2, 7}  // Right
     };
     int i;
+    MATRIX rotPos;
+    matrix_unit(rotPos);
     for (i = 2; i < 6; i++) {
         float x = point[faces[i][0]][0] + point[faces[i][1]][0] + point[faces[i][2]][0] + point[faces[i][3]][0];
         float z = point[faces[i][0]][1] + point[faces[i][1]][1] + point[faces[i][2]][1] + point[faces[i][3]][1];
         float y = point[faces[i][0]][2] + point[faces[i][1]][2] + point[faces[i][2]][2] + point[faces[i][3]][2];
-        gfxDrawBillboardQuad(6, 1, MATH_PI, (VECTOR){x * 0.25, z * 0.25, y * 0.25, 1}, 24, 0x40000000 | HBOLT_SPRITE_COLOR, 0);
+        // gfxDrawBillboardQuad(2, 1, MATH_PI, (VECTOR){x * 0.25, z * 0.25, y * 0.25, 1}, 24, 0x40000000 | HBOLT_SPRITE_COLOR, 0);
+        switch (i) {
+            case 0: matrix_rotate_y(rotPos, rotPos, 1); break;
+            case 1: matrix_rotate_y(rotPos, rotPos, -1); break;
+            case 2: matrix_rotate_z(rotPos, rotPos, 1); break;
+            case 3: matrix_rotate_z(rotPos, rotPos, -1); break;
+            case 4: matrix_rotate_x(rotPos, rotPos, -1); break;
+            case 5: matrix_rotate_x(rotPos, rotPos, 1); break;
+        }
+        memcpy(&rotPos[12], (VECTOR){x * 0.25, z * 0.25, y * 0.25, 1}, sizeof(VECTOR));
+        testEffectQuad(1, rotPos, 24, 0x80ffffff, 0);
     }
 }
 
@@ -155,25 +212,11 @@ void drawTheThingJulie(Moby *moby)
     }
     // edgeMe(worldCorners);
     faceMe(worldCorners);
-    VECTOR pos;
-    // float y = moby->position[2];
-    // if (yMove == 0) {
-    //     yMove = y;
-    // } else if (yMove < y + 5) {
-    //     yMove += .5;
-    // } else if (yMove > y + 5){
-    //     yMove = y;
-    // }
-    // vector_copy(pos, moby->position);
-    // vector_add(pos, pos, (VECTOR){0, 0, yMove, 0});
-    // circleMe(tempMatrix, 36);
+    // circleMe(tempMatrix, 180);
 }
 
 void postDraw(Moby *moby)
 {
-    // QuadDef quad;
-    // MATRIX m2;
-    // VECTOR t;
     int opacity = 0x80;
     struct HBoltPVar* pvars = (struct HBoltPVar*)moby->pVar;
     if (!pvars)
@@ -249,6 +292,9 @@ void update(Moby* moby)
     // if (pvars->DestroyAtTime && gameGetTime() > pvars->DestroyAtTime) {
     //     scavHuntHBoltDestroy(moby);
     // }
+
+	((void(*)(Moby *))0x003f7d50)(moby);
+
 }
 
 void spawn(VECTOR position)

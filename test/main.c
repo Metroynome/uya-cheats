@@ -180,23 +180,23 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 	matrix_unit(m2);
 
 	// get texture
-	QuadDef texture;
-	((void(*)(QuadDef *, u64, int, int))0x0045a220)(&texture, texId, 0, 0x80);
+	// QuadDef texture;
+	// ((void(*)(QuadDef *, u64, int, int))0x0045a220)(&texture, texId, 0, 0x80);
 
 	// color of each corner?
-	vector_copy(quad.xzyw[0], pTL);
-	vector_copy(quad.xzyw[1], pTR);
-	vector_copy(quad.xzyw[2], pBL);
-	vector_copy(quad.xzyw[3], pBR);
+	vector_copy(quad.point[0], pTL);
+	vector_copy(quad.point[1], pTR);
+	vector_copy(quad.point[2], pBL);
+	vector_copy(quad.point[3], pBR);
 	quad.rgba[0] = quad.rgba[1] = quad.rgba[2] = quad.rgba[3] = color;
 	quad.uv[0] = (struct UV){0, 0};
 	quad.uv[1] = (struct UV){0, 1};
-	quad.uv[2] = (struct UV){5, 0};
-	quad.uv[3] = (struct UV){5, 1};
-	quad.clamp = texture.clamp;
-	quad.tex0 = texture.tex0;// gfxGetEffectTex(texId);
-	quad.tex1 = texture.tex1; // 0xff9000000260;
-	quad.alpha = texture.alpha; // 0x8000000044;
+	quad.uv[2] = (struct UV){1, 0};
+	quad.uv[3] = (struct UV){1, 1};
+	quad.clamp = 0;
+	quad.tex0 = gfxGetEffectTex(texId);
+	quad.tex1 = 0xff9000000260;
+	quad.alpha = 0x8000000044;
 
 	GameCamera* camera = cameraGetGameCamera(0);
 	if (!camera)
@@ -222,7 +222,7 @@ void drawEffectQuad(VECTOR position, int texId, float scale)
 
 	// draw
 	gfxSetupGifPaging(0);
-	gfxDrawQuad(quad, m2);
+	gfxDrawQuad(quad, &m2);
 	gfxDoGifPaging();
 }
 
@@ -846,8 +846,6 @@ int main(void)
 		*(u32*)0x001A5A70 = 0;
 		// gameGetLocalSettings()->Wide = 1;
 		
-		// patchDisplayPlayerNames();
-
 		// gfxRegistserDrawFunction(&PostDraw, p->PlayerMoby);
 		// drawEffectQuad(p->pMoby->position, EFFECT_ME, 1);
 		// drawSomething(p->pMoby);
