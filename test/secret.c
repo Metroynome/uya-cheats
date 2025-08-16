@@ -88,6 +88,37 @@ void testEffectQuad(float scale, MATRIX position, int texId, int color, int draw
 	gfxDrawQuad(quad, position);
 }
 
+void testDrawStrip(float scale, MATRIX position, int texId, int color, int drawStyle)
+{
+	QuadDef quad;
+	VECTOR t;
+	VECTOR pTL = {1, 0, 1, 1};
+	VECTOR pTR = {-1, 0, 1, 1};
+	VECTOR pBL = {1, 0, -1, 1};
+	VECTOR pBR = {-1 ,0 , -1, 1};
+
+    // get texture info (tex0, tex1, clamp, alpha)
+    gfxSetupEffectTex(&quad, texId, drawStyle, 0x80);
+
+	vector_copy(quad.point[0], pBL);
+	vector_copy(quad.point[1], pBR);
+	vector_copy(quad.point[2], pTL);
+	vector_copy(quad.point[3], pTR);
+	quad.rgba[0] = quad.rgba[1] = quad.rgba[2] = quad.rgba[3] = color;
+	quad.uv[0] = (UV_t){0, 0};
+	quad.uv[1] = (UV_t){0, 1};
+	quad.uv[2] = (UV_t){1, 0};
+	quad.uv[3] = (UV_t){1, 1};
+
+
+	t[0] = t[1] = t[2] = scale;
+	t[3] = 1;
+	matrix_scale(position, position, t);
+
+	// position
+	gfxDrawQuad(quad, position);
+}
+
 void drawLine(VECTOR pointA, VECTOR pointB)
 {
     int i, k;
@@ -111,13 +142,13 @@ void drawLine(VECTOR pointA, VECTOR pointB)
     // do rotation
     // setup matrix (rot + pos)
     matrix_unit(rotPos);
-    if (dx >= dy && dx >= dz) {
-        matrix_rotate_x(rotPos, rotPos, 1);
-    } else if (dy >= dx && dy >= dz) {
-        matrix_rotate_y(rotPos, rotPos, 1);
-    } else {
-        matrix_rotate_z(rotPos, rotPos, 1);;
-    }
+    // if (dx >= dy && dx >= dz) {
+    //     matrix_rotate_x(rotPos, rotPos, 1);
+    // } else if (dy >= dx && dy >= dz) {
+    //     matrix_rotate_y(rotPos, rotPos, 1);
+    // } else {
+    //     matrix_rotate_z(rotPos, rotPos, 1);;
+    // }
 
     vector_copy(edge, pointA);
     memcpy(&rotPos[12], edge, sizeof(VECTOR));
@@ -127,6 +158,52 @@ void drawLine(VECTOR pointA, VECTOR pointB)
         vector_add(edge, edge, (VECTOR){sx, sz, sy, 0});
         memcpy(&rotPos[12], edge, sizeof(VECTOR));
     }
+}
+
+float vector_dot(VECTOR a, VECTOR b){ return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; }
+void vector_cross(VECTOR output, VECTOR a, VECTOR b)
+{
+    output[0] = a[1] * b[2] - a[2] * b[1];
+    output[1] = a[2] * b[0] - a[0] * b[2];
+    output[2] = a[0] * b[1] - a[1] * b[0];
+    output[3] = 0;
+}
+
+void rotate_around_axis(VECTOR output, VECTOR v, VECTOR n_unit, float theta){
+    VECTOR vn, v_par, v_perp, w, sum;
+    float c = cosf(theta), s = sinf(theta);
+    vector_scale(vn, n_unit, vector_dot(n_unit, v) * (1.0f - c));
+    vector_scale(v_par, n_unit, vector_dot(n_unit, v));
+    vector_subtract(v_perp, v, v_par);
+    vector_cross(w, n_unit, v);
+    vector_scale(sum, v_perp, c);
+    vector_add(sum, sum, v_par);
+    vector_add(sum, sum, vn);
+    vector_scale(w, w, s);
+    vector_add(output, sum, w);
+}
+
+void drawSegment(VECTOR pointA, VECTOR pointB, VECTOR circleCenter)
+{
+    MATRIX rotPos;
+    VECTOR centerPoint, direction;
+    // setup matrix (rot + pos)
+    matrix_unit(rotPos);
+    
+    // add points and scale to get center.
+    vector_add(centerPoint, pointA, pointB);
+    vector_scale(centerPoint, centerPoint, .5);
+    
+    // direction from circle center to midpoint (XZ only)
+    vector_subtract(direction, centerPoint, circleCenter);
+    float angle = atan2f(direction[0], direction[2]);
+    // rotate so +Z of the quad faces outward
+    matrix_rotate_y(rotPos, rotPos, angle);
+
+    // copy position vector to matrix
+    memcpy(&rotPos[12], centerPoint, sizeof(VECTOR));
+    // draw
+    testDrawStrip(1, rotPos, FX_TIRE_TRACKS + 1, 0x40ffffff, 0);
 }
 
 void faceMe(VECTOR point[8])
@@ -142,44 +219,46 @@ void faceMe(VECTOR point[8])
     int i;
     MATRIX rotPos;
     matrix_unit(rotPos);
-    for (i = 2; i < 6; i++) {
-        float x = point[faces[i][0]][0] + point[faces[i][1]][0] + point[faces[i][2]][0] + point[faces[i][3]][0];
-        float z = point[faces[i][0]][1] + point[faces[i][1]][1] + point[faces[i][2]][1] + point[faces[i][3]][1];
-        float y = point[faces[i][0]][2] + point[faces[i][1]][2] + point[faces[i][2]][2] + point[faces[i][3]][2];
-        // gfxDrawBillboardQuad(2, 1, MATH_PI, (VECTOR){x * 0.25, z * 0.25, y * 0.25, 1}, 24, 0x40000000 | HBOLT_SPRITE_COLOR, 0);
+    for (i = 0; i < 1; i++) {
+        float x = .25 * (point[faces[i][0]][0] + point[faces[i][1]][0] + point[faces[i][2]][0] + point[faces[i][3]][0]);
+        float z = .25 * (point[faces[i][0]][1] + point[faces[i][1]][1] + point[faces[i][2]][1] + point[faces[i][3]][1]);
+        float y = .25 * (point[faces[i][0]][2] + point[faces[i][1]][2] + point[faces[i][2]][2] + point[faces[i][3]][2]);
+        VECTOR scaled = {x, z, y, 0};
+        memcpy(&rotPos[12], scaled, sizeof(VECTOR));
         switch (i) {
-            case 0: matrix_rotate_y(rotPos, rotPos, 1); break;
-            case 1: matrix_rotate_y(rotPos, rotPos, -1); break;
-            case 2: matrix_rotate_z(rotPos, rotPos, 1); break;
-            case 3: matrix_rotate_z(rotPos, rotPos, -1); break;
-            case 4: matrix_rotate_x(rotPos, rotPos, -1); break;
-            case 5: matrix_rotate_x(rotPos, rotPos, 1); break;
+            case 0: matrix_rotate_y(&rotPos, rotPos, 1); break;
+            case 1: matrix_rotate_y(&rotPos, rotPos, -1); break;
+            case 2: matrix_rotate_z(&rotPos, rotPos, 1); break;
+            case 3: matrix_rotate_z(&rotPos, rotPos, -1); break;
+            case 4: matrix_rotate_x(&rotPos, rotPos, -1); break;
+            case 5: matrix_rotate_x(&rotPos, rotPos, 1); break;
         }
-        memcpy(&rotPos[12], (VECTOR){x * 0.25, z * 0.25, y * 0.25, 1}, sizeof(VECTOR));
-        testEffectQuad(1, rotPos, 24, 0x80ffffff, 0);
+        testEffectQuad(3, rotPos, FX_GADGETRON, 0x80ffffff, 0);
     }
 }
 
-void circleMe(mtx4 matrix, int segments)
-{
-    float radius = matrix.v0[0] * .5;
-    if (segments < 6) segments = 16;
-    float step = (2 * MATH_PI) / segments;
+// void circleMe(mtx4 matrix, int segments)
+// {
+//     VECTOR prev, first, n;
+//     int i;
+//     float radius = matrix.v0[0] * .5;
+//     float step = (2 * MATH_PI) / segments;
 
-    VECTOR prev, first;
-    int i;
-    for (i = 0; i <= segments; ++i) {
-        float a = (i * step) - MATH_PI;
-        VECTOR p = {matrix.v3[0] + radius * cosf(a), matrix.v3[1] + radius * sinf(a), matrix.v3[2], 1};
-        if (i == 0) {
-            vector_copy(first, p);
-        } else {
-            drawLine(prev, p);
-        }
-        vector_copy(prev, p);
-    }
-    drawLine(first, prev);
-}
+//     vector_copy(n, matrix.v3);
+//     // vector_normalize(n, n);
+
+//     for (i = 0; i <= segments; ++i) {
+//         float a = (i * step) - MATH_PI;
+//         VECTOR p = {n[0] + radius * cosf(a), n[1] + radius * sinf(a), n[2] + 2, 0};
+//         if (i == 0) {
+//             vector_copy(first, p);
+//         } else {
+//             drawSegment(prev, p);
+//         }
+//         vector_copy(prev, p);
+//     }
+//     drawSegment(first, prev);
+// }
 
 void edgeMe(VECTOR corner[8])
 {
@@ -202,17 +281,94 @@ void edgeMe(VECTOR corner[8])
     }
 }
 
+void drawCircle(mtx4 position, int segments)
+{
+    VECTOR from, to, centerPoint;
+    VECTOR points[segments];
+    float step = (2 * MATH_PI) / (float)segments;
+    float radius = position.v0[0] * .5;
+    // vector_copy(r, (VECTOR){position.v0[0], position.v1[0], position.v2[0], 0}); // radius vector
+    // vector_normalize(axis, (VECTOR){position.v0[1], position.v1[1], position.v2[1], 0});
+    int i;
+    for (i = 0; i < segments; ++i) {
+        float theta1 = (step * i);
+        float theta2 = step * (i + 1);
+
+        // First point
+        vector_fromyaw(from, theta1 - MATH_PI);
+        vector_scale(from, from, radius);
+        vector_add(from, from, position.v3);
+
+        // Second point
+        vector_fromyaw(to, theta2 - MATH_PI);
+        vector_scale(to, to, radius);
+        vector_add(to, to, position.v3);
+        // drawSegment(from, to, position.v3);
+
+        VECTOR r;
+        vector_add(r, from, to);
+        vector_scale(r, r, .5);
+        vector_copy(points[i], r);
+    }
+}
+
+vec3 lePoints[4];
+vec3 backPoints[4];
+void stripMe(VECTOR point[8])
+{
+    // front
+    memcpy(lePoints[0], &point[0], sizeof(vec3));
+    memcpy(lePoints[1], &point[1], sizeof(vec3));
+    memcpy(lePoints[2], &point[2], sizeof(vec3));
+    memcpy(lePoints[3], &point[3], sizeof(vec3));
+    // back
+    memcpy(backPoints[0], &point[4], sizeof(vec3));
+    memcpy(backPoints[1], &point[5], sizeof(vec3));
+    memcpy(backPoints[2], &point[6], sizeof(vec3));
+    memcpy(backPoints[3], &point[7], sizeof(vec3));
+    float rgbas[4];
+    rgbas[0] = 0x80ffffff;
+    rgbas[1] = 0x80ffffff;
+    rgbas[2] = 0x80ffffff;
+    rgbas[3] = 0x80ffffff;
+    UV_t uvs[4];
+    uvs[0].x = 0;
+    uvs[0].y = 0;
+    uvs[1].x = 0;
+    uvs[1].y = 1;
+    uvs[2].x = 1;
+    uvs[2].y = 0;
+    uvs[3].x = 1;
+    uvs[3].y = 1;
+    gfxDrawStripInit();
+    gfxDrawStrip(0x16, &lePoints, &rgbas, &uvs, 1);
+    gfxDrawStrip(0x17, &backPoints, &rgbas, &uvs, 1);
+}
+
 void drawTheThingJulie(Moby *moby)
 {
+    int isCircle = 0;
 	VECTOR worldCorners[8];
 	int i;
+    // Check if needs to be circle or square
+    float len = vector_length(tempMatrix.v2);
+    if (len > 1.0001) {
+        isCircle = 1;
+    }
 	for (i = 0; i < 8; i++) {
         vector_transform(worldCorners[i], corners[i], (MATRIX*)&tempMatrix);
 		worldCorners[i][2] += tempMatrix.v2[2] * .5;
     }
-    // edgeMe(worldCorners);
-    faceMe(worldCorners);
-    // circleMe(tempMatrix, 180);
+    if (isCircle) {
+        // circleMe(tempMatrix, 100);
+    } else {
+        edgeMe(worldCorners);
+        // faceMe(worldCorners);
+    }
+    // faceMe(worldCorners);
+    // drawCircle(tempMatrix, 100);
+    // circleMe(tempMatrix, 100);
+    stripMe(worldCorners);
 }
 
 void postDraw(Moby *moby)
