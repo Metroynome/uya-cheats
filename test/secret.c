@@ -160,27 +160,32 @@ void drawLine(VECTOR pointA, VECTOR pointB)
     }
 }
 
-float vector_dot(VECTOR a, VECTOR b){ return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; }
-void vector_cross(VECTOR output, VECTOR a, VECTOR b)
+void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
 {
-    output[0] = a[1] * b[2] - a[2] * b[1];
-    output[1] = a[2] * b[0] - a[0] * b[2];
-    output[2] = a[0] * b[1] - a[1] * b[0];
-    output[3] = 0;
-}
+    VECTOR k, v_cross, term1, term2, term3;
+    float cosTheta = cosf(angle);
+    float sinTheta = sinf(angle);
 
-void rotate_around_axis(VECTOR output, VECTOR v, VECTOR n_unit, float theta){
-    VECTOR vn, v_par, v_perp, w, sum;
-    float c = cosf(theta), s = sinf(theta);
-    vector_scale(vn, n_unit, vector_dot(n_unit, v) * (1.0f - c));
-    vector_scale(v_par, n_unit, vector_dot(n_unit, v));
-    vector_subtract(v_perp, v, v_par);
-    vector_cross(w, n_unit, v);
-    vector_scale(sum, v_perp, c);
-    vector_add(sum, sum, v_par);
-    vector_add(sum, sum, vn);
-    vector_scale(w, w, s);
-    vector_add(output, sum, w);
+    // normalize axis into k
+    vector_normalize(k, axis);
+
+    // term1 = v * cos(theta)
+    vector_scale(term1, v, cosTheta);
+
+    // term2 = (k x v) * sin(theta)
+    vector_outerproduct(v_cross, k, v);  // cross product
+    vector_scale(term2, v_cross, sinTheta);
+
+    // term3 = k * (k . v) * (1 - cos(theta))
+    float dot = vector_innerproduct(k, v);
+    vector_scale(term3, k, dot * (1.0f - cosTheta));
+
+    // output = term1 + term2 + term3
+    vector_add(output, term1, term2);
+    vector_add(output, output, term3);
+
+    // preserve homogeneous component
+    output[3] = v[3];
 }
 
 void drawSegment(VECTOR pointA, VECTOR pointB, VECTOR circleCenter)
@@ -203,7 +208,8 @@ void drawSegment(VECTOR pointA, VECTOR pointB, VECTOR circleCenter)
     // copy position vector to matrix
     memcpy(&rotPos[12], centerPoint, sizeof(VECTOR));
     // draw
-    testDrawStrip(1, rotPos, FX_TIRE_TRACKS + 1, 0x40ffffff, 0);
+    // testDrawStrip(1, rotPos, FX_TIRE_TRACKS + 1, 0x40ffffff, 0);
+    testEffectQuad(1, rotPos, FX_TIRE_TRACKS + 1, 0x40ffffff, 0);
 }
 
 void faceMe(VECTOR point[8])
@@ -233,7 +239,7 @@ void faceMe(VECTOR point[8])
             case 4: matrix_rotate_x(&rotPos, rotPos, -1); break;
             case 5: matrix_rotate_x(&rotPos, rotPos, 1); break;
         }
-        testEffectQuad(3, rotPos, FX_GADGETRON, 0x80ffffff, 0);
+        testEffectQuad(1, rotPos, FX_GADGETRON, 0x80ffffff, 0);
     }
 }
 
@@ -303,12 +309,138 @@ void drawCircle(mtx4 position, int segments)
         vector_fromyaw(to, theta2 - MATH_PI);
         vector_scale(to, to, radius);
         vector_add(to, to, position.v3);
-        // drawSegment(from, to, position.v3);
+        drawSegment(from, to, position.v3);
+    }
+}
 
-        VECTOR r;
-        vector_add(r, from, to);
-        vector_scale(r, r, .5);
-        vector_copy(points[i], r);
+void circleMe3(mtx4 matrix, int segments)
+{
+    int color = 0x40ffffff;
+    float scale = 1.5;
+    int texId = FX_TIRE_TRACKS + 1;
+
+    
+    QuadDef quad;
+    VECTOR pos, right, up;
+    float thetaStep = 2.0f * (float)MATH_PI / (float)segments;
+
+    // get texture info (tex0, tex1, clamp, alpha)
+    gfxSetupEffectTex(&quad, texId, 0, 0x80);
+
+	quad.rgba[0] = quad.rgba[1] = quad.rgba[2] = quad.rgba[3] = color;
+	quad.uv[0] = (UV_t){0, 0};
+	quad.uv[1] = (UV_t){0, 1};
+	quad.uv[2] = (UV_t){1, 0};
+	quad.uv[3] = (UV_t){1, 1};
+
+    // get radius (half of x)
+    VECTOR r = {matrix.v0[0] *.5, matrix.v1[0] * .5, matrix.v2[0] * .5, 0}; // x-axis halved.
+    // axis of which to go around (y in this case)
+    VECTOR axis = {matrix.v0[2], matrix.v1[2], matrix.v2[2], 1}; // y-axis
+
+    // normalize axis
+    vector_normalize(axis, axis);
+
+    // get tangent
+    vector_outerproduct(right, axis, r);            // tangent = axis × r   (swap order if winding is flipped)
+    vector_normalize(right, right);
+
+    // Not needed: scale x, y of texture
+    // vector_scale(right, right, 1);
+    // vector_scale(up, axis, 1);
+    
+    int i;
+    for (i = 0; i < segments; ++i) {
+        VECTOR center;
+        vector_add(center, matrix.v3, r);
+        int signs[4][2] = {
+            { 1, -1 },  // corner 0: +right -up
+            { -1, -1 }, // corner 1: -right -up
+            { 1, 1 },   // corner 2: +right +up
+            { -1, 1 }   // corner 3: -right +up
+        };
+
+        // create vector for each point.
+        int j;
+        for (j = 0; j < 4; ++j) {
+            quad.point[j][0] = center[0] + signs[j][0] * right[0] + signs[j][1] * up[0];
+            quad.point[j][1] = center[1] + signs[j][0] * right[1] + signs[j][1] * up[1];
+            quad.point[j][2] = center[2] + signs[j][0] * right[2] + signs[j][1] * up[2];
+            quad.point[j][3] = 1.0f;
+        }
+
+        gfxDrawQuad(quad, NULL);
+
+        // rotate radius and tangent
+        vector_rodrigues(r, r, axis, thetaStep);
+        vector_rodrigues(right, right, axis, thetaStep);
+    }
+}
+
+// uses gfxDrawStrip
+typedef struct Vertex {
+    vec3 pos;
+    UV_t uv;
+    int rgba;
+} Vertex_t;
+void circleMe4(mtx4 matrix, int segments)
+{
+    int MAX_SEGS = 100;
+    int color = 0x40ffffff;
+    float scale = 1;
+    int texId = FX_TIRE_TRACKS + 1;
+
+    int isCircle = 0;
+    Vertex_t top[MAX_SEGS + 2];
+    Vertex_t bottom[MAX_SEGS + 2];
+
+    // check length of Y to see if it's a circle or square.
+    float len = vector_length(matrix.v2);
+    if (len > 1.0001) {
+        isCircle = 1;
+    }
+    int n = isCircle ? (segments > 3 ? (segments < MAX_SEGS ? segments : MAX_SEGS) : 4) : 4;   
+
+    VECTOR r = {matrix.v0[0] * .5, matrix.v1[0] * .5, matrix.v2[0] * .5, 1}; // x-axis halved.
+    VECTOR axis = {matrix.v0[2], matrix.v1[2], matrix.v2[2], 1}; // y-axis
+    float timePhase = gameGetTime() / 120.0f;
+    float sStep = 16.0f / (float)n;
+    float thetaStep = 2.0f * (float)MATH_PI / (float)n;
+    VECTOR pos;
+    vector_copy(pos, matrix.v3);
+    int i;
+    gfxDrawStripInit();
+    for (i = 0; i < n; ++i) {
+        VECTOR pw;
+        vector_add(pw, pos, r);
+
+        float s = sStep * (float)i - 8.0f;
+        memcpy(top[i].pos, &pw, sizeof(vec3));
+        top[i].uv.x = s;
+        top[i].uv.y = timePhase;
+        top[i].rgba = color;
+        bottom[i] = top[i];
+        // get next point
+        vector_rodrigues(r, r, axis, thetaStep);
+    }
+    int k;
+    for (k = 0; k <= n; ++k) {
+        VECTOR p;
+        VECTOR pt;
+        vector_copy(p, (VECTOR){top[k].pos[0], top[k].pos[1], top[k].pos[2], 0});
+        vector_scale(pt, p, 3);
+        vector_add(pt, pt, p);
+        memcpy(top[k].pos, &pt, sizeof(vec3));
+        top[k].rgba = color;
+
+        // bottom strip offset
+        VECTOR pb;
+        vector_scale(pb, p, -1.5);
+        vector_add(pb, pb, p);
+        memcpy(bottom[k].pos, &pt, sizeof(vec3));
+        bottom[k].rgba = color;
+    
+        gfxDrawStrip(FX_TIRE_TRACKS + 1, &top[k].pos, &top[k].rgba, &top[k].uv, 0);
     }
 }
 
@@ -360,15 +492,17 @@ void drawTheThingJulie(Moby *moby)
 		worldCorners[i][2] += tempMatrix.v2[2] * .5;
     }
     if (isCircle) {
+        circleMe3(tempMatrix, 50); // rodrigues rotation
         // circleMe(tempMatrix, 100);
     } else {
-        edgeMe(worldCorners);
+        // edgeMe(worldCorners);
         // faceMe(worldCorners);
     }
     // faceMe(worldCorners);
     // drawCircle(tempMatrix, 100);
     // circleMe(tempMatrix, 100);
-    stripMe(worldCorners);
+    // stripMe(worldCorners);
+    // circleMe4(tempMatrix, 100); // just like DL
 }
 
 void postDraw(Moby *moby)
@@ -439,7 +573,7 @@ void update(Moby* moby)
 
         vector_subtract(t, p->playerPosition, moby->position);
         if (vector_sqrmag(t) < (HBOLT_PICKUP_RADIUS * HBOLT_PICKUP_RADIUS)) {
-            uiShowPopup(0, "HUG YOUR MOTHER!!\x0", 3);
+            uiShowPopup(0, "HUG YOUR MOTHER!!\x0", 0);
             // soundPlayByOClass(2, 0, moby, MOBY_ID_OMNI_SHIELD);
             break;
         }
