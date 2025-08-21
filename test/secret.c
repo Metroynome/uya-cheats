@@ -30,9 +30,12 @@
 #define HBOLT_SPRITE_COLOR          (0x00ffffff)
 #define HBOLT_SCALE                 (0.5)
 
-#define DRAW_SCALE                  (0.5)
+#define DRAW_SCALE (0.5)
+#define MAX_SEGMENTS (64)
+#define MIN_SEGMENTS (8)
 
 int spawned = 0;
+int isCircle = 0;
 
 struct HBoltPVar {
     int DestroyAtTime;
@@ -43,7 +46,7 @@ mtx4 tempMatrix = {
     {15, 0, 0, 0},
     {0, 15, 0, 0},
     {0, 0, 5, 0},
-    {402.324, 366.073, 201.466, 1}
+    {519.58356, 398.7586, 201.38, 1}
 };
 
 VECTOR corners[8] = {
@@ -243,29 +246,6 @@ void faceMe(VECTOR point[8])
     }
 }
 
-// void circleMe(mtx4 matrix, int segments)
-// {
-//     VECTOR prev, first, n;
-//     int i;
-//     float radius = matrix.v0[0] * .5;
-//     float step = (2 * MATH_PI) / segments;
-
-//     vector_copy(n, matrix.v3);
-//     // vector_normalize(n, n);
-
-//     for (i = 0; i <= segments; ++i) {
-//         float a = (i * step) - MATH_PI;
-//         VECTOR p = {n[0] + radius * cosf(a), n[1] + radius * sinf(a), n[2] + 2, 0};
-//         if (i == 0) {
-//             vector_copy(first, p);
-//         } else {
-//             drawSegment(prev, p);
-//         }
-//         vector_copy(prev, p);
-//     }
-//     drawSegment(first, prev);
-// }
-
 void edgeMe(VECTOR corner[8])
 {
     int edges[2][12][2] = {
@@ -287,52 +267,132 @@ void edgeMe(VECTOR corner[8])
     }
 }
 
-void drawCircle(mtx4 position, int segments)
+float scrollQuad = 0;
+void circleMeFinal(mtx4 matrix)
 {
-    VECTOR from, to, centerPoint;
-    VECTOR points[segments];
-    float step = (2 * MATH_PI) / (float)segments;
-    float radius = position.v0[0] * .5;
-    // vector_copy(r, (VECTOR){position.v0[0], position.v1[0], position.v2[0], 0}); // radius vector
-    // vector_normalize(axis, (VECTOR){position.v0[1], position.v1[1], position.v2[1], 0});
-    int i;
-    for (i = 0; i < segments; ++i) {
-        float theta1 = (step * i);
-        float theta2 = step * (i + 1);
+    QuadDef quad[3];
+    // get texture info (tex0, tex1, clamp, alpha)
+    gfxSetupEffectTex(&quad[0], FX_TIRE_TRACKS + 1, 0, 0x80);
+    gfxSetupEffectTex(&quad[2], FX_CIRLCE_NO_FADED_EDGE, 0, 0x80);
 
-        // First point
-        vector_fromyaw(from, theta1 - MATH_PI);
-        vector_scale(from, from, radius);
-        vector_add(from, from, position.v3);
+	quad[0].uv[0] = (UV_t){0, 0};
+	quad[0].uv[1] = (UV_t){0, 1};
+	quad[0].uv[2] = (UV_t){1, 0};
+	quad[0].uv[3] = (UV_t){1, 1};
 
-        // Second point
-        vector_fromyaw(to, theta2 - MATH_PI);
-        vector_scale(to, to, radius);
-        vector_add(to, to, position.v3);
-        drawSegment(from, to, position.v3);
+    // copy quad 0 to others.
+    quad[1] = quad[0];
+    memcpy(quad[2].uv, &quad[0].uv, sizeof(quad[0].uv));
+
+    // set seperate rgbas
+	quad[0].rgba[0] = quad[0].rgba[1] = 0x00fffff;
+    quad[0].rgba[2] = quad[0].rgba[3] = 0x30ffffff;
+	quad[1].rgba[0] = quad[1].rgba[1] = 0x50ffffff;
+    quad[1].rgba[2] = quad[1].rgba[3] = 0x20ffffff;
+    quad[2].rgba[0] = quad[2].rgba[1] = quad[2].rgba[2] = quad[2].rgba[3] = 0x20ffffff;
+
+    VECTOR center, tempCenter, tempRight, tempUp, vRadius, r;
+    vector_copy(center, matrix.v3);
+    VECTOR xAxis = {matrix.v0[0], matrix.v1[0], matrix.v2[0], 0};
+    VECTOR zAxis = {matrix.v0[1], matrix.v1[1], matrix.v2[1], 0};
+    VECTOR yAxis = {matrix.v0[2], matrix.v1[2], matrix.v2[2], 1};
+    vector_scale(vRadius, xAxis, .5);
+    float fRadius = sqrtf(matrix.v0[0] * matrix.v0[0] + matrix.v1[0] * matrix.v1[0] + matrix.v2[0] * matrix.v2[0]) * 0.5f;
+    int signs[4][2] = {{1, -1}, {-1, -1}, {1, 1}, {-1, 1}};
+    vector_normalize(yAxis, yAxis);
+
+    // get tangent
+    vector_outerproduct(tempRight, yAxis, vRadius);
+    vector_normalize(tempRight, tempRight);
+
+    // scale x, y of texture
+    vector_scale(tempRight, tempRight, 1);
+    vector_scale(tempUp, yAxis, 1);
+
+    float segmentSize = 1;
+    int segments = (int)((2.0f * (float)MATH_PI * fRadius) / segmentSize);
+    float thetaStep = 2 * (float)MATH_PI / clamp((float)segments, MIN_SEGMENTS, MAX_SEGMENTS);
+
+    int i, k, j;
+    for (k = 0; k < 2; ++k) {
+        // copy vRadius into r
+        vector_copy(r, vRadius);
+        // draw top and botom quad
+        for (i = 0; i < segments; ++i) {
+            vector_add(tempCenter, center, r);
+            // offset quad[1] by 3
+            tempCenter[2] += k * 2;
+            // create vector for each point.
+            for (j = 0; j < 4; ++j) {
+                quad[k].point[j][0] = tempCenter[0] + signs[j][0] * tempRight[0] + signs[j][1] * tempUp[0];
+                quad[k].point[j][1] = tempCenter[1] + signs[j][0] * tempRight[1] + signs[j][1] * tempUp[1];
+                quad[k].point[j][2] = tempCenter[2] + signs[j][0] * tempRight[2] + signs[j][1] * tempUp[2];
+                quad[k].point[j][3] = 1.0f;
+            }
+
+            quad[k].uv[0].x = quad[k].uv[1].x = 0 - scrollQuad;
+            quad[k].uv[2].x = quad[k].uv[3].x = 1 - scrollQuad;
+            gfxDrawQuad(quad[k], NULL);
+        
+            // rotate radius and tangent
+            vector_rodrigues(r, r, yAxis, thetaStep);
+            vector_rodrigues(tempRight, tempRight, yAxis, thetaStep);
+        }
     }
+    // scroll quad to animate
+   scrollQuad += .007;
+
+   // draw floor
+    // Scale to circle radius
+    fRadius += 1;
+    vector_copy(tempRight, xAxis);
+    vector_copy(tempUp, zAxis);
+    vector_normalize(tempRight, tempRight);
+    vector_normalize(tempUp, tempUp);
+    vector_scale(tempRight, tempRight, fRadius);
+    vector_scale(tempUp, tempUp, fRadius);
+
+    // throw it on the ground
+    float offset = -1;
+    VECTOR yOffset = {yAxis[0] * offset, yAxis[1] * offset, yAxis[2] * offset, 0};
+    vector_add(tempCenter, center, yOffset);
+
+    for (i = 0; i < 4; ++i) {
+        quad[2].point[i][0] = tempCenter[0] + signs[i][0] * tempRight[0] + signs[i][1] * tempUp[0];
+        quad[2].point[i][1] = tempCenter[1] + signs[i][0] * tempRight[1] + signs[i][1] * tempUp[1];
+        quad[2].point[i][2] = tempCenter[2] + signs[i][0] * tempRight[2] + signs[i][1] * tempUp[2];
+        quad[2].point[i][3] = 0;
+    }
+    gfxDrawQuad(quad[2], NULL);
 }
 
-void circleMe3(mtx4 matrix, int segments)
+void circleMe3(mtx4 matrix)
 {
-    int color = 0x40ffffff;
-    float scale = 1.5;
-    int texId = FX_TIRE_TRACKS + 1;
-
-    
-    QuadDef quad;
-    VECTOR pos, right, up;
-    float thetaStep = 2.0f * (float)MATH_PI / (float)segments;
+    QuadDef quad[3];
+    VECTOR right, up;
 
     // get texture info (tex0, tex1, clamp, alpha)
-    gfxSetupEffectTex(&quad, texId, 0, 0x80);
+    gfxSetupEffectTex(&quad[0], FX_TIRE_TRACKS + 1, 0, 0x80);
+    gfxSetupEffectTex(&quad[2], FX_CIRLCE_NO_FADED_EDGE, 0, 0x80);
 
-	quad.rgba[0] = quad.rgba[1] = quad.rgba[2] = quad.rgba[3] = color;
-	quad.uv[0] = (UV_t){0, 0};
-	quad.uv[1] = (UV_t){0, 1};
-	quad.uv[2] = (UV_t){1, 0};
-	quad.uv[3] = (UV_t){1, 1};
+	quad[0].uv[0] = (UV_t){0, 0};
+	quad[0].uv[1] = (UV_t){0, 1};
+	quad[0].uv[2] = (UV_t){1, 0};
+	quad[0].uv[3] = (UV_t){1, 1};
 
+    // copy quad 0 to others.
+    quad[1] = quad[0];
+    memcpy(quad[2].uv, &quad[0].uv, sizeof(quad[0].uv));
+
+    // set seperate rgbas
+	quad[0].rgba[0] = quad[0].rgba[1] = 0x00fffff;
+    quad[0].rgba[2] = quad[0].rgba[3] = 0x30ffffff;
+	quad[1].rgba[0] = quad[1].rgba[1] = 0x50ffffff;
+    quad[1].rgba[2] = quad[1].rgba[3] = 0x20ffffff;
+    quad[2].rgba[0] = quad[2].rgba[1] = quad[2].rgba[2] = quad[2].rgba[3] = 0x20ffffff;
+
+    VECTOR center, tempCenter;
+    vector_copy(center, matrix.v3);
     // get radius (half of x)
     VECTOR r = {matrix.v0[0] *.5, matrix.v1[0] * .5, matrix.v2[0] * .5, 0}; // x-axis halved.
     // axis of which to go around (y in this case)
@@ -345,35 +405,143 @@ void circleMe3(mtx4 matrix, int segments)
     vector_outerproduct(right, axis, r);            // tangent = axis × r   (swap order if winding is flipped)
     vector_normalize(right, right);
 
-    // Not needed: scale x, y of texture
-    // vector_scale(right, right, 1);
-    // vector_scale(up, axis, 1);
-    
-    int i;
-    for (i = 0; i < segments; ++i) {
-        VECTOR center;
-        vector_add(center, matrix.v3, r);
-        int signs[4][2] = {
-            { 1, -1 },  // corner 0: +right -up
-            { -1, -1 }, // corner 1: -right -up
-            { 1, 1 },   // corner 2: +right +up
-            { -1, 1 }   // corner 3: -right +up
-        };
+    // scale x, y of texture
+    vector_scale(right, right, 1);
+    vector_scale(up, axis, 1);
 
-        // create vector for each point.
-        int j;
-        for (j = 0; j < 4; ++j) {
-            quad.point[j][0] = center[0] + signs[j][0] * right[0] + signs[j][1] * up[0];
-            quad.point[j][1] = center[1] + signs[j][0] * right[1] + signs[j][1] * up[1];
-            quad.point[j][2] = center[2] + signs[j][0] * right[2] + signs[j][1] * up[2];
-            quad.point[j][3] = 1.0f;
+    float segmentSize = 1;
+    float radius = sqrtf(
+        matrix.v0[0]*matrix.v0[0] +
+        matrix.v1[0]*matrix.v1[0] +
+        matrix.v2[0]*matrix.v2[0]
+    ) * 0.5f;
+    int segments = (int)((2.0f * (float)MATH_PI * radius) / segmentSize);
+    if (segments < 8) segments = 8;
+    float thetaStep = 2 * (float)MATH_PI / (float)segments;
+
+    int signs[4][2] = {{1, -1}, {-1, -1}, {1, 1}, {-1, 1}};
+    int i, k, j;
+    for (k = 0; k < 2; ++k) {
+        // draw top and botom quad
+        for (i = 0; i < segments; ++i) {
+            vector_add(tempCenter, center, r);
+            // offset quad[1] by 3
+            tempCenter[2] += k * 2;
+            // create vector for each point.
+            for (j = 0; j < 4; ++j) {
+                quad[k].point[j][0] = tempCenter[0] + signs[j][0] * right[0] + signs[j][1] * up[0];
+                quad[k].point[j][1] = tempCenter[1] + signs[j][0] * right[1] + signs[j][1] * up[1];
+                quad[k].point[j][2] = tempCenter[2] + signs[j][0] * right[2] + signs[j][1] * up[2];
+                quad[k].point[j][3] = 1.0f;
+            }
+
+            quad[k].uv[0].x = 0 - scrollQuad;
+            quad[k].uv[1].x = 0 - scrollQuad;
+            quad[k].uv[2].x = 1 - scrollQuad;
+            quad[k].uv[3].x = 1 - scrollQuad;
+
+            gfxDrawQuad(quad[k], NULL);
+        
+            // rotate radius and tangent
+            vector_rodrigues(r, r, axis, thetaStep);
+            vector_rodrigues(right, right, axis, thetaStep);
         }
+    }
+    // scroll quad to animate
+   scrollQuad += .007;
 
-        gfxDrawQuad(quad, NULL);
+   // draw floor
+    // Scale them to circle radius
+    radius += 1;
+    vector_copy(right, (VECTOR){matrix.v0[0], matrix.v1[0], matrix.v2[0], 0});
+    vector_copy(up, (VECTOR){matrix.v0[1], matrix.v1[1], matrix.v2[1], 0});
+    vector_normalize(right, right);
+    vector_normalize(up, up);
+    vector_scale(right, right, radius);
+    vector_scale(up, up, radius);
 
-        // rotate radius and tangent
-        vector_rodrigues(r, r, axis, thetaStep);
-        vector_rodrigues(right, right, axis, thetaStep);
+    vector_copy(center, matrix.v3);
+
+    // Push it down along axis so it’s flush with bottom circle
+    float floorOffset = -1;
+    vector_add(tempCenter, center, (VECTOR){axis[0] * floorOffset, axis[1] * floorOffset, axis[2] * floorOffset, 0});
+
+    for (i = 0; i < 4; ++i) {
+        quad[2].point[i][0] = tempCenter[0] + signs[i][0] * right[0] + signs[i][1] * up[0];
+        quad[2].point[i][1] = tempCenter[1] + signs[i][0] * right[1] + signs[i][1] * up[1];
+        quad[2].point[i][2] = tempCenter[2] + signs[i][0] * right[2] + signs[i][1] * up[2];
+        quad[2].point[i][3] = 0;
+    }
+    gfxDrawQuad(quad[2], NULL);
+
+}
+
+void drawCircleFan(mtx4 matrix, int segments)
+{
+    int texId = 7;
+    float thetaStep = 2 * (float)MATH_PI / (float)segments;
+
+    // Setup a quad/triangle def
+    QuadDef tri;
+    gfxSetupEffectTex(&tri, texId, 0, 0x80);
+
+    // Solid color (semi-transparent white)
+    int i;
+    for (i = 0; i < 4; i++)
+        tri.rgba[i] = 0x30ffffff;
+
+    // Axis and radius
+    VECTOR r = {matrix.v0[0] * 0.5f, matrix.v1[0] * 0.5f, matrix.v2[0] * 0.5f, 0};
+    VECTOR axis = {matrix.v0[2], matrix.v1[2], matrix.v2[2], 1};
+    vector_normalize(axis, axis);
+
+    // Tangent (initial right vector)
+    VECTOR right;
+    vector_outerproduct(right, axis, r);
+    vector_normalize(right, right);
+
+    // Center of the fan (bottom circle’s plane)
+    VECTOR center;
+    vector_copy(center, matrix.v3);
+
+    // Make a copy so we can iterate rim points
+    VECTOR rim;
+    vector_copy(rim, r);
+
+    // First rim point
+    VECTOR prev;
+    vector_add(prev, center, rim);
+    for (i = 1; i <= segments; i++) {
+        VECTOR next;
+        vector_rodrigues(rim, rim, axis, thetaStep);
+        vector_add(next, center, rim);
+
+        // Define triangle: center–prev–next
+        tri.point[0][0] = center[0];
+        tri.point[0][1] = center[1];
+        tri.point[0][2] = center[2];
+        tri.point[0][3] = 1.0f;
+
+        tri.point[1][0] = prev[0];
+        tri.point[1][1] = prev[1];
+        tri.point[1][2] = prev[2];
+        tri.point[1][3] = 1.0f;
+
+        tri.point[2][0] = next[0];
+        tri.point[2][1] = next[1];
+        tri.point[2][2] = next[2];
+        tri.point[2][3] = 1.0f;
+
+        // dummy UVs (whole texture)
+        tri.uv[0] = (UV_t){0.5f, 0.5f};
+        tri.uv[1] = (UV_t){0.0f, 1.0f};
+        tri.uv[2] = (UV_t){1.0f, 1.0f};
+
+        // Draw triangle
+        gfxDrawQuad(tri, NULL);
+
+        // Move forward
+        vector_copy(prev, next);
     }
 }
 
@@ -390,7 +558,6 @@ void circleMe4(mtx4 matrix, int segments)
     float scale = 1;
     int texId = FX_TIRE_TRACKS + 1;
 
-    int isCircle = 0;
     Vertex_t top[MAX_SEGS + 2];
     Vertex_t bottom[MAX_SEGS + 2];
 
@@ -477,9 +644,9 @@ void stripMe(VECTOR point[8])
     gfxDrawStrip(0x17, &backPoints, &rgbas, &uvs, 1);
 }
 
+int debugToPlayer = 0;
 void drawTheThingJulie(Moby *moby)
 {
-    int isCircle = 0;
 	VECTOR worldCorners[8];
 	int i;
     // Check if needs to be circle or square
@@ -487,22 +654,25 @@ void drawTheThingJulie(Moby *moby)
     if (len > 1.0001) {
         isCircle = 1;
     }
+    // for debug, make player be center of cuboid.
+    // if (!debugToPlayer) {
+    //     vector_copy(tempMatrix.v3, playerGetFromSlot(0)->pMoby->position);
+    //     debugToPlayer = 1;
+    // }
+
 	for (i = 0; i < 8; i++) {
         vector_transform(worldCorners[i], corners[i], (MATRIX*)&tempMatrix);
 		worldCorners[i][2] += tempMatrix.v2[2] * .5;
     }
     if (isCircle) {
-        circleMe3(tempMatrix, 50); // rodrigues rotation
-        // circleMe(tempMatrix, 100);
+        // circleMe3(tempMatrix); // rodrigues rotation (DO NOT EDIT, WORKS)
+        // circleMeFull(tempMatrix, NUM_SEGMENTS);
     } else {
         // edgeMe(worldCorners);
         // faceMe(worldCorners);
     }
-    // faceMe(worldCorners);
-    // drawCircle(tempMatrix, 100);
-    // circleMe(tempMatrix, 100);
-    // stripMe(worldCorners);
-    // circleMe4(tempMatrix, 100); // just like DL
+    circleMeFinal(tempMatrix); // rodrigues rotation (DO NOT EDIT, WORKS)
+    // edgeMe(worldCorners);
 }
 
 void postDraw(Moby *moby)
