@@ -32,7 +32,7 @@
 
 #define DRAW_SCALE (0.5)
 #define MAX_SEGMENTS (64)
-#define MIN_SEGMENTS (8)
+#define MIN_SEGMENTS (4)
 
 int spawned = 0;
 int isCircle = 0;
@@ -272,8 +272,9 @@ void circleMeFinal(mtx4 matrix)
 {
     QuadDef quad[3];
     // get texture info (tex0, tex1, clamp, alpha)
+    int flootTex = isCircle ? FX_CIRLCE_NO_FADED_EDGE : FX_SQUARE_FLAT_1;
     gfxSetupEffectTex(&quad[0], FX_TIRE_TRACKS + 1, 0, 0x80);
-    gfxSetupEffectTex(&quad[2], FX_CIRLCE_NO_FADED_EDGE, 0, 0x80);
+    gfxSetupEffectTex(&quad[2], flootTex, 0, 0x80);
 
 	quad[0].uv[0] = (UV_t){0, 0};
 	quad[0].uv[1] = (UV_t){0, 1};
@@ -311,8 +312,9 @@ void circleMeFinal(mtx4 matrix)
 
     float segmentSize = 1;
     int segments = (int)((2.0f * (float)MATH_PI * fRadius) / segmentSize);
-    float thetaStep = 2 * (float)MATH_PI / clamp((float)segments, MIN_SEGMENTS, MAX_SEGMENTS);
-
+    segments = clamp(segments, MIN_SEGMENTS, MAX_SEGMENTS);
+    // if circle, do per segment, if square, do 90 degrees
+    float thetaStep = (isCircle) ? (2 * (float)MATH_PI / (float)segments) : ((float)MATH_PI * 0.5);
     int i, k, j;
     for (k = 0; k < 2; ++k) {
         // copy vRadius into r
@@ -329,7 +331,6 @@ void circleMeFinal(mtx4 matrix)
                 quad[k].point[j][2] = tempCenter[2] + signs[j][0] * tempRight[2] + signs[j][1] * tempUp[2];
                 quad[k].point[j][3] = 1.0f;
             }
-
             quad[k].uv[0].x = quad[k].uv[1].x = 0 - scrollQuad;
             quad[k].uv[2].x = quad[k].uv[3].x = 1 - scrollQuad;
             gfxDrawQuad(quad[k], NULL);
@@ -344,7 +345,9 @@ void circleMeFinal(mtx4 matrix)
 
    // draw floor
     // Scale to circle radius
-    fRadius += 1;
+    if (isCircle)
+        fRadius += 1;
+
     vector_copy(tempRight, xAxis);
     vector_copy(tempUp, zAxis);
     vector_normalize(tempRight, tempRight);
