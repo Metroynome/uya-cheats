@@ -46,7 +46,7 @@ void DebugInGame(Player* player)
     if (playerPadGetButtonDown(player, PAD_LEFT) > 0) {
 		// Swap Teams
 		int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
-		// playerSetTeam(player, SetTeam);
+		playerSetTeam(player, SetTeam);
 	} else if (playerPadGetButtonDown(player, PAD_RIGHT) > 0) {
         // Hurt Player
         // playerDecHealth(player, 1);
