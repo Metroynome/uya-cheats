@@ -43,9 +43,9 @@ struct HBoltPVar {
 };
 
 mtx4 tempMatrix = {
-    {10, 0, 0, 0},
-    {0, 20, 0, 0},
-    {0, 0, 1, 0},
+    {64, 0, 0, 0},
+    {0, 12, 0, 0},
+    {0, 0, 5, 0},
     {519.58356, 398.7586, 201.38, 1}
 };
 
@@ -279,21 +279,30 @@ void circleMeFinal(mtx4 matrix)
     gfxSetupEffectTex(&quad[0], FX_TIRE_TRACKS + 1, 0, 0x80);
     gfxSetupEffectTex(&quad[2], flootTex, 0, 0x80);
 
-    quad[0].uv[0] = (UV_t){0, 0};
-    quad[0].uv[1] = (UV_t){0, 1};
-    quad[0].uv[2] = (UV_t){1, 0};
-    quad[0].uv[3] = (UV_t){1, 1};
+    quad[0].uv[0] = (UV_t){0, 0}; // bottom left (-, -)
+    quad[0].uv[1] = (UV_t){0, 1}; // top left (-, +)
+    quad[0].uv[2] = (UV_t){1, 0}; // bottom right (+, -)
+    quad[0].uv[3] = (UV_t){1, 1}; // top right (+, +)
 
-    // copy quad 0 to others.
-    quad[1] = quad[0];
+    // copy quad 0 to quad 2
     memcpy(quad[2].uv, &quad[0].uv, sizeof(quad[0].uv));
+
+    // modify top and bottom level UVs Y.  (uv is turned 90 degrees)
+    float uvOffset = 0; // .04;
+    quad[0].uv[0].y += uvOffset;
+    quad[0].uv[1].y -= uvOffset;
+    quad[0].uv[2].y += uvOffset;
+    quad[0].uv[3].y -= uvOffset;
+
+    // copy quad 0 uv to quad 1;
+    quad[1] = quad[0];
 
     // set seperate rgbas
     quad[0].rgba[0] = quad[0].rgba[1] = (0x00 << 24) | baseColor;
     quad[0].rgba[2] = quad[0].rgba[3] = (0x30 << 24) | baseColor;
     quad[1].rgba[0] = quad[1].rgba[1] = (0x50 << 24) | baseColor;
     quad[1].rgba[2] = quad[1].rgba[3] = (0x20 << 24) | baseColor;
-    quad[2].rgba[0] = quad[2].rgba[1] = quad[2].rgba[2] = quad[2].rgba[3] = 0x20000000 | baseColor;
+    quad[2].rgba[0] = quad[2].rgba[1] = quad[2].rgba[2] = quad[2].rgba[3] = (0x30 << 24) | baseColor;
 
     VECTOR center, tempCenter, tempRight, tempUp, halfX, halfZ, vRadius;
     vector_copy(center, matrix.v3);
@@ -354,8 +363,8 @@ void circleMeFinal(mtx4 matrix)
             
                 // rotate radius and tangent
                 vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
-                vector_rodrigues(tempRight, tempRight, yAxis, thetaStep);
-            }
+                vector_outerproduct(tempRight, yAxis, vRadius);
+                vector_normalize(tempRight, tempRight);            }
        } else {
             // segment counts
             float sideLenX = vector_length(xAxis);
