@@ -43,8 +43,8 @@ struct HBoltPVar {
 };
 
 mtx4 tempMatrix = {
-    {15, 0, 0, 0},
-    {0, 15, 0, 0},
+    {10, 0, 0, 0},
+    {0, 20, 0, 0},
     {0, 0, 1, 0},
     {519.58356, 398.7586, 201.38, 1}
 };
@@ -270,8 +270,9 @@ void edgeMe(VECTOR corner[8])
 float scrollQuad = 0;
 void circleMeFinal(mtx4 matrix)
 {
-    u32 baseColor = TEAM_COLORS[playerGetFromSlot(0)->mpTeam];
+    u32 baseColor = 0x00ffffff; // TEAM_COLORS[playerGetFromSlot(0)->mpTeam];
 
+    int i, k, j, s;
     QuadDef quad[3];
     // get texture info (tex0, tex1, clamp, alpha)
     int flootTex = isCircle ? FX_CIRLCE_NO_FADED_EDGE : FX_SQUARE_FLAT_1;
@@ -282,9 +283,6 @@ void circleMeFinal(mtx4 matrix)
     quad[0].uv[1] = (UV_t){0, 1};
     quad[0].uv[2] = (UV_t){1, 0};
     quad[0].uv[3] = (UV_t){1, 1};
-    // very short, doesn't work.
-    // for (i = 0; i < 4; ++i) quad[0].uv[i] = (UV_t){ i & 1, i >> 1 };
-
 
     // copy quad 0 to others.
     quad[1] = quad[0];
@@ -297,18 +295,31 @@ void circleMeFinal(mtx4 matrix)
     quad[1].rgba[2] = quad[1].rgba[3] = (0x20 << 24) | baseColor;
     quad[2].rgba[0] = quad[2].rgba[1] = quad[2].rgba[2] = quad[2].rgba[3] = 0x20000000 | baseColor;
 
-    VECTOR center, tempCenter, tempRight, tempUp, vRadius, r;
+    VECTOR center, tempCenter, tempRight, tempUp, halfX, halfZ, vRadius;
     vector_copy(center, matrix.v3);
     VECTOR xAxis = {matrix.v0[0], matrix.v1[0], matrix.v2[0], 0};
     VECTOR zAxis = {matrix.v0[1], matrix.v1[1], matrix.v2[1], 0};
-    VECTOR yAxis = {matrix.v0[2], matrix.v1[2], matrix.v2[2], 1};
-    vector_scale(vRadius, xAxis, .5);
-    float fRadius = vector_length(xAxis) * 0.5f;
+    VECTOR yAxis = {matrix.v0[2], matrix.v1[2], matrix.v2[2], 0};
+    vector_scale(halfX, xAxis, .5);
+    vector_scale(halfZ, zAxis, .5);
+    float fRadius = vector_length(halfX);
     int signs[4][2] = {{1, -1}, {-1, -1}, {1, 1}, {-1, 1}};
     vector_normalize(yAxis, yAxis);
+    VECTOR corners[4];
+    if (isCircle) {
+        vector_copy(corners[0], (VECTOR){center[0] - fRadius, center[1] - fRadius, center[2], 0});
+        vector_copy(corners[1], (VECTOR){center[0] + fRadius, center[1] - fRadius, center[2], 0});
+        vector_copy(corners[2], (VECTOR){center[0] + fRadius, center[1] + fRadius, center[2], 0});
+        vector_copy(corners[3], (VECTOR){center[0] - fRadius, center[1] + fRadius, center[2], 0});
+    } else {
+        vector_copy(corners[0], (VECTOR){center[0]-halfX[0]-halfZ[0], center[1]-halfX[1]-halfZ[1], center[2]-halfX[2]-halfZ[2], 0});
+        vector_copy(corners[1], (VECTOR){center[0]+halfX[0]-halfZ[0], center[1]+halfX[1]-halfZ[1], center[2]+halfX[2]-halfZ[2], 0});
+        vector_copy(corners[2], (VECTOR){center[0]+halfX[0]+halfZ[0], center[1]+halfX[1]+halfZ[1], center[2]+halfX[2]+halfZ[2], 0});
+        vector_copy(corners[3], (VECTOR){center[0]-halfX[0]+halfZ[0], center[1]-halfX[1]+halfZ[1], center[2]-halfX[2]+halfZ[2], 0});
+    }
 
     // get tangent
-    vector_outerproduct(tempRight, yAxis, vRadius);
+    vector_outerproduct(tempRight, yAxis, halfX);
     vector_normalize(tempRight, tempRight);
 
     // scale x, y of texture
@@ -316,24 +327,17 @@ void circleMeFinal(mtx4 matrix)
     vector_scale(tempUp, yAxis, 1);
 
     float segmentSize = 1;
-    int segments = (int)((2.0f * (float)MATH_PI * fRadius) / segmentSize);
-    float thetaStep = 2 * (float)MATH_PI / clamp((float)segments, MIN_SEGMENTS, MAX_SEGMENTS);
+    int segments = (int)((2 * MATH_PI * fRadius) / segmentSize);
+    float thetaStep = 2 * MATH_PI / clamp((float)segments, MIN_SEGMENTS, MAX_SEGMENTS);
     int segPerSide = 0;  // for squares.
-    if (!isCircle) {
-        float sideLen = 2 * fRadius;
-        segPerSide = clamp((int)(sideLen / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
-        segments = 4 * segPerSide;
-        thetaStep = (float)MATH_PI * .5;
-    }
 
-    int i, k, j, s;
     for (k = 0; k < 2; ++k) {
-        // copy vRadius into r
-        vector_copy(r, vRadius);
         if (isCircle) {
             // draw top and botom quad
+            // copy vRadius into r
+            vector_copy(vRadius, halfX);
             for (i = 0; i < segments; ++i) {
-                vector_add(tempCenter, center, r);
+                vector_add(tempCenter, center, vRadius);
                 // offset quad[1] by 3
                 tempCenter[2] += k * 2;
                 // create vector for each point.
@@ -341,7 +345,7 @@ void circleMeFinal(mtx4 matrix)
                     quad[k].point[j][0] = tempCenter[0] + signs[j][0] * tempRight[0] + signs[j][1] * tempUp[0];
                     quad[k].point[j][1] = tempCenter[1] + signs[j][0] * tempRight[1] + signs[j][1] * tempUp[1];
                     quad[k].point[j][2] = tempCenter[2] + signs[j][0] * tempRight[2] + signs[j][1] * tempUp[2];
-                    quad[k].point[j][3] = 1.0f;
+                    quad[k].point[j][3] = 1;
                 }
 
                 quad[k].uv[0].x = quad[k].uv[1].x = 0 - scrollQuad;
@@ -349,46 +353,50 @@ void circleMeFinal(mtx4 matrix)
                 gfxDrawQuad(quad[k], NULL);
             
                 // rotate radius and tangent
-                vector_rodrigues(r, r, yAxis, thetaStep);
+                vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
                 vector_rodrigues(tempRight, tempRight, yAxis, thetaStep);
             }
-        } else {
-            VECTOR corners[4] = {
-                {center[0] - fRadius, center[1] - fRadius, center[2] + k * 2, 1},
-                {center[0] + fRadius, center[1] - fRadius, center[2] + k * 2, 1},
-                {center[0] + fRadius, center[1] + fRadius, center[2] + k * 2, 1},
-                {center[0] - fRadius, center[1] + fRadius, center[2] + k * 2, 1}
-            };
+       } else {
+            // segment counts
+            float sideLenX = vector_length(xAxis);
+            float sideLenZ = vector_length(zAxis);
+            int segX = clamp((int)(sideLenX / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
+            int segZ = clamp((int)(sideLenZ / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
+
             for (i = 0; i < 4; ++i) {
                 VECTOR p0, p1;
                 vector_copy(p0, corners[i]);
-                vector_copy(p1, corners[(i + 1) % 4]);
+                vector_copy(p1, corners[(i + 1) & 3]);
 
-                // get rotation
+                // choose per-edge segments
+                int segCount = (i % 2 == 0) ? segX : segZ;
+
+                // ---- use TANGENT, not normal ----
                 vector_subtract(tempRight, p1, p0);
-                vector_outerproduct(tempRight, yAxis, tempRight);
-                vector_normalize(tempRight, tempRight);
-                // rotate
-                vector_outerproduct(tempRight, tempRight, yAxis);
-                vector_normalize(tempRight, tempRight);
+                vector_normalize(tempRight, tempRight);       // quad local X (along edge)
 
-                for (s = 0; s < segPerSide; ++s) {
-                    float t0 = (float)s / segPerSide;
-                    float t1 = (float)(s+1) / segPerSide;
+                for (s = 0; s < segCount; ++s) {
+                    float t0 = (float)s       / segCount;
+                    float t1 = (float)(s + 1) / segCount;
 
                     VECTOR a, b;
                     vector_lerp(a, p0, p1, t0);
                     vector_lerp(b, p0, p1, t1);
+
+                    // center between segment endpoints
                     vector_add(tempCenter, a, b);
-                    vector_scale(tempCenter, tempCenter, .5);
+                    vector_scale(tempCenter, tempCenter, 0.5f);
+
+                    tempCenter[2] += k * 2;
                     for (j = 0; j < 4; ++j) {
                         quad[k].point[j][0] = tempCenter[0] + signs[j][0] * tempRight[0] + signs[j][1] * tempUp[0];
                         quad[k].point[j][1] = tempCenter[1] + signs[j][0] * tempRight[1] + signs[j][1] * tempUp[1];
                         quad[k].point[j][2] = tempCenter[2] + signs[j][0] * tempRight[2] + signs[j][1] * tempUp[2];
-                        quad[k].point[j][3] = 1.0f;
+                        quad[k].point[j][3] = 1;
                     }
                     quad[k].uv[0].x = quad[k].uv[1].x = 0 - scrollQuad;
                     quad[k].uv[2].x = quad[k].uv[3].x = 1 - scrollQuad;
+
                     gfxDrawQuad(quad[k], NULL);
                 }
             }
@@ -397,27 +405,16 @@ void circleMeFinal(mtx4 matrix)
     // scroll quad to animate
     scrollQuad += .007f;
 
-    // --- Floor ---
-    if (isCircle)
-        fRadius += 1;
-
-    vector_copy(tempRight, xAxis);
-    vector_copy(tempUp, zAxis);
-    vector_normalize(tempRight, tempRight);
-    vector_normalize(tempUp, tempUp);
-    vector_scale(tempRight, tempRight, fRadius);
-    vector_scale(tempUp, tempUp, fRadius);
-
-    float offset = -1;
-    VECTOR yOffset = {yAxis[0] * offset, yAxis[1] * offset, yAxis[2] * offset, 0};
-    vector_add(tempCenter, center, yOffset);
-
+    // draw floor quad
+    VECTOR offset = {0, 0, -1, 0};
     for (i = 0; i < 4; ++i) {
-        quad[2].point[i][0] = tempCenter[0] + signs[i][0] * tempRight[0] + signs[i][1] * tempUp[0];
-        quad[2].point[i][1] = tempCenter[1] + signs[i][0] * tempRight[1] + signs[i][1] * tempUp[1];
-        quad[2].point[i][2] = tempCenter[2] + signs[i][0] * tempRight[2] + signs[i][1] * tempUp[2];
-        quad[2].point[i][3] = 0;
+        vector_add(corners[i], corners[i], offset);
     }
+    vector_copy(quad[2].point[0], corners[1]);
+    vector_copy(quad[2].point[1], corners[0]);
+    vector_copy(quad[2].point[2], corners[2]);
+    vector_copy(quad[2].point[3], corners[3]);
+
     gfxDrawQuad(quad[2], NULL);
 }
 
