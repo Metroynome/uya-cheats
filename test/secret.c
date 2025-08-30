@@ -592,7 +592,7 @@ void stripMe(VECTOR point[8])
     uvs[3].y = 1;
 
     gfxDrawStripInit();
-    gfxDrawStrip(FX_GADGETRON, &lePoints, &rgbas, &uvs, 4);
+    gfxDrawStrip(FX_GADGETRON, lePoints, rgbas, uvs, 1);
     // gfxDrawStrip(0x17, &backPoints, &rgbas, &uvs, 4);
 }
 
@@ -626,173 +626,61 @@ void drawTheThingJulie(Moby *moby)
     // stripMe(worldCorners);
     // circleMeFinal(tempMatrix); // rodrigues rotation (DO NOT EDIT, WORKS)
     // edgeMe(worldCorners);
-    myDrawCallback();
+    myDrawCallback(worldCorners);
 }
 
 
 
 
-#define MAX_VERTICES 22
-#define MAX_SEGMENTS 10
-#define PI_STEP 0.31415927f  // π/10 for 10 segments
-
-// Global arrays (these would be defined elsewhere in the original code)
-vec3 shieldVertices[MAX_VERTICES];
-u32 shieldColors[MAX_VERTICES];
-UV_t shieldUVs[MAX_VERTICES];
-float animationTime = -1;
 // Example 1: Simple Quad using Triangle Strip
 void drawSimpleQuad(void)
 {
-    int segmentCount = 10;
-    int texId = FX_TIRE_TRACKS + 1;
-
-    if (animationTime == -1)
-        animationTime = gameGetTime();
-
-    gfxAddRegister(8, 0);
-    gfxAddRegister(0x14, 0xff9000000260);
+    int texId = FX_GADGETRON;
     u64 tex = gfxGetEffectTex(texId);
-    gfxAddRegister(6, tex);
-    // set blend
-    // gfxAddRegister(0x47, 0x53001);
-    // gfxAddRegister(0x42, 0x8000000048);
-
-    // Initialize triangle strip system
+    // gfxAddRegister(8, 0);
+    // gfxAddRegister(0x14, 0xff9000000260);
+    // gfxAddRegister(6, tex);
     gfxDrawStripInit();
-    
-    // Setup initial vertex data
-    float vOffset = (animationTime - (float)(int)animationTime) + 7.0f;
-    
-    // Initialize base vertices in a circular pattern
-    int i;
-    for (i = 0; i < MAX_VERTICES; i++) {
-        // Alternating pattern for UV coordinates
-        shieldUVs[i].x = (float)((int)(i / 2) & 1);  // 0 or 1
-        
-        if ((i ^ 1) & 1) {
-            // Odd vertices - set to center position and use animated V coordinate
-            // Note: Original code used stack variables that appear to be transform results
-            // This would need the actual transform matrix to work correctly
-            Player *p = playerGetFromSlot(0);
-            Moby *m = &p->pMoby;
-            shieldVertices[i][0] = tempMatrix.v3[0];  // Would be transformed center X
-            shieldVertices[i][1] = tempMatrix.v3[1];  // Would be transformed center Y  
-            shieldVertices[i][2] = tempMatrix.v3[2];  // Would be transformed center Z
-            shieldColors[i] = 0x80ffffff;
-            shieldUVs[i].y = vOffset;
-        }
-    }
-    
-    // Handle segment count
-    float colorStep;
-    int reverseAnimation = 0;
-    if (segmentCount < 0) {
-        colorStep = 0.0f;
-        segmentCount = -segmentCount;
-        reverseAnimation = 1;
-    }
-    else {
-        colorStep = 1.0f / (float)segmentCount;
-    }
-    
-    // Limit segments to reasonable range
-    int actualSegments = (segmentCount < MAX_SEGMENTS) ? segmentCount : MAX_SEGMENTS;
-    
-    // Animation loop - creates expanding shield rings
-    float currentTime = 0.0f;
-    float currentAngle = PI_STEP;  // Start at π/10
-    float currentVOffset = vOffset;
-    
-    int segment;
-    for (segment = 0; segment < actualSegments; segment += 2) {
-        if (actualSegments <= 0) break;
-        
-        // Update animation parameters
-        currentTime += colorStep;
-        currentVOffset -= 1.0f;  // Move texture coordinate
-        
-        // Calculate sin/cos for this rotation
-        float sinAngle = sinf(currentAngle);
-        float cosAngle = cosf(currentAngle);
-        
-        // Get interpolated color for this segment
-        u32 segmentColor = 0x80ffffff;
-        
-        // Generate vertices around the circle
-        // Note: Original code references some circular vertex arrays (gp0xffffa7e0, gp0xffffa810)
-        // These would contain pre-calculated circle points
-        for (i = 0; i < 10; i++) {  // 20 vertices total, processing every other one
-            int vertexIndex = i * 2;
-            
-            // This would use pre-calculated circle coordinates
-            // For now, generating a simple circle
-            float circleX = cosf((float)i * 0.628318f);  // 2π/10
-            float circleZ = sinf((float)i * 0.628318f);
-            
-            // Apply rotation and scaling
-            VECTOR localVertex = {
-                sinAngle * circleX,
-                sinAngle * circleZ,
-                cosAngle,
-                1.0f
-            };
-            
-            // Transform vertex (this would use the matrix from parameters)
-            // For now, just copy the local coordinates
-            shieldVertices[vertexIndex][0] = localVertex[0];
-            shieldVertices[vertexIndex][1] = localVertex[1];
-            shieldVertices[vertexIndex][2] = localVertex[2];
-            
-            // Set color and UV
-            shieldColors[vertexIndex] = segmentColor;
-            shieldUVs[vertexIndex * 2].x = currentVOffset;  // Animated texture scroll
-        }
-        
-        // Draw the strip using your gfxDrawStrip function
-        gfxDrawStrip(texId, (vec3 *)&shieldVertices, (int *)&shieldColors, (struct UV*)&shieldUVs, MAX_VERTICES);
-        
-        // Early exit for single segment
-        if (actualSegments == 1) break;
-        
-        // Setup for next iteration
-        currentAngle += PI_STEP;
-        currentTime += colorStep;
-        currentVOffset -= 1.0f;
-        actualSegments -= 2;
-        
-        // Second pass with slightly different parameters
-        if (actualSegments > 0) {
-            sinAngle = sinf(currentAngle);
-            cosAngle = cosf(currentAngle);
-            segmentColor = 0x80ffffff;
-            
-            // Similar vertex generation loop (code was duplicated in original)
-            for (i = 0; i < 10; i++) {
-                int vertexIndex = i * 2;
-                
-                float circleX = cosf((float)i * 0.628318f);
-                float circleZ = sinf((float)i * 0.628318f);
-                
-                VECTOR localVertex = {
-                    sinAngle * circleX,
-                    sinAngle * circleZ,
-                    cosAngle,
-                    1.0f
-                };
-                
-                shieldVertices[vertexIndex][0] = localVertex[0];
-                shieldVertices[vertexIndex][1] = localVertex[1];
-                shieldVertices[vertexIndex][2] = localVertex[2];
-                
-                shieldColors[vertexIndex] = segmentColor;
-                shieldUVs[vertexIndex * 2].x = currentVOffset;
-            }
-            
-            gfxDrawStrip(texId, (vec3 *)&shieldVertices, (int *)&shieldColors, (struct UV*)&shieldUVs, MAX_VERTICES);
-            currentAngle += PI_STEP;
-        }
-    }
+
+    vec3 lePoints[4];
+    // Colors for each vertex (RGBA format)
+    int leRGBs[4] = {
+        0x800000ff,  // Red
+        0x80ff0000,  // Green
+        0x8000ff00,  // Blue
+        0x80ffffff   // White
+    };
+
+    // UV coordinates for texture mapping
+    struct UV leUVs[4] = {
+        {0.0f, 1.0f},  // Bottom-left of texture
+        {1.0f, 1.0f},  // Bottom-right of texture
+        {0.0f, 0.0f},  // Top-left of texture
+        {1.0f, 0.0f}   // Top-right of texture
+    };
+    // Define 4 vertices for a quad (as triangle strip: v0-v1-v2-v3)
+    // Triangle strip order: (v0,v1,v2) then (v1,v2,v3)
+    VECTOR positions[4] = {
+        {-10.0f, 0.0f, -10.0f, 0},  // Bottom-left
+        { 10.0f, 0.0f, -10.0f, 0},  // Bottom-right  
+        {-10.0f, 0.0f,  10.0f, 0},  // Top-left
+        { 10.0f, 0.0f,  10.0f, 0}   // Top-right
+    };
+    VECTOR p[4];
+    vector_add(p[0], positions[0], tempMatrix.v3);
+    vector_add(p[1], positions[1], tempMatrix.v3);
+    vector_add(p[2], positions[2], tempMatrix.v3);
+    vector_add(p[3], positions[3], tempMatrix.v3);
+
+    memcpy(lePoints[0], &p[0], sizeof(vec3));
+    memcpy(lePoints[1], &p[1], sizeof(vec3));
+    memcpy(lePoints[2], &p[2], sizeof(vec3));
+    memcpy(lePoints[3], &p[3], sizeof(vec3));
+
+        // Draw the strip with 4 vertices
+    // texId: use a sprite texture or FX texture
+    // Last parameter (4) is likely the vertex count
+    gfxDrawStrip(FX_GADGETRON, lePoints, leRGBs, leUVs, 1);
 }
 
 // Example 2: More Complex Triangle Strip (6 vertices)
@@ -808,23 +696,30 @@ void drawTriangleStrip(void)
     
     // 6 vertices forming a more complex shape
     // UYA vector format: {x, z, y}
-    vec3 positions[6] = {
-        {469.0f, 398.0f, 251.0f},  // v0
-        {519.0f, 398.0f, 301.0f},  // v1
-        {519.0f, 398.0f, 201.0f},  // v2
-        {569.0f, 398.0f, 301.0f},  // v3
-        {569.0f, 398.0f, 201.0f},  // v4
-        {619.0f, 398.0f, 250.0f}   // v5
+    VECTOR positions[6] = {
+        { -10.0f, 0.0f,    0.0f, 0 },  // v0
+        { -5.0f, 0.0f,   5.0f, 0 },  // v1
+        { -5.0f, 0.0f,  -5.0f, 0 },  // v2
+        {   0.0f, 0.0f,   5.0f, 0 },  // v3
+        {   0.0f, 0.0f,  -5.0f, 0 },  // v4
+        {  5.0f, 0.0f,    0.0f, 0 }   // v5
     };
+    VECTOR a[6];
+    vec3 b[6];
+    int i;
+    for (i = 0; i < 6; ++i) {
+        vector_add(a[i], positions[i], tempMatrix.v3);
+        memcpy(b[i], &a[i], sizeof(vec3));
+    }
     
     // Gradient colors
     int colors[6] = {
-        0xFF0000FF,  // Red
-        0xFF8000FF,  // Orange
-        0xFFFF00FF,  // Yellow
-        0x00FF00FF,  // Green
-        0x0080FFFF,  // Light Blue
-        0x0000FFFF   // Blue
+        0x80ffffff,  // Red
+        0x80ffffff,  // Orange
+        0x80ffffff,  // Yellow
+        0x80ffffff,  // Green
+        0x80ffffff,  // Light Blue
+        0x80ffffff   // Blue
     };
     
     // UV coordinates
@@ -837,7 +732,7 @@ void drawTriangleStrip(void)
         {0.6f, 0.5f}
     };
     
-    gfxDrawStrip(FX_TIRE_TRACKS + 1, &positions, &colors, &uvs, 1);
+    gfxDrawStrip(FX_BASELIGHT + 1, b, colors, uvs, 1);
 }
 
 // Example 3: Textured Ribbon/Banner
@@ -852,8 +747,8 @@ void drawTexturedRibbon(VECTOR startPos, VECTOR endPos, float width)
     
     // Create perpendicular vector (UYA format: {x, z, y} - assuming z-up)
     perpendicular[0] = -direction[2];  // x = -y (from standard)
-    perpendicular[1] = direction[0];           // z = 0 (ground level)
-    perpendicular[2] = 0;   // y = x (from standard)
+    perpendicular[1] = 0;           // z = 0 (ground level)
+    perpendicular[2] = direction[0];   // y = x (from standard)
     vector_scale(perpendicular, perpendicular, width * 0.5f);
     
     // 4 vertices for ribbon (UYA format: {x, z, y})
@@ -879,10 +774,10 @@ void drawTexturedRibbon(VECTOR startPos, VECTOR endPos, float width)
     
     // Solid color
     int colors[4] = {
-        0x8080FFFF,  // Semi-transparent blue
-        0x8080FFFF,
-        0x8080FFFF,
-        0x8080FFFF
+        0x80FFFFFF,  // Semi-transparent blue
+        0x80FFFFFF,
+        0x80FFFFFF,
+        0x80FFFFFF
     };
     
     // UV mapping for ribbon
@@ -893,23 +788,24 @@ void drawTexturedRibbon(VECTOR startPos, VECTOR endPos, float width)
         {1.0f, 1.0f}   // End right
     };
     
-    gfxDrawStrip(FX_LENS_FLARE_1, positions, colors, uvs, 1);
+    gfxDrawStrip(FX_BASELIGHT, positions, colors, uvs, 1);
 }
 
 // Example usage in a draw callback
-void myDrawCallback(void)
+void myDrawCallback(float points[8])
 {
     // Example 1: Simple colored quad
-    drawSimpleQuad();
+    // drawSimpleQuad();
     
     // Example 2: Triangle strip with gradient
     // drawTriangleStrip();
     
-    // VECTOR start, end;
-    // VECTOR offset = {-100, 0, -50, 0};
-    // vector_add(start, offset, tempMatrix.v3);
-    // vector_copy(end, tempMatrix.v3);
-    // drawTexturedRibbon(start, end, 20.0f);
+    VECTOR start, end;
+    VECTOR offsetEnd = {50.0, 0.0, 50.0, 0.0};
+    VECTOR offsetStart = {0, 0, 5, 0};
+    vector_add(start, offsetStart, tempMatrix.v3);
+    vector_add(end, offsetEnd, start);
+    drawTexturedRibbon(start, end, 10.0f);
 }
 
 

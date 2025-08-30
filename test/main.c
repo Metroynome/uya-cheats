@@ -388,9 +388,6 @@ int main(void)
 	// 	// gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 1;
 	// }
 
-	// hud();
-	// secret();
-
     if (isInGame()) {
 		Player * p = playerGetFromSlot(0);
 		if (!p)
@@ -456,7 +453,9 @@ int main(void)
 		// DebugInMenus();
 	}
 
-	StartBots();
+	// StartBots();
+	// hud();
+	secret();
 
 	uyaPostUpdate();
 
