@@ -30,7 +30,7 @@
 #define HBOLT_SPRITE_COLOR          (0x00ffffff)
 #define HBOLT_SCALE                 (0.5)
 
-#define DRAW_SCALE (0.5)
+#define DRAW_SCALE (1)
 #define MAX_SEGMENTS (64)
 #define MIN_SEGMENTS (4)
 
@@ -45,7 +45,7 @@ struct HBoltPVar {
 mtx4 tempMatrix = {
     {64, 0, 0, 0},
     {0, 100, 0, 0},
-    {0, 0, 1, 0},
+    {0, 0, 2, 0},
     {519.58356, 398.7586, 201.38, 1}
 };
 
@@ -163,34 +163,6 @@ void drawLine(VECTOR pointA, VECTOR pointB)
     }
 }
 
-void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
-{
-    VECTOR k, v_cross, term1, term2, term3;
-    float cosTheta = cosf(angle);
-    float sinTheta = sinf(angle);
-
-    // normalize axis into k
-    vector_normalize(k, axis);
-
-    // term1 = v * cos(theta)
-    vector_scale(term1, v, cosTheta);
-
-    // term2 = (k x v) * sin(theta)
-    vector_outerproduct(v_cross, k, v);  // cross product
-    vector_scale(term2, v_cross, sinTheta);
-
-    // term3 = k * (k . v) * (1 - cos(theta))
-    float dot = vector_innerproduct(k, v);
-    vector_scale(term3, k, dot * (1.0f - cosTheta));
-
-    // output = term1 + term2 + term3
-    vector_add(output, term1, term2);
-    vector_add(output, output, term3);
-
-    // preserve homogeneous component
-    output[3] = v[3];
-}
-
 void drawSegment(VECTOR pointA, VECTOR pointB, VECTOR circleCenter)
 {
     MATRIX rotPos;
@@ -267,6 +239,34 @@ void edgeMe(VECTOR corner[8])
     }
 }
 
+void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
+{
+    VECTOR k, v_cross, term1, term2, term3;
+    float cosTheta = cosf(angle);
+    float sinTheta = sinf(angle);
+
+    // normalize axis into k
+    vector_normalize(k, axis);
+
+    // term1 = v * cos(theta)
+    vector_scale(term1, v, cosTheta);
+
+    // term2 = (k x v) * sin(theta)
+    vector_outerproduct(v_cross, k, v);  // cross product
+    vector_scale(term2, v_cross, sinTheta);
+
+    // term3 = k * (k . v) * (1 - cos(theta))
+    float dot = vector_innerproduct(k, v);
+    vector_scale(term3, k, dot * (1.0f - cosTheta));
+
+    // output = term1 + term2 + term3
+    vector_add(output, term1, term2);
+    vector_add(output, output, term3);
+
+    // preserve homogeneous component
+    output[3] = v[3];
+}
+
 float scrollQuad = 0;
 void circleMeFinal(mtx4 matrix)
 {
@@ -275,9 +275,9 @@ void circleMeFinal(mtx4 matrix)
     int i, k, j, s;
     QuadDef quad[3];
     // get texture info (tex0, tex1, clamp, alpha)
-    int flootTex = isCircle ? FX_CIRLCE_NO_FADED_EDGE : FX_SQUARE_FLAT_1;
+    int floorTex = isCircle ? FX_CIRLCE_NO_FADED_EDGE : FX_SQUARE_FLAT_1;
     gfxSetupEffectTex(&quad[0], FX_TIRE_TRACKS + 1, 0, 0x80);
-    gfxSetupEffectTex(&quad[2], flootTex, 0, 0x80);
+    gfxSetupEffectTex(&quad[2], floorTex, 0, 0x80);
 
     quad[0].uv[0] = (UV_t){0, 0}; // bottom left (-, -)
     quad[0].uv[1] = (UV_t){0, 1}; // top left (-, +)
@@ -288,7 +288,7 @@ void circleMeFinal(mtx4 matrix)
     memcpy(quad[2].uv, &quad[0].uv, sizeof(quad[0].uv));
 
     // modify top and bottom level UVs Y.  (uv is turned 90 degrees)
-    float uvOffset = 0; // .04;
+    float uvOffset = isCircle ? 0 : 0; // .04;
     quad[0].uv[0].y += uvOffset;
     quad[0].uv[1].y -= uvOffset;
     quad[0].uv[2].y += uvOffset;
@@ -360,7 +360,7 @@ void circleMeFinal(mtx4 matrix)
                 quad[k].uv[0].x = quad[k].uv[1].x = 0 - scrollQuad;
                 quad[k].uv[2].x = quad[k].uv[3].x = 1 - scrollQuad;
                 gfxDrawQuad(quad[k], NULL);
-            
+
                 // rotate radius and tangent
                 vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
                 vector_outerproduct(tempRight, yAxis, vRadius);
@@ -624,118 +624,13 @@ void drawTheThingJulie(Moby *moby)
         // faceMe(worldCorners);
     }
     // stripMe(worldCorners);
-    // circleMeFinal(tempMatrix); // rodrigues rotation (DO NOT EDIT, WORKS)
+    circleMeFinal(tempMatrix); // rodrigues rotation (DO NOT EDIT, WORKS)
     // edgeMe(worldCorners);
-    myDrawCallback(worldCorners);
+    // myDrawCallback(worldCorners);
 }
 
 
 
-
-// Example 1: Simple Quad using Triangle Strip
-void drawSimpleQuad(void)
-{
-    int texId = FX_GADGETRON;
-    u64 tex = gfxGetEffectTex(texId);
-    // gfxAddRegister(8, 0);
-    // gfxAddRegister(0x14, 0xff9000000260);
-    // gfxAddRegister(6, tex);
-    gfxDrawStripInit();
-
-    vec3 lePoints[4];
-    // Colors for each vertex (RGBA format)
-    int leRGBs[4] = {
-        0x800000ff,  // Red
-        0x80ff0000,  // Green
-        0x8000ff00,  // Blue
-        0x80ffffff   // White
-    };
-
-    // UV coordinates for texture mapping
-    struct UV leUVs[4] = {
-        {0.0f, 1.0f},  // Bottom-left of texture
-        {1.0f, 1.0f},  // Bottom-right of texture
-        {0.0f, 0.0f},  // Top-left of texture
-        {1.0f, 0.0f}   // Top-right of texture
-    };
-    // Define 4 vertices for a quad (as triangle strip: v0-v1-v2-v3)
-    // Triangle strip order: (v0,v1,v2) then (v1,v2,v3)
-    VECTOR positions[4] = {
-        {-10.0f, 0.0f, -10.0f, 0},  // Bottom-left
-        { 10.0f, 0.0f, -10.0f, 0},  // Bottom-right  
-        {-10.0f, 0.0f,  10.0f, 0},  // Top-left
-        { 10.0f, 0.0f,  10.0f, 0}   // Top-right
-    };
-    VECTOR p[4];
-    vector_add(p[0], positions[0], tempMatrix.v3);
-    vector_add(p[1], positions[1], tempMatrix.v3);
-    vector_add(p[2], positions[2], tempMatrix.v3);
-    vector_add(p[3], positions[3], tempMatrix.v3);
-
-    memcpy(lePoints[0], &p[0], sizeof(vec3));
-    memcpy(lePoints[1], &p[1], sizeof(vec3));
-    memcpy(lePoints[2], &p[2], sizeof(vec3));
-    memcpy(lePoints[3], &p[3], sizeof(vec3));
-
-        // Draw the strip with 4 vertices
-    // texId: use a sprite texture or FX texture
-    // Last parameter (4) is likely the vertex count
-    gfxDrawStrip(FX_GADGETRON, lePoints, leRGBs, leUVs, 1);
-}
-
-// Example 2: More Complex Triangle Strip (6 vertices)
-void drawTriangleStrip(void)
-{
-
-    // gfxAddRegister(8, 0);
-    // gfxAddRegister(0x14, 0xff9000000260);
-    // gfxAddRegister(042, 0x8000000048);
-    // gfxAddRegister(0x47, 0x513f1);
-
-    gfxDrawStripInit();
-    
-    // 6 vertices forming a more complex shape
-    // UYA vector format: {x, z, y}
-    VECTOR positions[6] = {
-        { -10.0f, 0.0f,    0.0f, 0 },  // v0
-        { -5.0f, 0.0f,   5.0f, 0 },  // v1
-        { -5.0f, 0.0f,  -5.0f, 0 },  // v2
-        {   0.0f, 0.0f,   5.0f, 0 },  // v3
-        {   0.0f, 0.0f,  -5.0f, 0 },  // v4
-        {  5.0f, 0.0f,    0.0f, 0 }   // v5
-    };
-    VECTOR a[6];
-    vec3 b[6];
-    int i;
-    for (i = 0; i < 6; ++i) {
-        vector_add(a[i], positions[i], tempMatrix.v3);
-        memcpy(b[i], &a[i], sizeof(vec3));
-    }
-    
-    // Gradient colors
-    int colors[6] = {
-        0x80ffffff,  // Red
-        0x80ffffff,  // Orange
-        0x80ffffff,  // Yellow
-        0x80ffffff,  // Green
-        0x80ffffff,  // Light Blue
-        0x80ffffff   // Blue
-    };
-    
-    // UV coordinates
-    struct UV uvs[6] = {
-        {0.0f, 0.5f},
-        {0.2f, 0.0f},
-        {0.2f, 1.0f},
-        {0.4f, 0.0f},
-        {0.4f, 1.0f},
-        {0.6f, 0.5f}
-    };
-    
-    gfxDrawStrip(FX_BASELIGHT + 1, b, colors, uvs, 1);
-}
-
-// Example 3: Textured Ribbon/Banner
 void drawTexturedRibbon(VECTOR startPos, VECTOR endPos, float width)
 {
     gfxDrawStripInit();
@@ -747,44 +642,45 @@ void drawTexturedRibbon(VECTOR startPos, VECTOR endPos, float width)
     
     // Create perpendicular vector (UYA format: {x, z, y} - assuming z-up)
     perpendicular[0] = -direction[2];  // x = -y (from standard)
-    perpendicular[1] = 0;           // z = 0 (ground level)
+    perpendicular[1] = 0;              // z = 0 (ground level)
     perpendicular[2] = direction[0];   // y = x (from standard)
     vector_scale(perpendicular, perpendicular, width * 0.5f);
     
-    // 4 vertices for ribbon (UYA format: {x, z, y})
+    // 4 vertices for ribbon - CORRECT TRISTRIP ORDER
     vec3 positions[4];
     
-    // Start edge
-    positions[0][0] = startPos[0] - perpendicular[0];  // x
-    positions[0][1] = startPos[1] - perpendicular[1];  // z
-    positions[0][2] = startPos[2] - perpendicular[2];  // y
+    // Bottom-left (start)
+    positions[0][0] = startPos[0] - perpendicular[0];
+    positions[0][1] = startPos[1] - perpendicular[1];
+    positions[0][2] = startPos[2] - perpendicular[2];
     
-    positions[1][0] = startPos[0] + perpendicular[0];  // x
-    positions[1][1] = startPos[1] + perpendicular[1];  // z
-    positions[1][2] = startPos[2] + perpendicular[2];  // y
+    // Bottom-right (start)
+    positions[1][0] = startPos[0] + perpendicular[0];
+    positions[1][1] = startPos[1] + perpendicular[1];
+    positions[1][2] = startPos[2] + perpendicular[2];
     
-    // End edge
-    positions[2][0] = endPos[0] - perpendicular[0];    // x
-    positions[2][1] = endPos[1] - perpendicular[1];    // z
-    positions[2][2] = endPos[2] - perpendicular[2];    // y
+    // Bottom-left (end)
+    positions[2][0] = endPos[0] - perpendicular[0];
+    positions[2][1] = endPos[1] - perpendicular[1];
+    positions[2][2] = endPos[2] - perpendicular[2];
     
-    positions[3][0] = endPos[0] + perpendicular[0];    // x
-    positions[3][1] = endPos[1] + perpendicular[1];    // z
-    positions[3][2] = endPos[2] + perpendicular[2];    // y
+    // Bottom-right (end)
+    positions[3][0] = endPos[0] + perpendicular[0];
+    positions[3][1] = endPos[1] + perpendicular[1];
+    positions[3][2] = endPos[2] + perpendicular[2];
     
-    // Solid color
     int colors[4] = {
-        0x80FFFFFF,  // Semi-transparent blue
+        0x80FFFFFF,
         0x80FFFFFF,
         0x80FFFFFF,
         0x80FFFFFF
     };
     
-    // UV mapping for ribbon
+    // UV mapping - matches vertex order
     struct UV uvs[4] = {
         {0.0f, 0.0f},  // Start left
-        {0.0f, 1.0f},  // Start right
-        {1.0f, 0.0f},  // End left
+        {1.0f, 0.0f},  // Start right
+        {0.0f, 1.0f},  // End left
         {1.0f, 1.0f}   // End right
     };
     
@@ -794,15 +690,9 @@ void drawTexturedRibbon(VECTOR startPos, VECTOR endPos, float width)
 // Example usage in a draw callback
 void myDrawCallback(float points[8])
 {
-    // Example 1: Simple colored quad
-    // drawSimpleQuad();
-    
-    // Example 2: Triangle strip with gradient
-    // drawTriangleStrip();
-    
     VECTOR start, end;
-    VECTOR offsetEnd = {50.0, 0.0, 50.0, 0.0};
-    VECTOR offsetStart = {0, 0, 5, 0};
+    VECTOR offsetEnd = {20, 0, 20, 0};
+    VECTOR offsetStart = {1, 0, 1, 0};
     vector_add(start, offsetStart, tempMatrix.v3);
     vector_add(end, offsetEnd, start);
     drawTexturedRibbon(start, end, 10.0f);

@@ -45,11 +45,12 @@ void DebugInGame(Player* player)
 {
     if (playerPadGetButtonDown(player, PAD_LEFT) > 0) {
 		// Swap Teams
-		int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
-		playerSetTeam(player, SetTeam);
-	} else if (playerPadGetButtonDown(player, PAD_RIGHT) > 0) {
+		// int SetTeam = (player->mpTeam < 7) ? player->mpTeam + 1 : 0;
+		// playerSetTeam(player, SetTeam);
         // Hurt Player
-        // playerDecHealth(player, 1);
+        playerDecHealth(player, 1);
+	} else if (playerPadGetButtonDown(player, PAD_RIGHT) > 0) {
+		playerSetHealth(player, 15);
 	} else if (playerPadGetButtonDown(player, PAD_UP) > 0) {
 		// static int Occlusion = (Occlusion == 2) ? 0 : 2;
 		// gfxOcclusion(Occlusion);
@@ -64,7 +65,7 @@ void DebugInGame(Player* player)
 		// Nothing Yet!
 		int id = 0x6b;
 		void * cuboid = (void*)(*(u32*)GetAddress(&vaSpawnPointsPtr) + id * 0x80 + 0x30);
-		((void (*)(u8, void*))0x0043bd98)(player->unk_24c9, cuboid);
+		((void (*)(u8, void*))0x0043bd98)(player->isLocal2, cuboid);
 	} else if (playerPadGetButtonDown(player, PAD_R3) > 0) {
 		// printf("\npZ: %f", player->cheatZ);
 		// printf("\npY: %f", player->cheatY);
@@ -409,15 +410,23 @@ int main(void)
 
 		// Test_Sprites(SCREEN_WIDTH * 0.3, SCREEN_HEIGHT * .50, 100);
 
+		// print deobfuscated: state, health, weapon[0], ressurrect time
+		// int state = playerGetState(p);
+		// int health = playerGetHealth(p);
+		// int weapon = playerDeobfuscate(&p->quickSelect.Slot[0], 1);
+		// int timer = playerGetRespawnTimer(p);
+		// printf("s: %d, h: %d, w: %d, r: %04d\n", state, health, weapon, timer);
+
+
 		// Only print state if it's diferent from last state.
-		static int nowState = -1;
-		int currentState = playerDeobfuscate(&p->state, 0);
-		if (currentState != nowState) {
-			nowState = currentState;
-			// printf("\n------------------");
-			// printf("\nState: %d", nowState);
-			// printf("\n------------------");
-		}
+		// static int nowState = -1;
+		// int currentState = playerDeobfuscate(&p->state, 0);
+		// if (currentState != nowState) {
+		// 	nowState = currentState;
+		// 	printf("\n------------------");
+		// 	printf("\nState: %d", nowState);
+		// 	printf("\n------------------");
+		// }
 
 		// if (playerPadGetButtonDown(p, PAD_DOWN) > 0) {
 			// printf("\n------------------");

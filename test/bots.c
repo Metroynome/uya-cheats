@@ -340,7 +340,7 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 	// vector_copy(target->fps.cameraDir, &m[4]);
 	// target->fps.vars.cameraY.rotation = sPlayer->Yaw;
 
-	memcpy(target->camera->uMtx, player->camera->uMtx, sizeof(VECTOR) * 3);
+	target->camera->uMtx = player->camera->uMtx;
 	memcpy(target->fps.cameraDir, player->fps.cameraDir, sizeof(VECTOR));
     target->fps.vars.cameraY.rotation = player->fps.vars.cameraY.rotation;
     target->fps.vars.cameraZ.rotation = player->fps.vars.cameraZ.rotation;
