@@ -42,13 +42,24 @@ struct HBoltPVar {
     PartInstance_t* Particles[4];
 };
 
+typedef struct hillPvar {
+    short state;
+    short isCircle;
+    Player *playersIn[GAME_MAX_PLAYERS];
+    Cuboid *currentCuboid;
+    int teamTime[8];
+    u32 color;
+} hillPvar_t;
+
 Cuboid rawr = {
     .matrix = {
         {64, 0, 0, 0},
-        {0, 100, 0, 0},
+        {0, 64, 0, 0},
         {0, 0, 2, 0}
     },
     .pos = {519.58356, 398.7586, 201.38, 1},
+    .imatrix = 0,
+    .rot = {0, 0, 0, 0}
 };
 
 VECTOR corners[8] = {
@@ -241,6 +252,67 @@ void edgeMe(VECTOR corner[8])
     }
 }
 
+int hillCheckIfInside(Cuboid cube, VECTOR playerPos)
+{
+    MATRIX rotMatrix;
+    matrix_unit(rotMatrix);
+    matrix_rotate_x(rotMatrix, rotMatrix, cube.rot[0]);
+    matrix_rotate_y(rotMatrix, rotMatrix, cube.rot[1]);
+    matrix_rotate_z(rotMatrix, rotMatrix, cube.rot[2]);
+    
+    // get imatrix
+    MATRIX invMatrix;
+    matrix_unit(invMatrix);
+    matrix_inverse(invMatrix, rotMatrix);
+    memcpy(&cube.imatrix, invMatrix, sizeof(mtx3));
+
+    VECTOR delta;
+    vector_subtract(delta, playerPos, (VECTOR){cube.pos[0], cube.pos[1], cube.pos[2], 0});
+    vector_apply(delta, delta, invMatrix);
+    VECTOR xAxis = {cube.matrix.v0[0], cube.matrix.v1[0], cube.matrix.v2[0], 0};
+    VECTOR zAxis = {cube.matrix.v0[1], cube.matrix.v1[1], cube.matrix.v2[1], 0};
+    VECTOR yAxis = {cube.matrix.v0[2], cube.matrix.v1[2], cube.matrix.v2[2], 0};
+
+    float halfWidth = vector_length(xAxis) * .5;
+    float halfDepth = vector_length(zAxis) * .5;
+    float yHeight = vector_length(yAxis);
+    
+    if (delta[2] < -1.25 || delta[2] > yHeight + 6) {
+        return 0;
+    }
+    if (isCircle) {
+        float radius = halfWidth;
+        float distSq = delta[0] * delta[0] + delta[1] * delta[1];
+        return (distSq <= radius * radius);
+    } else {
+        int x = delta[0] < -halfWidth || delta[0] > halfWidth;
+        int z = delta[1] < -halfDepth || delta[1] > halfDepth;
+        return (x || z) ? 0 : 1;
+    }
+}
+
+void hillPlayerUpdates(Moby *this)
+{
+    hillPvar_t *pvar = (hillPvar_t*)this->pVar;
+    GameSettings *gs = gameGetSettings();
+    int playerCount = gs->PlayerCount;
+    int i;
+    for (i = 0; i < playerCount; ++i) {
+        Player *player = playerGetFromSlot(i);
+        if (!player || playerIsDead(player))
+            continue;
+
+        int in = hillCheckIfInside(*pvar->currentCuboid, player->playerPosition);
+        printf("\ninside hill: %d", in);
+        if (in) {
+            pvar->color = TEAM_COLORS[player->mpTeam];
+        } else {
+            pvar->color = 0x00ffffff;
+        }
+
+    }
+}
+
 void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
 {
     VECTOR k, v_cross, term1, term2, term3;
@@ -271,9 +343,12 @@ void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
 
 float scrollQuad = 0;
 // vec4 quadPos[2][MAX_SEGMENTS];
-void circleMeFinal(Cuboid cube)
+void circleMeFinal(Moby *this, Cuboid cube)
 {
-    u32 baseColor = 0x00ffffff; // TEAM_COLORS[playerGetFromSlot(0)->mpTeam];
+    hillPvar_t *pvar = (hillPvar_t*)this->pVar;
+    int isCircle = pvar->isCircle;
+    u32 baseColor = pvar->color; // TEAM_COLORS[playerGetFromSlot(0)->mpTeam];
+    
 
     int i, k, j, s;
     QuadDef quad[3];
@@ -307,11 +382,23 @@ void circleMeFinal(Cuboid cube)
     quad[1].rgba[2] = quad[1].rgba[3] = (0x20 << 24) | baseColor;
     quad[2].rgba[0] = quad[2].rgba[1] = quad[2].rgba[2] = quad[2].rgba[3] = (0x30 << 24) | baseColor;
 
+    MATRIX rotMatrix;
+    matrix_unit(rotMatrix);
+    matrix_rotate_x(rotMatrix, rotMatrix, cube.rot[0]);
+    matrix_rotate_y(rotMatrix, rotMatrix, cube.rot[1]);
+    matrix_rotate_z(rotMatrix, rotMatrix, cube.rot[2]);
+
     VECTOR center, tempCenter, tempRight, tempUp, halfX, halfZ, vRadius;
     vector_copy(center, cube.pos);
     VECTOR xAxis = {cube.matrix.v0[0], cube.matrix.v1[0], cube.matrix.v2[0], 0};
     VECTOR zAxis = {cube.matrix.v0[1], cube.matrix.v1[1], cube.matrix.v2[1], 0};
     VECTOR yAxis = {cube.matrix.v0[2], cube.matrix.v1[2], cube.matrix.v2[2], 0};
+    
+    // Apply rotation to axes
+    vector_apply(xAxis, xAxis, rotMatrix);
+    vector_apply(zAxis, zAxis, rotMatrix);
+    vector_apply(yAxis, yAxis, rotMatrix);
+    
     vector_scale(halfX, xAxis, .5);
     vector_scale(halfZ, zAxis, .5);
     float fRadius = vector_length(halfX);
@@ -422,8 +509,10 @@ void circleMeFinal(Cuboid cube)
 
     // draw floor quad
     VECTOR offset = {0, 0, -1, 0};
+    VECTOR rotatedOffset;
+    vector_apply(rotatedOffset, offset, rotMatrix);
     for (i = 0; i < 4; ++i) {
-        vector_add(corners[i], corners[i], offset);
+        vector_add(corners[i], corners[i], rotatedOffset);
     }
     vector_copy(quad[2].point[0], corners[1]);
     vector_copy(quad[2].point[1], corners[0]);
@@ -605,12 +694,13 @@ void stripMe(VECTOR point[8])
 int debugToPlayer = 0;
 void drawTheThingJulie(Moby *moby)
 {
+    hillPvar_t *pvar = (hillPvar_t*)moby->pVar;
 	VECTOR worldCorners[8];
 	int i;
     // Check if needs to be circle or square
     float len = vector_length(rawr.matrix.v2);
     if (len > 1.0001) {
-        isCircle = 1;
+        pvar->isCircle = 1;
     }
     // for debug, make player be center of cuboid.
     // if (!debugToPlayer) {
@@ -622,7 +712,7 @@ void drawTheThingJulie(Moby *moby)
         vector_transform(worldCorners[i], corners[i], (MATRIX*)&rawr.matrix);
 		worldCorners[i][2] += rawr.matrix.v2[2] * .5;
     }
-    if (isCircle) {
+    if (pvar->isCircle) {
         // circleMe3(tempMatrix); // rodrigues rotation (DO NOT EDIT, WORKS)
         // circleMeFull(tempMatrix, NUM_SEGMENTS);
     } else {
@@ -630,92 +720,15 @@ void drawTheThingJulie(Moby *moby)
         // faceMe(worldCorners);
     }
     // stripMe(worldCorners);
-    circleMeFinal(rawr); // rodrigues rotation (DO NOT EDIT, WORKS)
+    circleMeFinal(moby, rawr); // rodrigues rotation (DO NOT EDIT, WORKS)
     // edgeMe(worldCorners);
     // myDrawCallback(worldCorners);
 }
 
-
-
-void drawTexturedRibbon(VECTOR startPos, VECTOR endPos, float width)
-{
-    gfxDrawStripInit();
-    
-    // Calculate perpendicular vector for width
-    VECTOR direction, perpendicular;
-    vector_subtract(direction, endPos, startPos);
-    vector_normalize(direction, direction);
-    
-    // Create perpendicular vector (UYA format: {x, z, y} - assuming z-up)
-    perpendicular[0] = -direction[2];  // x = -y (from standard)
-    perpendicular[1] = 0;              // z = 0 (ground level)
-    perpendicular[2] = direction[0];   // y = x (from standard)
-    vector_scale(perpendicular, perpendicular, width * 0.5f);
-    
-    // 4 vertices for ribbon - CORRECT TRISTRIP ORDER
-    vec3 positions[4];
-    
-    // Bottom-left (start)
-    positions[0][0] = startPos[0] - perpendicular[0];
-    positions[0][1] = startPos[1] - perpendicular[1];
-    positions[0][2] = startPos[2] - perpendicular[2];
-    
-    // Bottom-right (start)
-    positions[1][0] = startPos[0] + perpendicular[0];
-    positions[1][1] = startPos[1] + perpendicular[1];
-    positions[1][2] = startPos[2] + perpendicular[2];
-    
-    // Bottom-left (end)
-    positions[2][0] = endPos[0] - perpendicular[0];
-    positions[2][1] = endPos[1] - perpendicular[1];
-    positions[2][2] = endPos[2] - perpendicular[2];
-    
-    // Bottom-right (end)
-    positions[3][0] = endPos[0] + perpendicular[0];
-    positions[3][1] = endPos[1] + perpendicular[1];
-    positions[3][2] = endPos[2] + perpendicular[2];
-    
-    int colors[4] = {
-        0x80FFFFFF,
-        0x80FFFFFF,
-        0x80FFFFFF,
-        0x80FFFFFF
-    };
-    
-    // UV mapping - matches vertex order
-    struct UV uvs[4] = {
-        {0.0f, 0.0f},  // Start left
-        {1.0f, 0.0f},  // Start right
-        {0.0f, 1.0f},  // End left
-        {1.0f, 1.0f}   // End right
-    };
-    
-    gfxDrawStrip(FX_BASELIGHT, positions, colors, uvs, 1);
-}
-
-// Example usage in a draw callback
-void myDrawCallback(float points[8])
-{
-    VECTOR start, end;
-    VECTOR offsetEnd = {20, 0, 20, 0};
-    VECTOR offsetStart = {1, 0, 1, 0};
-    vector_add(start, offsetStart, rawr.pos);
-    vector_add(end, offsetEnd, start);
-    drawTexturedRibbon(start, end, 10.0f);
-}
-
-
-
-
-
-
-
-
-
 void postDraw(Moby *moby)
 {
     int opacity = 0x80;
-    struct HBoltPVar* pvars = (struct HBoltPVar*)moby->pVar;
+    hillPvar_t* pvars = (hillPvar_t*)moby->pVar;
     if (!pvars)
         return;
 
@@ -737,54 +750,25 @@ void postDraw(Moby *moby)
     color = opacity | (color & HBOLT_SPRITE_COLOR);
     moby->primaryColor = color;
 
-    // u32 hook = (u32)GetAddress(&vaReplace_GetEffectTexJAL) + 0x20;
-    // HOOK_JAL(hook, GetAddress(&vaGetFrameTex));
-    // gfxDrawBillboardQuad(0.55, 0, MATH_PI, moby->position, 1, opacity, 0);
-    // gfxDrawBillboardQuad(0.5, 0.01, MATH_PI, moby->position, 1, color, 0);
     drawTheThingJulie(moby);
-    // HOOK_JAL(hook, GetAddress(&vaGetEffectTex));
 }
 
 void update(Moby* moby)
 {
-    const float rotSpeeds[] = { 0.05, 0.02, -0.03, -0.1 };
-    const int opacities[] = { 64, 32, 44, 51 };
     VECTOR t;
     int i;
-    struct HBoltPVar* pvars = (struct HBoltPVar*)moby->pVar;
+    hillPvar_t *pvars = (hillPvar_t*)moby->pVar;
     if (!pvars)
         return;
 
     gfxRegistserDrawFunction(&postDraw, moby);
 
-    // handle particles
-    // u32 color = colorLerp(0, HBOLT_PARTICLE_COLOR, 1.0 / 4);
-    // color |= 0x80000000;
-    // for (i = 0; i < 4; ++i) {
-    //     PartInstance_t * particle = pvars->Particles[i];
-    //     if (!particle) {
-    //         particle = gfxSpawnParticle(moby->position, HBOLT_MOBY_OCLASS, color, 100, i);
-    //     }
+    // force set cuboid for now
+    pvars->currentCuboid = &rawr;
 
-    //     // update
-    //     if (particle) {
-    //         particle->rot = (int)((gameGetTime() + (i * 100)) / (TIME_SECOND * rotSpeeds[i])) & 0xFF;
-    //     }
-    // }
+    // handle players
+    hillPlayerUpdates(moby);
 
-    // handle pickup
-    for (i = 0; i < GAME_MAX_LOCALS; ++i) {
-        Player* p = playerGetFromSlot(i);
-        if (!p || playerIsDead(p))
-            continue;
-
-        vector_subtract(t, p->playerPosition, moby->position);
-        if (vector_sqrmag(t) < (HBOLT_PICKUP_RADIUS * HBOLT_PICKUP_RADIUS)) {
-            uiShowPopup(0, "HUG YOUR MOTHER!!\x0", 0);
-            // soundPlayByOClass(2, 0, moby, MOBY_ID_OMNI_SHIELD);
-            break;
-        }
-    }
     // handle auto destruct
     // if (pvars->DestroyAtTime && gameGetTime() > pvars->DestroyAtTime) {
     //     scavHuntHBoltDestroy(moby);
@@ -793,7 +777,7 @@ void update(Moby* moby)
 
 void spawn(VECTOR position)
 {
-    Moby* moby = mobySpawn(HBOLT_MOBY_OCLASS, sizeof(struct HBoltPVar));
+    Moby* moby = mobySpawn(HBOLT_MOBY_OCLASS, sizeof(hillPvar_t));
     if (!moby) return;
 
     moby->pUpdate = &update;
@@ -804,9 +788,9 @@ void spawn(VECTOR position)
     moby->drawDist = 0x00;
 
     // update pvars
-    struct HBoltPVar* pvars = (struct HBoltPVar*)moby->pVar;
+    hillPvar_t* pvars = (hillPvar_t*)moby->pVar;
     // pvars->DestroyAtTime = gameGetTime() + (TIME_SECOND * 30);
-    memset(pvars->Particles, 0, sizeof(pvars->Particles));
+    memset(pvars, 0, sizeof(pvars));
 
     // mobySetState(moby, 0, -1);
     // scavHuntResetBoltSpawnCooldown();
