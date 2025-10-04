@@ -42,11 +42,13 @@ struct HBoltPVar {
     PartInstance_t* Particles[4];
 };
 
-mtx4 tempMatrix = {
-    {64, 0, 0, 0},
-    {0, 100, 0, 0},
-    {0, 0, 2, 0},
-    {519.58356, 398.7586, 201.38, 1}
+Cuboid rawr = {
+    .matrix = {
+        {64, 0, 0, 0},
+        {0, 100, 0, 0},
+        {0, 0, 2, 0}
+    },
+    .pos = {519.58356, 398.7586, 201.38, 1},
 };
 
 VECTOR corners[8] = {
@@ -268,7 +270,8 @@ void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
 }
 
 float scrollQuad = 0;
-void circleMeFinal(mtx4 matrix)
+// vec4 quadPos[2][MAX_SEGMENTS];
+void circleMeFinal(Cuboid cube)
 {
     u32 baseColor = 0x00ffffff; // TEAM_COLORS[playerGetFromSlot(0)->mpTeam];
 
@@ -305,10 +308,10 @@ void circleMeFinal(mtx4 matrix)
     quad[2].rgba[0] = quad[2].rgba[1] = quad[2].rgba[2] = quad[2].rgba[3] = (0x30 << 24) | baseColor;
 
     VECTOR center, tempCenter, tempRight, tempUp, halfX, halfZ, vRadius;
-    vector_copy(center, matrix.v3);
-    VECTOR xAxis = {matrix.v0[0], matrix.v1[0], matrix.v2[0], 0};
-    VECTOR zAxis = {matrix.v0[1], matrix.v1[1], matrix.v2[1], 0};
-    VECTOR yAxis = {matrix.v0[2], matrix.v1[2], matrix.v2[2], 0};
+    vector_copy(center, cube.pos);
+    VECTOR xAxis = {cube.matrix.v0[0], cube.matrix.v1[0], cube.matrix.v2[0], 0};
+    VECTOR zAxis = {cube.matrix.v0[1], cube.matrix.v1[1], cube.matrix.v2[1], 0};
+    VECTOR yAxis = {cube.matrix.v0[2], cube.matrix.v1[2], cube.matrix.v2[2], 0};
     vector_scale(halfX, xAxis, .5);
     vector_scale(halfZ, zAxis, .5);
     float fRadius = vector_length(halfX);
@@ -359,6 +362,10 @@ void circleMeFinal(mtx4 matrix)
 
                 quad[k].uv[0].x = quad[k].uv[1].x = 0 - scrollQuad;
                 quad[k].uv[2].x = quad[k].uv[3].x = 1 - scrollQuad;
+                
+                // maybe for later:  put points in array.
+                // quadPos[k][i] = quad[k].point;
+                
                 gfxDrawQuad(quad[k], NULL);
 
                 // rotate radius and tangent
@@ -380,7 +387,6 @@ void circleMeFinal(mtx4 matrix)
                 // choose per-edge segments
                 int segCount = (i % 2 == 0) ? segX : segZ;
 
-                // ---- use TANGENT, not normal ----
                 vector_subtract(tempRight, p1, p0);
                 vector_normalize(tempRight, tempRight);       // quad local X (along edge)
 
@@ -602,7 +608,7 @@ void drawTheThingJulie(Moby *moby)
 	VECTOR worldCorners[8];
 	int i;
     // Check if needs to be circle or square
-    float len = vector_length(tempMatrix.v2);
+    float len = vector_length(rawr.matrix.v2);
     if (len > 1.0001) {
         isCircle = 1;
     }
@@ -613,8 +619,8 @@ void drawTheThingJulie(Moby *moby)
     // }
 
 	for (i = 0; i < 8; i++) {
-        vector_transform(worldCorners[i], corners[i], (MATRIX*)&tempMatrix);
-		worldCorners[i][2] += tempMatrix.v2[2] * .5;
+        vector_transform(worldCorners[i], corners[i], (MATRIX*)&rawr.matrix);
+		worldCorners[i][2] += rawr.matrix.v2[2] * .5;
     }
     if (isCircle) {
         // circleMe3(tempMatrix); // rodrigues rotation (DO NOT EDIT, WORKS)
@@ -624,7 +630,7 @@ void drawTheThingJulie(Moby *moby)
         // faceMe(worldCorners);
     }
     // stripMe(worldCorners);
-    circleMeFinal(tempMatrix); // rodrigues rotation (DO NOT EDIT, WORKS)
+    circleMeFinal(rawr); // rodrigues rotation (DO NOT EDIT, WORKS)
     // edgeMe(worldCorners);
     // myDrawCallback(worldCorners);
 }
@@ -693,7 +699,7 @@ void myDrawCallback(float points[8])
     VECTOR start, end;
     VECTOR offsetEnd = {20, 0, 20, 0};
     VECTOR offsetStart = {1, 0, 1, 0};
-    vector_add(start, offsetStart, tempMatrix.v3);
+    vector_add(start, offsetStart, rawr.pos);
     vector_add(end, offsetEnd, start);
     drawTexturedRibbon(start, end, 10.0f);
 }
@@ -810,7 +816,7 @@ void spawn(VECTOR position)
 void runUltimateSecret(void)
 {
     if (!spawned) {
-        spawn(tempMatrix.v3);
+        spawn(rawr.pos);
         spawned = 1;
     }
 }
