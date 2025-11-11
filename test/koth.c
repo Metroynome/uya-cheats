@@ -48,7 +48,7 @@ Cuboid rawr = {
     .rot = {0, 0, 0, 0}
 };
 
-int hillCheckIfInside(Cuboid cube, VECTOR playerPos)
+int hillCheckIfInside(Cuboid cube, VECTOR playerPos, char isCircle)
 {
     MATRIX rotMatrix;
     matrix_unit(rotMatrix);
@@ -98,7 +98,7 @@ void hillPlayerUpdates(Moby *this)
         if (!player || playerIsDead(player))
             continue;
 
-        int in = hillCheckIfInside(*pvar->currentCuboid, player->playerPosition);
+        int in = hillCheckIfInside(*pvar->currentCuboid, player->playerPosition, pvar->isCircle);
         printf("\ninside hill: %d", in);
         if (in) {
             pvar->color = TEAM_COLORS[player->mpTeam];
