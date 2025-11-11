@@ -1108,16 +1108,10 @@ void drawTheThingJulie(Moby *moby)
     }
     // stripMe(worldCorners);
     // circleMeFinal(moby, rawr); // rodrigues rotation (DO NOT EDIT, WORKS)
-    circleMeFinal_StripMe(moby, rawr); // rodrigues rotation (DO NOT EDIT, WORKS)
+    // circleMeFinal_StripMe(moby, rawr); // rodrigues rotation (DO NOT EDIT, WORKS)
     // edgeMe(worldCorners);
     // myDrawCallback(worldCorners);
 }
-
-
-
-
-
-
 
 // void drawTexturedRibbon(VECTOR startPos)
 // {
