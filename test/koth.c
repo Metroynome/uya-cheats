@@ -101,7 +101,7 @@ void hillPlayerUpdates(Moby *this)
         int in = hillCheckIfInside(*pvar->currentCuboid, player->playerPosition);
         printf("\ninside hill: %d", in);
         if (in) {
-            pvar->color = 0x00ffffff; // TEAM_COLORS[player->mpTeam];
+            pvar->color = TEAM_COLORS[player->mpTeam];
         } else {
             pvar->color = 0x00ffffff;
         }
