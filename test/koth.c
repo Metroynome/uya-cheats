@@ -451,7 +451,7 @@ void hill_update(Moby* moby)
 
 void spawnHillMoby(VECTOR position)
 {
-    Moby* moby = mobySpawn(HBOLT_MOBY_OCLASS, sizeof(hillPvar_t));
+    Moby* moby = mobySpawn(0x1c0d, sizeof(hillPvar_t));
     if (!moby) return;
 
     moby->pUpdate = &hill_update;
