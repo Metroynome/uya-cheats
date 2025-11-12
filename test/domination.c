@@ -29,6 +29,7 @@ typedef struct DominationBase {
 	int state;
     Moby *node;
 	Moby *boltCrank;
+    Player *players[8];
 	int color;
     float scrolling;
 } DominationBase_t;
@@ -184,7 +185,7 @@ void drawBase(Moby *base)
 		}
     }
     // scroll quad to animate
-    scrollQuad += .007f;
+    pvar->scrolling += .007f;
 
     // draw floor quad
     VECTOR offset = {0, 0, -1, 0};
@@ -222,36 +223,105 @@ void basePlayerUpdate(Moby *this)
 {
     DominationBase_t *pvar = (DominationBase_t*)this->pVar;
     GameSettings *gs = gameGetSettings();
-    int playerCount = gs->PlayerCount;
-    int i;
-    for (i = 0; i < playerCount; ++i) {
+    int i, j;
+    
+    for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
         Player *player = playerGetFromSlot(i);
         if (!player || playerIsDead(player))
             continue;
 
         int in = baseCheckIfInside(this->position, player->playerPosition);
         if (in) {
-            pvar->color = TEAM_COLORS[player->mpTeam];
+            // Check if player is already in the array
+            int alreadyIn = 0;
+            for (j = 0; j < 8; ++j) {
+                if (pvar->players[j] == player) {
+                    alreadyIn = 1;
+                    break;
+                }
+            }
+            
+            // Add player if not already in array
+            if (!alreadyIn) {
+                for (j = 0; j < 8; ++j) {
+                    if (!pvar->players[j]) {
+                        pvar->players[j] = player;
+                        break;
+                    }
+                }
+            }
         } else {
-            pvar->color = 0x00ffffff;
+            // Remove player from array if they left the radius
+            for (j = 0; j < 8; ++j) {
+                if (pvar->players[j] == player) {
+                    pvar->players[j] = NULL;
+                    break;
+                }
+            }
         }
-
+    }
+    
+    // Set color based on first player in array
+    pvar->color = 0x00ffffff; // Default white
+    for (j = 0; j < 8; ++j) {
+        if (pvar->players[j]) {
+            pvar->color = TEAM_COLORS[pvar->players[j]->mpTeam];
+            break;
+        }
     }
 }
 
-void updateBase(Moby* moby)
+void baseHandleCapture(Moby* this)
 {
-    DominationBase_t *pvars = (DominationBase_t*)moby->pVar;
+    int capturingTeam = -1;
+    int isContested = 0;
+    int capturingCount = 0;
+    int defendingCount = 0;
+    Player *capturingPlayer[8] = {0};  // Initialize to NULL
+    Player *defendingPlayer[8] = {0};  // Initialize to NULL
+    int i;
+    DominationBase_t *pvars = (DominationBase_t*)this->pVar;
+
+    // Get first capturing player and team
+    for (i = 0; i < 8; ++i) {
+        if (pvars->players[i] && !playerIsDead(pvars->players[i])) {
+            if (capturingTeam == -1) {
+                // First player found - they become the capturing team
+                capturingTeam = pvars->players[i]->mpTeam;
+                capturingPlayer[capturingCount++] = pvars->players[i];
+            } else if (pvars->players[i]->mpTeam == capturingTeam) {
+                // Same team as capturing team
+                capturingPlayer[capturingCount++] = pvars->players[i];
+            } else {
+                // Different team - it's contested!
+                defendingPlayer[defendingCount++] = pvars->players[i];
+                isContested = 1;
+            }
+        }
+    }
+
+    if (!isContested && capturingTeam != -1) {
+        pvars->boltCrank->state = 3;
+    }
+}
+
+void updateBase(Moby* this)
+{
+    DominationBase_t *pvars = (DominationBase_t*)this->pVar;
     if (!pvars) return;
 
     // turn collision off and move bolt crank to y: 0
 	pvars->boltCrank->collData = 0;
 	pvars->boltCrank->position[2] = 0;
 
-    gfxRegistserDrawFunction(&drawBase, (Moby*)moby);
+    // draw base
+    gfxRegistserDrawFunction(&drawBase, (Moby*)this);
 
-    // handle players
-   basePlayerUpdate(moby);
+    // handle players and base color
+    basePlayerUpdate(this);
+
+    // handle capture
+    // baseHandleCapture(this);
 }
 
 Moby *spawnBaseMobies(Moby *node, Moby *boltCrank)
