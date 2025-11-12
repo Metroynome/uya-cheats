@@ -27,6 +27,7 @@
 
 typedef struct DominationBase {
 	int state;
+    int owner;
     Moby *node;
 	Moby *boltCrank;
     Player *players[8];
@@ -262,13 +263,18 @@ void basePlayerUpdate(Moby *this)
     }
     
     // Set color based on first player in array
-    pvar->color = 0x00ffffff; // Default white
-    for (j = 0; j < 8; ++j) {
-        if (pvar->players[j]) {
-            pvar->color = TEAM_COLORS[pvar->players[j]->mpTeam];
-            break;
-        }
-    }
+    // pvar->color = 0x00ffffff; // Default white
+    // for (j = 0; j < 8; ++j) {
+    //     if (pvar->players[j]) {
+    //         pvar->color = TEAM_COLORS[pvar->players[j]->mpTeam];
+    //         break;
+    //     }
+    // }
+
+    // set color based on base owner team
+    pvar->color = 0x00ffffff;
+    if (pvar->owner > -1)
+        pvar->color = TEAM_COLORS[pvar->owner];
 }
 
 void baseHandleCapture(Moby* this)
@@ -282,26 +288,36 @@ void baseHandleCapture(Moby* this)
     int i;
     DominationBase_t *pvars = (DominationBase_t*)this->pVar;
 
+    // Safety check
+    if (!pvars || !pvars->boltCrank)
+        return;
+
     // Get first capturing player and team
     for (i = 0; i < 8; ++i) {
         if (pvars->players[i] && !playerIsDead(pvars->players[i])) {
             if (capturingTeam == -1) {
                 // First player found - they become the capturing team
                 capturingTeam = pvars->players[i]->mpTeam;
-                capturingPlayer[capturingCount++] = pvars->players[i];
+                capturingPlayer[capturingCount] = pvars->players[i];
+                ++capturingCount;
             } else if (pvars->players[i]->mpTeam == capturingTeam) {
                 // Same team as capturing team
-                capturingPlayer[capturingCount++] = pvars->players[i];
+                capturingPlayer[capturingCount] = pvars->players[i];
+                ++capturingCount;
             } else {
                 // Different team - it's contested!
-                defendingPlayer[defendingCount++] = pvars->players[i];
+                defendingPlayer[defendingCount] = pvars->players[i];
+                ++defendingCount;
                 isContested = 1;
             }
         }
     }
 
     if (!isContested && capturingTeam != -1) {
-        pvars->boltCrank->state = 3;
+        pvars->owner = capturingTeam;
+        *(u32*)(pvars->boltCrank->pVar) = capturingTeam;
+    } else {
+        pvars->state = 5;
     }
 }
 
@@ -321,7 +337,7 @@ void updateBase(Moby* this)
     basePlayerUpdate(this);
 
     // handle capture
-    // baseHandleCapture(this);
+    baseHandleCapture(this);
 }
 
 Moby *spawnBaseMobies(Moby *node, Moby *boltCrank)
@@ -342,6 +358,7 @@ Moby *spawnBaseMobies(Moby *node, Moby *boltCrank)
     base->node = (Moby*)node;
     base->boltCrank = (Moby*)boltCrank;
     base->color = 0x00ffffff;
+    base->owner = -1;
 
     return moby;
 }
