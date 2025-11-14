@@ -23,16 +23,94 @@
 
 #define MAX_SEGMENTS (64)
 #define MIN_SEGMENTS (8)
-#define BASE_RADIUS (20.0f)
+#define BASE_RADIUS (10.0f)
+#define CAPTURE_STEP (0.001f)
+
+static inline int playerIsLocal(Player *player)
+{
+    return player && player->isLocal;
+}
+
+static float clamp01(float value)
+{
+    if (value < 0.0f) return 0.0f;
+    if (value > 1.0f) return 1.0f;
+    return value;
+}
+
+static void approachFloat(float *value, float target, float step)
+{
+    if (*value < target) {
+        *value += step;
+        if (*value > target)
+            *value = target;
+    } else if (*value > target) {
+        *value -= step;
+        if (*value < target)
+            *value = target;
+    }
+}
+
+static u32 lerpColor(u32 a, u32 b, float t)
+{
+    t = clamp01(t);
+    int aA = (a >> 24) & 0xFF;
+    int aR = (a >> 16) & 0xFF;
+    int aG = (a >> 8) & 0xFF;
+    int aB = a & 0xFF;
+
+    int bA = (b >> 24) & 0xFF;
+    int bR = (b >> 16) & 0xFF;
+    int bG = (b >> 8) & 0xFF;
+    int bB = b & 0xFF;
+
+    int rA = aA + (int)((bA - aA) * t);
+    int rR = aR + (int)((bR - aR) * t);
+    int rG = aG + (int)((bG - aG) * t);
+    int rB = aB + (int)((bB - aB) * t);
+
+    return (rA << 24) | (rR << 16) | (rG << 8) | (rB & 0xFF);
+}
+
+// if local player is blue, invert
+static u32 getBoltCrankTextColor(float percent01, int invert)
+{
+    const u32 redColor = 0x00FF5050;
+    const u32 whiteColor = 0x00FFFFFF;
+    const u32 blueColor = 0x003060FF;
+
+    if (invert) {
+        percent01 = clamp01(percent01);
+        if (percent01 <= 0.5f) {
+            float localT = percent01 / 0.5f;
+            return lerpColor(redColor, whiteColor, localT);
+        }
+
+        float localT = (percent01 - 0.5f) / 0.5f;
+        return lerpColor(whiteColor, blueColor, localT);
+    } else {
+        percent01 = clamp01(percent01);
+        if (percent01 <= 0.5f) {
+            float localT = percent01 / 0.5f;
+            return lerpColor(blueColor, whiteColor, localT);
+        }
+
+        float localT = (percent01 - 0.5f) / 0.5f;
+        return lerpColor(whiteColor, redColor, localT);  
+    }
+}
 
 typedef struct DominationBase {
 	int state;
-    int owner;
+    float bias;
     Moby *node;
 	Moby *boltCrank;
     Player *players[8];
 	int color;
     float scrolling;
+    float boltCrankPercent;
+    int localPlayerInside;
+    int localPlayerColor;
 } DominationBase_t;
 
 typedef struct DominationInfo {
@@ -42,6 +120,8 @@ typedef struct DominationInfo {
     Moby *bases[8];
 } DominationInfo_t;
 DominationInfo_t domInfo;
+
+Moby *spawnBaseMobies(Moby *node, Moby *boltCrank);
 
 void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
 {
@@ -98,12 +178,13 @@ void drawBase(Moby *base)
 {
     DominationBase_t *pvar = base->pVar;
 	float scrollQuad = pvar->scrolling;
-    u32 baseColor = pvar->color;
+    u32 baseColor = getBoltCrankTextColor(clamp01(pvar->boltCrankPercent * 0.01f), pvar->localPlayerColor);
     
     int i, k, j, s;
     QuadDef quad[3];
     // get texture info (tex0, tex1, clamp, alpha)
-    gfxSetupEffectTex(&quad[0], FX_TIRE_TRACKS + 1, 0, 0x80);
+    //gfxSetupEffectTex(&quad[0], FX_TIRE_TRACKS + 1, 0, 0x80);
+    gfxSetupEffectTex(&quad[0], FX_RETICLE_5, 0, 0x80);
     gfxSetupEffectTex(&quad[2], FX_CIRLCE_NO_FADED_EDGE, 0, 0x80);
 
     quad[0].uv[0] = (UV_t){0, 0}; // bottom left (-, -)
@@ -126,9 +207,9 @@ void drawBase(Moby *base)
 
     // set seperate rgbas
     quad[0].rgba[0] = quad[0].rgba[1] = (0x00 << 24) | baseColor;
-    quad[0].rgba[2] = quad[0].rgba[3] = (0x30 << 24) | baseColor;
-    quad[1].rgba[0] = quad[1].rgba[1] = (0x50 << 24) | baseColor;
-    quad[1].rgba[2] = quad[1].rgba[3] = (0x20 << 24) | baseColor;
+    quad[0].rgba[2] = quad[0].rgba[3] = (0x20 << 24) | baseColor;
+    quad[1].rgba[0] = quad[1].rgba[1] = (0x30 << 24) | baseColor;
+    quad[1].rgba[2] = quad[1].rgba[3] = (0x10 << 24) | baseColor;
     quad[2].rgba[0] = quad[2].rgba[1] = quad[2].rgba[2] = quad[2].rgba[3] = (0x30 << 24) | baseColor;
 
     VECTOR center, tempCenter, tempRight, tempUp, halfX, halfZ, vRadius;
@@ -203,6 +284,21 @@ void drawBase(Moby *base)
     vector_copy(quad[2].point[3], corners[3]);
 
     gfxDrawQuad(quad[2], NULL);
+
+    // show capture progress when a local player is inside the base radius
+    if (pvar->localPlayerInside) {
+        char text[32];
+        int percentRounded = (int)(pvar->boltCrankPercent);
+        if (percentRounded < 0)
+            percentRounded = 0;
+        if (percentRounded > 100)
+            percentRounded = 100;
+
+        snprintf(text, sizeof(text), "Node capture progress: %d%%", percentRounded);
+        float percent01 = pvar->boltCrankPercent * 0.01f;
+        u32 textColor = (0x80 << 24) | getBoltCrankTextColor(percent01, pvar->localPlayerColor);
+        gfxScreenSpaceText(SCREEN_WIDTH * 0.5f, SCREEN_HEIGHT * 0.85f, 1, 1, textColor, text, -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
+    }
 }
 
 int baseCheckIfInside(VECTOR basePos, VECTOR playerPos)
@@ -217,6 +313,7 @@ int baseCheckIfInside(VECTOR basePos, VECTOR playerPos)
     // check radius
     float radius = domInfo.baseRaddius / 2;
     float distSq = delta[0] * delta[0] + delta[1] * delta[1];
+
     return (distSq <= radius * radius);
 }
 
@@ -225,14 +322,22 @@ void basePlayerUpdate(Moby *this)
     DominationBase_t *pvar = (DominationBase_t*)this->pVar;
     GameSettings *gs = gameGetSettings();
     int i, j;
+    int localPlayerInside = 0;
+    int localPlayerColor = -1;
+    Player** players = playerGetAll();
     
     for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
-        Player *player = playerGetFromSlot(i);
+        Player *player = players[i];
         if (!player || playerIsDead(player))
             continue;
 
         int in = baseCheckIfInside(this->position, player->playerPosition);
         if (in) {
+            if (playerIsLocal(player)) {
+                localPlayerInside = 1;
+                localPlayerColor = player->mpTeam;
+            }
+
             // Check if player is already in the array
             int alreadyIn = 0;
             for (j = 0; j < 8; ++j) {
@@ -261,6 +366,9 @@ void basePlayerUpdate(Moby *this)
             }
         }
     }
+
+    pvar->localPlayerInside = localPlayerInside;
+    pvar->localPlayerColor = localPlayerColor;
     
     // Set color based on first player in array
     // pvar->color = 0x00ffffff; // Default white
@@ -272,9 +380,27 @@ void basePlayerUpdate(Moby *this)
     // }
 
     // set color based on base owner team
-    pvar->color = 0x00ffffff;
-    if (pvar->owner > -1)
-        pvar->color = TEAM_COLORS[pvar->owner];
+    // pvar->color = 0x00ffffff;
+    // if (pvar->owner > -1)
+    //     pvar->color = TEAM_COLORS[pvar->owner];
+
+    // cache capture percentage for HUD drawing
+    pvar->boltCrankPercent = 0;
+    if (pvar->boltCrank && pvar->boltCrank->pVar) {
+        M6695_BoltCrank_t *boltVars = (M6695_BoltCrank_t*)pvar->boltCrank->pVar;
+        if (boltVars) {
+            float normalized = clamp01(boltVars->bias);
+            if (localPlayerColor == 0) {
+                // Invert the normalized value
+                pvar->boltCrankPercent = (1.0f - normalized) * 100.0f;
+            } else if (localPlayerColor == 1) {
+                // Use the normalized value directly
+                pvar->boltCrankPercent = normalized * 100.0f;
+            } else {
+                pvar->boltCrankPercent = normalized * 100.0f;
+            }
+        }
+    }
 }
 
 void baseHandleCapture(Moby* this)
@@ -289,8 +415,9 @@ void baseHandleCapture(Moby* this)
     DominationBase_t *pvars = (DominationBase_t*)this->pVar;
 
     // Safety check
-    if (!pvars || !pvars->boltCrank)
+    if (!pvars || !pvars->boltCrank || !pvars->boltCrank->pVar)
         return;
+    M6695_BoltCrank_t *boltVars = (M6695_BoltCrank_t*)pvars->boltCrank->pVar;
 
     // Get first capturing player and team
     for (i = 0; i < 8; ++i) {
@@ -313,12 +440,32 @@ void baseHandleCapture(Moby* this)
         }
     }
 
+    float targetBias = 0.5f;
+    float step = CAPTURE_STEP;
     if (!isContested && capturingTeam != -1) {
-        pvars->owner = capturingTeam;
-        *(u32*)(pvars->boltCrank->pVar) = capturingTeam;
+        if (capturingCount > 1) {
+            step *= capturingCount;
+            if (step > 0.05f)
+                step = 0.05f;
+        }
+
+        if (capturingTeam == TEAM_BLUE) {
+            targetBias = 0.0f;
+        } else if (capturingTeam == TEAM_RED) {
+            targetBias = 1.0f;
+        } else {
+            targetBias = 0.5f;
+        }
+        approachFloat(&boltVars->bias, targetBias, step);
+        pvars->bias = clamp01(boltVars->bias);
     } else {
         pvars->state = 5;
+        step = 0.005f;
     }
+
+    //approachFloat(&boltVars->bias, targetBias, step);
+    //boltVars->bias = clamp01(boltVars->bias);
+    //*(float*)(pvars->boltCrank->pVar) = boltVars->bias;
 }
 
 void updateBase(Moby* this)
@@ -343,7 +490,7 @@ void updateBase(Moby* this)
 Moby *spawnBaseMobies(Moby *node, Moby *boltCrank)
 {
     Moby *moby = mobySpawn(0x1c0d, sizeof(DominationBase_t));
-    if (!moby) return;
+    if (!moby) return NULL;
 
     moby->pUpdate = &updateBase;
     vector_copy(moby->position, boltCrank->position);
@@ -358,15 +505,19 @@ Moby *spawnBaseMobies(Moby *node, Moby *boltCrank)
     base->node = (Moby*)node;
     base->boltCrank = (Moby*)boltCrank;
     base->color = 0x00ffffff;
-    base->owner = -1;
+    base->bias = 0.5f;
+    base->boltCrankPercent = 50.0f;
+
 
     return moby;
 }
 
 void domination(void)
 {
-	if (!isInGame())
+	if (!isInGame()) {
+        domInfo.gameState = 0;
 		return;
+    }
 
 	if (domInfo.gameState == 0) {
 		getBases();
