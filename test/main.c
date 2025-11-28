@@ -347,17 +347,16 @@ void testSpritesOrEffects(int SpriteOrEffect, int tex,float x, float y, float sc
 	u64 effect = gfxGetEffectTex(tex);
 
 	u64 texture = (SpriteOrEffect) ? effect : sprite;
-
-	gfxSetupGifPaging(0);
-	// gfxDrawSprite(x+2, y+2, scale, scale, 0, 0, 32, 32, 0x40000000, dreadzoneSprite);
-	gfxDrawSprite(x, y, scale, scale, 0, 0, 32, 32, 0x80ffffff, texture);
-	// gfxDrawSprite(x+delta, y+delta, scale, scale, 0, 0, 32, 32, 0x80ffffff, texture);
-	
-	// VECTOR o = {0, 0, 1, 0};
-	// vector_add(o, o, playerGetFromSlot(0)->playerPosition);
-	// gfxDrawBillboardQuad(scale, scale, MATH_PI, o, texture, 0x80ffffff, 0);
-	
-	gfxDoGifPaging();
+	SPRITE_ME = tex;
+	if (SpriteOrEffect == 0) {
+		gfxSetupGifPaging(0);
+		gfxDrawSprite(x, y, scale, scale, 0, 0, 32, 32, 0x80ffffff, texture);
+		gfxDoGifPaging();
+	} else {
+		VECTOR o = {0, 0, 1, 0};
+		vector_add(o, o, playerGetFromSlot(0)->playerPosition);
+		gfxDrawBillboardQuad(scale, scale, MATH_PI, o, texture, 0x80ffffff, 0);
+	}
 }
 
 int debugTextures(void)
@@ -394,6 +393,7 @@ int main(void)
 		if (!p)
 			return 0;
 
+
 		// force lock-strafe (controller 1)
 		// *(u8*)0x001A5a34 = 1;
 		// Force Normal Up/Down Controls
@@ -401,7 +401,7 @@ int main(void)
 		// gameGetLocalSettings()->Wide = 1;
 		
 		// cycle through sprite/effect textures
-		// debugTextures();
+		debugTextures();
 
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
@@ -464,8 +464,8 @@ int main(void)
 
 	// StartBots();
 	// hud();
-	// secret();
-	domination();
+	secret();
+	// domination();
 
 	uyaPostUpdate();
 

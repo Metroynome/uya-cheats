@@ -31,8 +31,8 @@
 #define HBOLT_SCALE                 (0.5)
 
 #define DRAW_SCALE (1)
-#define MAX_SEGMENTS (196)
-#define MIN_SEGMENTS (8)
+#define MAX_SEGMENTS (64)
+#define MIN_SEGMENTS (6)
 #define CYLINDER_HEIGHT (2)
 #define TEXTURE_SCROLL_SPEED (0.007)
 #define EDGE_OPACITY (0x40)           /* 0x00 = transparent, 0x80 = full opacity */
@@ -58,8 +58,8 @@ typedef struct hillPvar {
 
 Cuboid rawr = {
     .matrix = {
-        {80, 0, 0, 0},
-        {0, 80, 0, 0},
+        {20, 0, 0, 0},
+        {0, 20, 0, 0},
         {0, 0, 2, 0}
     },
     .pos = {519.58356, 398.7586, 201.38, 1},
@@ -77,6 +77,60 @@ VECTOR corners[8] = {
     {-DRAW_SCALE,  DRAW_SCALE,  DRAW_SCALE, 1},
     { DRAW_SCALE,  DRAW_SCALE,  DRAW_SCALE, 1},
 };
+
+// Calculate optimal vertex count based on radius
+int calculateVertexCount(float radius) {
+    int vertices = (int)(radius * 0.75f);
+    if (vertices < MIN_SEGMENTS) vertices = MIN_SEGMENTS;
+    if (vertices > MAX_SEGMENTS) vertices = MAX_SEGMENTS;
+    return vertices;
+}
+
+float scroll = 0;
+void drawCylinder(VECTOR position, float radius, float height, u32 baseColor, int texture) {
+    int numVertices = calculateVertexCount(radius);
+    float angleStep = (2.0f * MATH_PI) / numVertices;
+    
+    vec3 p[2][(MAX_SEGMENTS)];
+    u32 c[2][(MAX_SEGMENTS)];
+    UV_t u[2][(MAX_SEGMENTS)];
+    
+    /* Initialize strip drawing */
+    gfxDrawStripInit();
+    gfxAddRegister(8, 0);
+    gfxAddRegister(0x14, 0xff9000000260);
+    gfxAddRegister(6, gfxGetEffectTex(texture));
+    gfxAddRegister(0x47, 0x513f1);
+    gfxAddRegister(0x42, 0x8000000044);
+    
+    /* Build cylinder side as a triangle strip */
+    int i;
+    for (i = 0; i <= numVertices; i++) {
+        float angle = (i % numVertices) * angleStep;
+        
+        /* Bottom vertex */
+        int idx = i * 2;
+        p[0][idx][0] = position[0] + cosf(angle) * radius;
+        p[0][idx][1] = position[1] + sinf(angle) * radius;
+        p[0][idx][2] = position[2] - height;
+        c[0][idx] = (0x80 << 24) | baseColor;
+        u[0][idx].y = (float)i / numVertices;
+        u[0][idx].x = scroll;
+        
+        /* Top vertex */
+        p[0][idx + 1][0] = position[0] + cosf(angle) * radius;
+        p[0][idx + 1][1] = position[1] + sinf(angle) * radius;
+        p[0][idx + 1][2] = position[2];
+        c[0][idx + 1] = (0x80 << 24) | baseColor;
+        u[0][idx + 1].y = (float)i / numVertices;
+        u[0][idx + 1].x = scroll + 1.0f;
+    }
+    
+    scroll += 0.007f;
+    
+    /* Draw cylinder side */
+    gfxDrawStrip(texture, &p, &c, &u, 1);
+}
 
 void testEffectQuad(float scale, MATRIX position, int texId, int color, int drawStyle)
 {
@@ -386,13 +440,15 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
     float fRadius = vector_length(halfX);
     
     /* ===== Calculate segment count ===== */
-    float segmentSize = (float)MAX_SEGMENTS / 64.0f;
+    float circumfrence = (int)(2.0f * MATH_PI * fRadius);
+    int segmentSize = (int)clamp(fRadius *.10f, 2, 16);
     int segments;
     
     if (isCircle) {
-        segments = (int)((2.0f * MATH_PI * fRadius) / segmentSize);
+        // segments = (int)(circumfrence / segmentSize);
+        segments = clamp(fRadius * 2 / segmentSize, MIN_SEGMENTS, MAX_SEGMENTS) + 1;
         /* Don't clamp circles - use actual segment count needed */
-        if (segments < MIN_SEGMENTS) segments = MIN_SEGMENTS;
+        // if (segments < MIN_SEGMENTS) segments = MIN_SEGMENTS;
     } else {
         /* For square, use average of side lengths */
         float sideLenX = vector_length(xAxis);
@@ -404,7 +460,7 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
     
     /* ===== Setup rendering ===== */
     int floorTex = isCircle ? FX_CIRLCE_NO_FADED_EDGE : FX_SQUARE_FLAT_1;
-    int ringTex = FX_TIRE_TRACKS + 1;
+    int ringTex = FX_TIRE_TRACKS;
     
     /* UV trimming to remove transparent edges */
     float uMin = TEXTURE_EDGE_TRIM_U;
@@ -425,12 +481,12 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
     if (isCircle) {
         /* === CIRCLE MODE === */
         float thetaStep = (2.0f * MATH_PI) / segments;
-        float distance = 16.0f / (float)segments;
-        VECTOR vRadius;
+        float distanceScale = 16;
+        float half_d = distanceScale * .5;
+        float distance = distanceScale / (float)segments;
+
+        VECTOR vRadius, tangent, tempRight, tempUp;
         vector_copy(vRadius, halfX);
-        
-        VECTOR tangent, tempRight, tempUp;
-        
         for (i = 0; i <= segments; i++) {
             /* Calculate position on circle */
             VECTOR circlePos;
@@ -447,7 +503,7 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
             
             /* Texture coordinates - rotated 90 degrees (swap U and V) */
             float textureU = scrollQuad;  /* U is now the scrolling axis */
-            float textureV = distance * (float)i - 8.0f;  /* V goes around the circle */
+            float textureV = (float)i / segmentSize; // distance * (float)i - half_d;  /* V goes around the circle */
             
             /* Apply UV trimming to remove transparent edges */
             float normalizedU = textureU - floorf(textureU);
@@ -462,7 +518,7 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
             colors[0][idx] = (EDGE_OPACITY << 24) | baseColor;
             uvs[0][idx].x = trimmedU;
             uvs[0][idx].y = trimmedV;
-            
+            // ++idx;
             /* Top vertex (outer ring) - equivalent to signs {1, 1} */
             positions[0][idx + 1][0] = circlePos[0] + tempRight[0] + tempUp[0];
             positions[0][idx + 1][1] = circlePos[1] + tempRight[1] + tempUp[1];
@@ -470,11 +526,9 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
             colors[0][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
             uvs[0][idx + 1].x = trimmedU - 0.4f;
             uvs[0][idx + 1].y = trimmedV;
-            
+            // ++idx;
             /* Rotate radius for next segment (but not after the last one) */
-            if (i < segments) {
-                vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
-            }
+            vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
         }
         
         /* Draw upper ring strip */
@@ -482,7 +536,6 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
         
         /* === Draw lower ring (inverted alpha) === */
         vector_copy(vRadius, halfX);
-        
         for (i = 0; i <= segments; i++) {
             VECTOR circlePos;
             vector_add(circlePos, center, vRadius);
@@ -498,7 +551,7 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
             vector_scale(tempUp, tempUp, 1.0f);
 
             float textureU = scrollQuad;
-            float textureV = distance * (float)i - 8.0f;
+            float textureV = (float)i / segmentSize; // distance * (float)i - half_d;
             
             /* Apply UV trimming */
             float normalizedU = textureU - floorf(textureU);
@@ -512,17 +565,15 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
             colors[1][idx] = (EDGE_OPACITY << 24) | baseColor;
             uvs[1][idx].x = trimmedU;
             uvs[1][idx].y = trimmedV;
-            
+
             positions[1][idx + 1][0] = circlePos[0] + tempRight[0] - tempUp[0];
             positions[1][idx + 1][1] = circlePos[1] + tempRight[1] - tempUp[1];
             positions[1][idx + 1][2] = circlePos[2] + tempRight[2] - tempUp[2] - 1;
             colors[1][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
             uvs[1][idx + 1].x = trimmedU + 0.4f;
             uvs[1][idx + 1].y = trimmedV;
-            
-            if (i < segments) {
-                vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
-            }
+
+            vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
         }
         
         gfxDrawStrip(ringTex, positions[1], colors[1], uvs[1], 1);
@@ -719,6 +770,7 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
 
 // float scrollQuad = 0;
 // vec4 quadPos[2][MAX_SEGMENTS];
+extern int SPRITE_ME;
 void circleMeFinal(Moby *this, Cuboid cube)
 {
     hillPvar_t *pvar = (hillPvar_t*)this->pVar;
@@ -730,8 +782,8 @@ void circleMeFinal(Moby *this, Cuboid cube)
     QuadDef quad[3];
     // get texture info (tex0, tex1, clamp, alpha)
     int floorTex = isCircle ? FX_CIRLCE_NO_FADED_EDGE : FX_SQUARE_FLAT_1;
-    gfxSetupEffectTex(&quad[0], FX_TIRE_TRACKS + 1, 0, 0x80);
-    gfxSetupEffectTex(&quad[2], floorTex, 0, 0x80);
+    gfxSetupEffectTex(&quad[0], SPRITE_ME, 0, 0x80);
+    gfxSetupEffectTex(&quad[2], SPRITE_ME, 0, 0x80);
 
     quad[0].uv[0] = (UV_t){0, 0}; // bottom left (-, -)
     quad[0].uv[1] = (UV_t){0, 1}; // top left (-, +)
@@ -751,12 +803,12 @@ void circleMeFinal(Moby *this, Cuboid cube)
     // copy quad 0 uv to quad 1;
     quad[1] = quad[0];
 
-    // set seperate rgbas
+    // set seperate rgbas (0x00, 0x30, 0x50, 0x20, 0x30)
     quad[0].rgba[0] = quad[0].rgba[1] = (0x00 << 24) | baseColor;
     quad[0].rgba[2] = quad[0].rgba[3] = (0x30 << 24) | baseColor;
     quad[1].rgba[0] = quad[1].rgba[1] = (0x50 << 24) | baseColor;
     quad[1].rgba[2] = quad[1].rgba[3] = (0x20 << 24) | baseColor;
-    quad[2].rgba[0] = quad[2].rgba[1] = quad[2].rgba[2] = quad[2].rgba[3] = (0x30 << 24) | baseColor;
+    quad[2].rgba[0] = quad[2].rgba[1] = quad[2].rgba[2] = quad[2].rgba[3] = (0x80 << 24) | baseColor;
 
     MATRIX rotMatrix;
     matrix_unit(rotMatrix);
@@ -881,7 +933,7 @@ void circleMeFinal(Moby *this, Cuboid cube)
         }
     }
     // scroll quad to animate
-    scrollQuad += .007f;
+    // scrollQuad += .007f;
 
     // draw floor quad
     VECTOR offset = {0, 0, -1, 0};
@@ -1108,9 +1160,13 @@ void drawTheThingJulie(Moby *moby)
     }
     // stripMe(worldCorners);
     // circleMeFinal(moby, rawr); // rodrigues rotation (DO NOT EDIT, WORKS)
-    // circleMeFinal_StripMe(moby, rawr); // rodrigues rotation (DO NOT EDIT, WORKS)
+    circleMeFinal_StripMe(moby, rawr); // rodrigues rotation (DO NOT EDIT, WORKS)
     // edgeMe(worldCorners);
     // myDrawCallback(worldCorners);
+
+
+    // drawCylinder(rawr.pos, 20, 6, 0x60ffffff, FX_RETICLE_1);
+
 }
 
 // void drawTexturedRibbon(VECTOR startPos)
