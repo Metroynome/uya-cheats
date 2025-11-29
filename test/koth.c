@@ -22,26 +22,39 @@
 #include <libuya/collision.h>
 #include <libuya/guber.h>
 #include <libuya/sound.h>
+#include <libuya/music.h>
 
+#define HILL_OCLASS (0x3000)
 #define MAX_SEGMENTS (64)
 #define MIN_SEGMENTS (4)
+#define TEXTURE_SCROLL_SPEED (0.007)
+#define EDGE_OPACITY (0x40)
+#define TEXTURE_EDGE_TRIM_U (0.0f)
+#define TEXTURE_EDGE_TRIM_V (0.25f)
 
 int spawned = 0;
+vec3 positions[2][(MAX_SEGMENTS + 1) * 2];
+int colors[2][(MAX_SEGMENTS + 1) * 2];
+UV_t uvs[2][(MAX_SEGMENTS + 1) * 2];
+int cachedSegments = -1;
+float scrollQuad = 0;
+
 
 typedef struct hillPvar {
+    int cuboidIndex[32];
     short state;
     short isCircle;
     Player *playersIn[GAME_MAX_PLAYERS];
     Cuboid *currentCuboid;
-    int teamTime[GAME_MAX_PLAYERS];
+    int teamTime[8];
     u32 color;
 } hillPvar_t;
 
 Cuboid rawr = {
     .matrix = {
-        {30, 0, 0, 0},
+        {20, 0, 0, 0},
         {0, 30, 0, 0},
-        {0, 0, 2, 0}
+        {0, 0, 1, 0}
     },
     .pos = {519.58356, 398.7586, 201.38, 1},
     .imatrix = 0,
@@ -137,267 +150,288 @@ void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
     output[3] = v[3];
 }
 
-float scrollQuad = 0;
 void hill_drawShape(Moby *this, Cuboid cube)
 {
     hillPvar_t *pvar = (hillPvar_t*)this->pVar;
     int isCircle = pvar->isCircle;
-    u32 baseColor = pvar->color; // TEAM_COLORS[playerGetFromSlot(0)->mpTeam];
+    u32 baseColor = pvar->color;
+    int i, edge, s;
     
-
-    int i, k, j, s;
-    QuadDef quad[3];
-    // get texture info (tex0, tex1, clamp, alpha)
-    int floorTex = isCircle ? FX_CIRLCE_NO_FADED_EDGE : FX_SQUARE_FLAT_1;
-    gfxSetupEffectTex(&quad[0], FX_TIRE_TRACKS + 1, 0, 0x80);
-    gfxSetupEffectTex(&quad[2], floorTex, 0, 0x80);
-
-    quad[0].uv[0] = (UV_t){0, 0}; // bottom left (-, -)
-    quad[0].uv[1] = (UV_t){0, 1}; // top left (-, +)
-    quad[0].uv[2] = (UV_t){1, 0}; // bottom right (+, -)
-    quad[0].uv[3] = (UV_t){1, 1}; // top right (+, +)
-
-    // copy quad 0 to quad 2
-    memcpy(quad[2].uv, &quad[0].uv, sizeof(quad[0].uv));
-
-    // modify top and bottom level UVs Y.  (uv is turned 90 degrees)
-    float uvOffset = isCircle ? 0 : 0; // .04;
-    quad[0].uv[0].y += uvOffset;
-    quad[0].uv[1].y -= uvOffset;
-    quad[0].uv[2].y += uvOffset;
-    quad[0].uv[3].y -= uvOffset;
-
-    // copy quad 0 uv to quad 1;
-    quad[1] = quad[0];
-
-    // set seperate rgbas
-    quad[0].rgba[0] = quad[0].rgba[1] = (0x00 << 24) | baseColor;
-    quad[0].rgba[2] = quad[0].rgba[3] = (0x30 << 24) | baseColor;
-    quad[1].rgba[0] = quad[1].rgba[1] = (0x50 << 24) | baseColor;
-    quad[1].rgba[2] = quad[1].rgba[3] = (0x20 << 24) | baseColor;
-    quad[2].rgba[0] = quad[2].rgba[1] = quad[2].rgba[2] = quad[2].rgba[3] = (0x30 << 24) | baseColor;
-
+    /* Setup rotation matrix from cube */
     MATRIX rotMatrix;
     matrix_unit(rotMatrix);
     matrix_rotate_x(rotMatrix, rotMatrix, cube.rot[0]);
     matrix_rotate_y(rotMatrix, rotMatrix, cube.rot[1]);
     matrix_rotate_z(rotMatrix, rotMatrix, cube.rot[2]);
-
-    VECTOR center, tempCenter, tempRight, tempUp, halfX, halfZ, vRadius;
-    vector_copy(center, cube.pos);
-    VECTOR xAxis = {cube.matrix.v0[0], cube.matrix.v1[0], cube.matrix.v2[0], 0};
-    VECTOR zAxis = {cube.matrix.v0[1], cube.matrix.v1[1], cube.matrix.v2[1], 0};
-    VECTOR yAxis = {cube.matrix.v0[2], cube.matrix.v1[2], cube.matrix.v2[2], 0};
     
-    // Apply rotation to axes
+    /* Extract axes from cube matrix */
+    VECTOR center, xAxis, zAxis, yAxis, halfX, halfZ;
+    vector_copy(center, cube.pos);
+    vector_copy(xAxis, (VECTOR){cube.matrix.v0[0], cube.matrix.v1[0], cube.matrix.v2[0], 0});
+    vector_copy(zAxis, (VECTOR){cube.matrix.v0[1], cube.matrix.v1[1], cube.matrix.v2[1], 0});
+    vector_copy(yAxis, (VECTOR){cube.matrix.v0[2], cube.matrix.v1[2], cube.matrix.v2[2], 0});
+    
+    /* Apply rotation to axes */
     vector_apply(xAxis, xAxis, rotMatrix);
     vector_apply(zAxis, zAxis, rotMatrix);
     vector_apply(yAxis, yAxis, rotMatrix);
     
-    vector_scale(halfX, xAxis, .5);
-    vector_scale(halfZ, zAxis, .5);
-    float fRadius = vector_length(halfX);
-    int signs[4][2] = {{1, -1}, {-1, -1}, {1, 1}, {-1, 1}};
+    vector_scale(halfX, xAxis, 0.5f);
+    vector_scale(halfZ, zAxis, 0.5f);
     vector_normalize(yAxis, yAxis);
-    VECTOR corners[4];
+    
+    float fRadius = vector_length(halfX);
+    
+    /* ===== Calculate segment count ===== */
+    int segmentSize = 2;
+    int segments;
+    
     if (isCircle) {
-        vector_copy(corners[0], (VECTOR){center[0] - fRadius, center[1] - fRadius, center[2], 0});
-        vector_copy(corners[1], (VECTOR){center[0] + fRadius, center[1] - fRadius, center[2], 0});
-        vector_copy(corners[2], (VECTOR){center[0] + fRadius, center[1] + fRadius, center[2], 0});
-        vector_copy(corners[3], (VECTOR){center[0] - fRadius, center[1] + fRadius, center[2], 0});
+        segments = clamp(fRadius * 2 / segmentSize, MIN_SEGMENTS, MAX_SEGMENTS);
     } else {
+        /* For square, calculate total segments around perimeter */
+        float sideLenX = vector_length(xAxis);
+        float sideLenZ = vector_length(zAxis);
+        float perimeter = (sideLenX + sideLenZ) * 2.0f;
+        segments = clamp((int)(perimeter / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
+    }
+    
+    /* ===== Setup rendering ===== */
+    int floorTex = isCircle ? FX_CIRLCE_NO_FADED_EDGE : FX_SQUARE_FLAT_1;
+    int ringTex = FX_TIRE_TRACKS;
+    
+    /* UV trimming to remove transparent edges */
+    float uMin = TEXTURE_EDGE_TRIM_U;
+    float uMax = 1.0f - TEXTURE_EDGE_TRIM_U;
+    float vMin = TEXTURE_EDGE_TRIM_V;
+    float vMax = 1.0f - TEXTURE_EDGE_TRIM_V;
+    float uRange = uMax - uMin;
+    float vRange = vMax - vMin;
+    
+    /* Initialize strip drawing */
+    gfxDrawStripInit();
+    gfxAddRegister(8, 0);
+    gfxAddRegister(0x14, 0xff9000000260);
+    gfxAddRegister(6, gfxGetEffectTex(ringTex));
+    gfxAddRegister(0x47, 0x513f1);
+    gfxAddRegister(0x42, 0x8000000044);
+
+    /* === Setup shape-specific parameters === */
+    VECTOR corners[4];
+    int segmentsPerEdge[4];
+    VECTOR vRadius;
+    float thetaStep;
+    
+    if (isCircle) {
+        thetaStep = (2.0f * MATH_PI) / segments;
+        vector_copy(vRadius, halfX);
+    } else {
+        /* Calculate corners */
         vector_copy(corners[0], (VECTOR){center[0]-halfX[0]-halfZ[0], center[1]-halfX[1]-halfZ[1], center[2]-halfX[2]-halfZ[2], 0});
         vector_copy(corners[1], (VECTOR){center[0]+halfX[0]-halfZ[0], center[1]+halfX[1]-halfZ[1], center[2]+halfX[2]-halfZ[2], 0});
         vector_copy(corners[2], (VECTOR){center[0]+halfX[0]+halfZ[0], center[1]+halfX[1]+halfZ[1], center[2]+halfX[2]+halfZ[2], 0});
         vector_copy(corners[3], (VECTOR){center[0]-halfX[0]+halfZ[0], center[1]-halfX[1]+halfZ[1], center[2]-halfX[2]+halfZ[2], 0});
+        
+        /* Calculate segments per edge proportionally */
+        float sideLenX = vector_length(xAxis);
+        float sideLenZ = vector_length(zAxis);
+        float perimeter = (sideLenX + sideLenZ) * 2.0f;
+        
+        segmentsPerEdge[0] = (int)((sideLenX / perimeter) * segments);
+        segmentsPerEdge[1] = (int)((sideLenZ / perimeter) * segments);
+        segmentsPerEdge[2] = (int)((sideLenX / perimeter) * segments);
+        segmentsPerEdge[3] = (int)((sideLenZ / perimeter) * segments);
+        
+        /* Ensure we use all segments */
+        int totalSegs = segmentsPerEdge[0] + segmentsPerEdge[1] + segmentsPerEdge[2] + segmentsPerEdge[3];
+        segmentsPerEdge[0] += (segments - totalSegs);
     }
-
-    // get tangent
-    vector_outerproduct(tempRight, yAxis, halfX);
-    vector_normalize(tempRight, tempRight);
-
-    // scale x, y of texture
-    vector_scale(tempRight, tempRight, 1);
-    vector_scale(tempUp, yAxis, 1);
-
-    float segmentSize = 1;
-    int segments = (int)((2 * MATH_PI * fRadius) / segmentSize);
-    float thetaStep = 2 * MATH_PI / clamp((float)segments, MIN_SEGMENTS, MAX_SEGMENTS);
-    int segPerSide = 0;  // for squares.
-
-    for (k = 0; k < 2; ++k) {
-        if (isCircle) {
-            // draw top and botom quad
-            // copy vRadius into r
-            vector_copy(vRadius, halfX);
-            for (i = 0; i < segments; ++i) {
-                vector_add(tempCenter, center, vRadius);
-                // offset quad[1] by 3
-                tempCenter[2] += k * 2;
-                // create vector for each point.
-                for (j = 0; j < 4; ++j) {
-                    quad[k].point[j][0] = tempCenter[0] + signs[j][0] * tempRight[0] + signs[j][1] * tempUp[0];
-                    quad[k].point[j][1] = tempCenter[1] + signs[j][0] * tempRight[1] + signs[j][1] * tempUp[1];
-                    quad[k].point[j][2] = tempCenter[2] + signs[j][0] * tempRight[2] + signs[j][1] * tempUp[2];
-                    quad[k].point[j][3] = 1;
-                }
-
-                quad[k].uv[0].x = quad[k].uv[1].x = 0 - scrollQuad;
-                quad[k].uv[2].x = quad[k].uv[3].x = 1 - scrollQuad;
+    
+    int numSegments = (segments + 1) * 2;
+    VECTOR tempRight, tempUp;
+    
+    /* === Generate positions once (only if not cached) === */
+    if (cachedSegments != segments) {
+        if (isCircle) vector_copy(vRadius, halfX);
+        
+        for (i = 0; i <= segments; i++) {
+            VECTOR pos;
+            
+            if (isCircle) {
+                /* Calculate position on circle */
+                vector_add(pos, center, vRadius);
                 
-                // maybe for later:  put points in array.
-                // quadPos[k][i] = quad[k].point;
-                
-                gfxDrawQuad(quad[k], NULL);
-
-                // rotate radius and tangent
-                vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
+                /* Calculate tangent for quad orientation */
                 vector_outerproduct(tempRight, yAxis, vRadius);
-                vector_normalize(tempRight, tempRight);            }
-       } else {
-            // segment counts
-            float sideLenX = vector_length(xAxis);
-            float sideLenZ = vector_length(zAxis);
-            int segX = clamp((int)(sideLenX / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
-            int segZ = clamp((int)(sideLenZ / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
-
-            for (i = 0; i < 4; ++i) {
-                VECTOR p0, p1;
-                vector_copy(p0, corners[i]);
-                vector_copy(p1, corners[(i + 1) & 3]);
-
-                // choose per-edge segments
-                int segCount = (i % 2 == 0) ? segX : segZ;
-
-                vector_subtract(tempRight, p1, p0);
-                vector_normalize(tempRight, tempRight);       // quad local X (along edge)
-
-                for (s = 0; s < segCount; ++s) {
-                    float t0 = (float)s       / segCount;
-                    float t1 = (float)(s + 1) / segCount;
-
-                    VECTOR a, b;
-                    vector_lerp(a, p0, p1, t0);
-                    vector_lerp(b, p0, p1, t1);
-
-                    // center between segment endpoints
-                    vector_add(tempCenter, a, b);
-                    vector_scale(tempCenter, tempCenter, 0.5f);
-
-                    tempCenter[2] += k * 2;
-                    for (j = 0; j < 4; ++j) {
-                        quad[k].point[j][0] = tempCenter[0] + signs[j][0] * tempRight[0] + signs[j][1] * tempUp[0];
-                        quad[k].point[j][1] = tempCenter[1] + signs[j][0] * tempRight[1] + signs[j][1] * tempUp[1];
-                        quad[k].point[j][2] = tempCenter[2] + signs[j][0] * tempRight[2] + signs[j][1] * tempUp[2];
-                        quad[k].point[j][3] = 1;
+                vector_normalize(tempRight, tempRight);
+                vector_copy(tempUp, yAxis);
+                
+                /* Rotate radius for next segment */
+                vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
+            } else {
+                /* Determine which edge we're on */
+                int accumulatedSegs = 0;
+                int currentEdge = 0;
+                int localS = i;
+                
+                for (edge = 0; edge < 4; edge++) {
+                    if (i <= accumulatedSegs + segmentsPerEdge[edge]) {
+                        currentEdge = edge;
+                        localS = i - accumulatedSegs;
+                        break;
                     }
-                    quad[k].uv[0].x = quad[k].uv[1].x = 0 - scrollQuad;
-                    quad[k].uv[2].x = quad[k].uv[3].x = 1 - scrollQuad;
-
-                    gfxDrawQuad(quad[k], NULL);
+                    accumulatedSegs += segmentsPerEdge[edge];
                 }
+                
+                VECTOR p0, p1, edgeDir;
+                vector_copy(p0, corners[currentEdge]);
+                vector_copy(p1, corners[(currentEdge + 1) & 3]);
+                
+                vector_subtract(edgeDir, p1, p0);
+                vector_normalize(edgeDir, edgeDir);
+                
+                float t = (float)localS / segmentsPerEdge[currentEdge];
+                vector_lerp(pos, p0, p1, t);
+                
+                /* For square, vertices are just offset in Z direction */
+                vector_copy(tempRight, (VECTOR){0, 0, 0, 0});
+                vector_copy(tempUp, (VECTOR){0, 0, 0, 0});
             }
-        }
-    }
-    // scroll quad to animate
-    scrollQuad += .007f;
+            
+            int idx = i * 2;
+            
+            /* === Upper ring positions === */
+            positions[0][idx][0] = pos[0] + tempRight[0] - tempUp[0];
+            positions[0][idx][1] = pos[1] + tempRight[1] - tempUp[1];
+            positions[0][idx][2] = pos[2] + tempRight[2] - tempUp[2] - 1;
+            
+            positions[0][idx + 1][0] = pos[0] + tempRight[0] + tempUp[0];
+            positions[0][idx + 1][1] = pos[1] + tempRight[1] + tempUp[1];
+            positions[0][idx + 1][2] = pos[2] + tempRight[2] + tempUp[2] + 1;
+            
+            /* === Lower ring positions === */
+            VECTOR offsetPos;
+            vector_add(offsetPos, pos, (VECTOR){0, 0, 2, 0});
+            
+            positions[1][idx][0] = offsetPos[0] + tempRight[0] + tempUp[0];
+            positions[1][idx][1] = offsetPos[1] + tempRight[1] + tempUp[1];
+            positions[1][idx][2] = offsetPos[2] + tempRight[2] + tempUp[2] + 1;
 
-    // draw floor quad
+            positions[1][idx + 1][0] = offsetPos[0] + tempRight[0] - tempUp[0];
+            positions[1][idx + 1][1] = offsetPos[1] + tempRight[1] - tempUp[1];
+            positions[1][idx + 1][2] = offsetPos[2] + tempRight[2] - tempUp[2] - 1;
+        }
+        
+        cachedSegments = segments;
+    }
+    
+    /* === Update colors and UVs every frame === */
+    for (i = 0; i <= segments; i++) {
+        /* Texture coordinates */
+        float textureU = scrollQuad;
+        float textureV = (float)i / segmentSize;
+        
+        /* Apply UV trimming */
+        float normalizedU = textureU - floorf(textureU);
+        float trimmedU = uMin + normalizedU * uRange;
+        float trimmedV = vMin + (textureV - floorf(textureV)) * vRange;
+        
+        int idx = i * 2;
+        
+        /* Upper ring */
+        colors[0][idx] = (EDGE_OPACITY << 24) | baseColor;
+        uvs[0][idx].x = trimmedU;
+        uvs[0][idx].y = trimmedV;
+        
+        colors[0][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
+        uvs[0][idx + 1].x = trimmedU - 0.4f;
+        uvs[0][idx + 1].y = trimmedV;
+        
+        /* Lower ring */
+        colors[1][idx] = (EDGE_OPACITY << 24) | baseColor;
+        uvs[1][idx].x = trimmedU;
+        uvs[1][idx].y = trimmedV;
+        
+        colors[1][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
+        uvs[1][idx + 1].x = trimmedU + 0.4f;
+        uvs[1][idx + 1].y = trimmedV;
+    }
+    
+    /* === Draw both rings === */
+    gfxDrawStrip(numSegments, positions[0], colors[0], uvs[0], 1);
+    gfxDrawStrip(numSegments, positions[1], colors[1], uvs[1], 1);
+    
+    /* Animate texture scroll */
+    scrollQuad += TEXTURE_SCROLL_SPEED;
+    if (scrollQuad >= 1.0f) scrollQuad -= 1.0f;
+    
+    /* ===== Draw floor quad ===== */
+    QuadDef floorQuad;
+    gfxSetupEffectTex(&floorQuad, floorTex, DRAW_TYPE_NORMAL, 0x30);
+    
+    /* Offset floor down slightly */
     VECTOR offset = {0, 0, -1, 0};
     VECTOR rotatedOffset;
     vector_apply(rotatedOffset, offset, rotMatrix);
-    for (i = 0; i < 4; ++i) {
-        vector_add(corners[i], corners[i], rotatedOffset);
+    
+    /* Create floor corners */
+    VECTOR floorCorners[4];
+    if (isCircle) {
+        vector_copy(floorCorners[0], (VECTOR){center[0] - fRadius, center[1] - fRadius, center[2], 0});
+        vector_copy(floorCorners[1], (VECTOR){center[0] + fRadius, center[1] - fRadius, center[2], 0});
+        vector_copy(floorCorners[2], (VECTOR){center[0] + fRadius, center[1] + fRadius, center[2], 0});
+        vector_copy(floorCorners[3], (VECTOR){center[0] - fRadius, center[1] + fRadius, center[2], 0});
+    } else {
+        vector_copy(floorCorners[0], (VECTOR){center[0]-halfX[0]-halfZ[0], center[1]-halfX[1]-halfZ[1], center[2]-halfX[2]-halfZ[2], 0});
+        vector_copy(floorCorners[1], (VECTOR){center[0]+halfX[0]-halfZ[0], center[1]+halfX[1]-halfZ[1], center[2]+halfX[2]-halfZ[2], 0});
+        vector_copy(floorCorners[2], (VECTOR){center[0]+halfX[0]+halfZ[0], center[1]+halfX[1]+halfZ[1], center[2]+halfX[2]+halfZ[2], 0});
+        vector_copy(floorCorners[3], (VECTOR){center[0]-halfX[0]+halfZ[0], center[1]-halfX[1]+halfZ[1], center[2]-halfX[2]+halfZ[2], 0});
     }
-    vector_copy(quad[2].point[0], corners[1]);
-    vector_copy(quad[2].point[1], corners[0]);
-    vector_copy(quad[2].point[2], corners[2]);
-    vector_copy(quad[2].point[3], corners[3]);
-
-    gfxDrawQuad(quad[2], NULL);
+    
+    /* Apply offset to all corners */
+    for (i = 0; i < 4; i++) {
+        vector_add(floorCorners[i], floorCorners[i], rotatedOffset);
+    }
+    
+    /* Setup floor quad vertices */
+    u32 floorColor = (0x30 << 24) | baseColor;
+    
+    vector_copy(floorQuad.point[0], floorCorners[1]);
+    vector_copy(floorQuad.point[1], floorCorners[0]);
+    vector_copy(floorQuad.point[2], floorCorners[2]);
+    vector_copy(floorQuad.point[3], floorCorners[3]);
+    
+    floorQuad.point[0][3] = 1.0f;
+    floorQuad.point[1][3] = 1.0f;
+    floorQuad.point[2][3] = 1.0f;
+    floorQuad.point[3][3] = 1.0f;
+    
+    floorQuad.rgba[0] = floorColor;
+    floorQuad.rgba[1] = floorColor;
+    floorQuad.rgba[2] = floorColor;
+    floorQuad.rgba[3] = floorColor;
+    
+    floorQuad.uv[0] = (UV_t){0, 0};
+    floorQuad.uv[1] = (UV_t){0, 1};
+    floorQuad.uv[2] = (UV_t){1, 0};
+    floorQuad.uv[3] = (UV_t){1, 1};
+    
+    gfxDrawQuad(floorQuad, NULL);
 }
 
-int debugToPlayer = 0;
 void hill_doDraw(Moby *moby)
 {
     hillPvar_t *pvar = (hillPvar_t*)moby->pVar;
-	VECTOR worldCorners[8];
 	int i;
     // Check if needs to be circle or square
     float len = vector_length(rawr.matrix.v2);
     if (len > 1.0001) {
         pvar->isCircle = 1;
     }
-    // for debug, make player be center of cuboid.
-    // if (!debugToPlayer) {
-    //     vector_copy(tempMatrix.v3, playerGetFromSlot(0)->pMoby->position);
-    //     debugToPlayer = 1;
-    // }
 
-    hill_drawShape(moby, rawr);
+    hill_drawShape(moby, *pvar->currentCuboid);
 
 }
-
-
-
-
-
-
-
-// void drawTexturedRibbon(VECTOR startPos)
-// {
-//     gfxDrawStripInit();
-
-//     gfxAddRegister(8, 0);
-//     gfxAddRegister(0x14, 0xff9000000260);
-//     gfxAddRegister(6, gfxGetEffectTex(FX_LENS_FLARE_1));
-//     // blend == 0
-//     gfxAddRegister(0x47, 0x513f1);
-//     gfxAddRegister(0x42, 0x8000000044);
-    
-//     float x = rawr.pos[0];
-//     float z = rawr.pos[1];
-//     float y = rawr.pos[2];
-
-//     vec3 pos[5] = {
-//         {x - 20f, z, rawr.pos[2]}, // 0, 0
-//         {x - 20f, z, rawr.pos[2] + 20f}, // 0, 1
-//         {x, z, rawr.pos[2]}, // 1, 0
-//         {x, rawr.pos[1], rawr.pos[2] + 20f} // 1, 1
-//         {x + 20f, z, rawr.pos[2]} // 0, 0
-//     }
-
-//     // Solid cxxxolor
-//     int colors[5] = {
-//         0x80FFFFFF,
-//         0x80FFFFFF,
-//         0x80FFFFFF,
-//         0x80FFFFFF,
-//         0x80ffffff
-//     };
-    
-//     // UV mapping for ribbon
-//     struct UV uvs[5] = {
-//         {0.0f, 0.0f},  // Start left
-//         {0.0f, 1.0f},  // Start right
-//         {1.0f, 0.0f},  // End left
-//         {1.0f, 1.0f},   // End right
-//         {0f, 0f}
-//     };
-    
-//     gfxDrawStrip(FX_LENS_FLARE_1, pos, colors, uvs, 1);
-// }
-
-// // Example usage in a draw callback
-// void myDrawCallback(void)
-// {
-//     // drawTexturedRibbon(rawr.pos);
-// }
-
-
-
-
-
 
 void hill_postDraw(Moby *moby)
 {
@@ -405,24 +439,6 @@ void hill_postDraw(Moby *moby)
     hillPvar_t* pvars = (hillPvar_t*)moby->pVar;
     if (!pvars)
         return;
-
-    // determine color
-    u32 color = HBOLT_SPRITE_COLOR;
-
-    // fade as we approach destruction
-    // int timeUntilDestruction = (pvars->DestroyAtTime - gameGetTime()) / TIME_SECOND;
-    // if (timeUntilDestruction < 1)
-    //     timeUntilDestruction = 1;
-
-    // if (timeUntilDestruction < 10) {
-    //     float speed = timeUntilDestruction < 3 ? 20.0 : 3.0;
-    //     float pulse = (1 + sinf(clampAngle((gameGetTime() / 1000.0) * speed))) * 0.5;
-    //     opacity = 32 + (pulse * 96);
-    // }
-
-    opacity = opacity << 24;
-    color = opacity | (color & HBOLT_SPRITE_COLOR);
-    moby->primaryColor = color;
 
     hill_doDraw(moby);
 }
@@ -437,8 +453,10 @@ void hill_update(Moby* moby)
 
     gfxRegistserDrawFunction(&hill_postDraw, moby);
 
-    // force set cuboid for now
-    pvars->currentCuboid = &rawr;
+    Cuboid *cuboid = spawnPointGet(pvars->cuboidIndex[0]);
+    printf("\ncuboid: %08x, pos: %d", cuboid, cuboid->pos[0]);
+    vector_copy(moby->position, cuboid->pos);
+    pvars->currentCuboid = cuboid;
 
     // handle players
     hillPlayerUpdates(moby);
@@ -449,34 +467,38 @@ void hill_update(Moby* moby)
     // }
 }
 
-void spawnHillMoby(VECTOR position)
+void hill_setupMoby(Moby *moby)
 {
-    Moby* moby = mobySpawn(0x1c0d, sizeof(hillPvar_t));
+    if (moby == NULL) {
+        Moby *moby = mobySpawn(HILL_OCLASS, sizeof(hillPvar_t));
+    }
     if (!moby) return;
 
     moby->pUpdate = &hill_update;
-    vector_copy(moby->position, position);
-    moby->updateDist = -1;
-    moby->drawn = 1;
-    moby->opacity = 0x00;
-    moby->drawDist = 0x00;
+    moby->modeBits = 0;
 
-    // update pvars
-    hillPvar_t* pvars = (hillPvar_t*)moby->pVar;
-    // pvars->DestroyAtTime = gameGetTime() + (TIME_SECOND * 30);
-    memset(pvars, 0, sizeof(pvars));
-
-    // mobySetState(moby, 0, -1);
-    // scavHuntResetBoltSpawnCooldown();
     soundPlayByOClass(1, 0, moby, MOBY_ID_OMNI_SHIELD);
 }
 
-void hill_init(void)
+void getHillMoby(void)
 {
-    if (!spawned) {
-        spawnHillMoby(rawr.pos);
-        spawned = 1;
+	Moby* moby = mobyListGetStart();
+	Moby* mobyEnd = mobyListGetEnd();
+	bool foundHillMoby = false;
+    int i = 0;
+	while (moby < mobyEnd) {
+		if (moby->oClass == 0x3000) {
+            foundHillMoby = true;
+            break;
+		}
+		++moby;
+	}
+    if (foundHillMoby) {
+        hill_setupMoby(moby);
+    } else {
+        hill_setupMoby(NULL);
     }
+    return;
 }
 
 void koth(void)
@@ -490,5 +512,8 @@ void koth(void)
     }
     Player *p = playerGetFromSlot(0);
 
-    hill_init();
+    if (!spawned) {
+        getHillMoby();
+        spawned = 1;
+    }
 }
