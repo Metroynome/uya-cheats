@@ -400,6 +400,9 @@ void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
     output[3] = v[3];
 }
 
+
+
+
 /* Prepare arrays for strip vertices */
 vec3 positions[2][(MAX_SEGMENTS + 1) * 2];
 int colors[2][(MAX_SEGMENTS + 1) * 2];
@@ -440,22 +443,17 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
     float fRadius = vector_length(halfX);
     
     /* ===== Calculate segment count ===== */
-    float circumfrence = (int)(2.0f * MATH_PI * fRadius);
-    int segmentSize = 2;// (int)clamp(fRadius *.10f, 2, 16);
+    int segmentSize = 2;
     int segments;
     
     if (isCircle) {
-        // segments = (int)(circumfrence / segmentSize);
-        segments = clamp(fRadius * 2 / segmentSize, MIN_SEGMENTS, MAX_SEGMENTS);
-        /* Don't clamp circles - use actual segment count needed */
-        // if (segments < MIN_SEGMENTS) segments = MIN_SEGMENTS;
+        segments = clamp((2 * MATH_PI * fRadius) / segmentSize, MIN_SEGMENTS, MAX_SEGMENTS);
     } else {
-        /* For square, use average of side lengths */
+        /* For square, calculate total segments around perimeter */
         float sideLenX = vector_length(xAxis);
         float sideLenZ = vector_length(zAxis);
-        int segX = clamp((int)(sideLenX / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
-        int segZ = clamp((int)(sideLenZ / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
-        segments = (segX + segZ) * 2; /* Total around perimeter */
+        float perimeter = (sideLenX + sideLenZ) * 2.0f;
+        segments = clamp((int)(perimeter / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
     }
     
     /* ===== Setup rendering ===== */
@@ -478,234 +476,196 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
     gfxAddRegister(0x47, 0x513f1);
     gfxAddRegister(0x42, 0x8000000044);
 
+    /* === Setup shape-specific parameters === */
+    VECTOR corners[4];
+    int segmentsPerEdge[4];
+    VECTOR vRadius;
+    float thetaStep;
+    
     if (isCircle) {
-        /* === CIRCLE MODE === */
-        float thetaStep = (2.0f * MATH_PI) / segments;
-        float distanceScale = 16;
-        float half_d = distanceScale * .5;
-        float distance = distanceScale / (float)segments;
-
-        int numSegments = (segments + 1) * 2;
-        VECTOR vRadius, tangent, tempRight, tempUp;
+        thetaStep = (2.0f * MATH_PI) / segments;
         vector_copy(vRadius, halfX);
-        for (i = 0; i <= segments; i++) {
+    } else {
+        /* Calculate corners */
+        vector_copy(corners[0], (VECTOR){center[0]-halfX[0]-halfZ[0], center[1]-halfX[1]-halfZ[1], center[2]-halfX[2]-halfZ[2], 0});
+        vector_copy(corners[1], (VECTOR){center[0]+halfX[0]-halfZ[0], center[1]+halfX[1]-halfZ[1], center[2]+halfX[2]-halfZ[2], 0});
+        vector_copy(corners[2], (VECTOR){center[0]+halfX[0]+halfZ[0], center[1]+halfX[1]+halfZ[1], center[2]+halfX[2]+halfZ[2], 0});
+        vector_copy(corners[3], (VECTOR){center[0]-halfX[0]+halfZ[0], center[1]-halfX[1]+halfZ[1], center[2]-halfX[2]+halfZ[2], 0});
+        
+        /* Calculate segments per edge proportionally */
+        float sideLenX = vector_length(xAxis);
+        float sideLenZ = vector_length(zAxis);
+        float perimeter = (sideLenX + sideLenZ) * 2.0f;
+        
+        segmentsPerEdge[0] = (int)((sideLenX / perimeter) * segments);
+        segmentsPerEdge[1] = (int)((sideLenZ / perimeter) * segments);
+        segmentsPerEdge[2] = (int)((sideLenX / perimeter) * segments);
+        segmentsPerEdge[3] = (int)((sideLenZ / perimeter) * segments);
+        
+        /* Ensure we use all segments */
+        int totalSegs = segmentsPerEdge[0] + segmentsPerEdge[1] + segmentsPerEdge[2] + segmentsPerEdge[3];
+        segmentsPerEdge[0] += (segments - totalSegs);
+    }
+    
+    int numSegments = (segments + 1) * 2;
+    VECTOR tempRight, tempUp;
+    
+    /* === Draw upper ring === */
+    if (isCircle) vector_copy(vRadius, halfX);
+    
+    for (i = 0; i <= segments; i++) {
+        VECTOR pos;
+        
+        if (isCircle) {
             /* Calculate position on circle */
-            VECTOR circlePos;
-            vector_add(circlePos, center, vRadius);
+            vector_add(pos, center, vRadius);
             
             /* Calculate tangent for quad orientation */
             vector_outerproduct(tempRight, yAxis, vRadius);
             vector_normalize(tempRight, tempRight);
             vector_copy(tempUp, yAxis);
             
-            /* Scale tangent and up vectors (like in quad version) */
-            vector_scale(tempRight, tempRight, 1.0f);
-            vector_scale(tempUp, tempUp, 1.0f);
-            
-            /* Texture coordinates - rotated 90 degrees (swap U and V) */
-            float textureU = scrollQuad;  /* U is now the scrolling axis */
-            float textureV = (float)i / segmentSize; // distance * (float)i - half_d;  /* V goes around the circle */
-            
-            /* Apply UV trimming to remove transparent edges */
-            float normalizedU = textureU - floorf(textureU);
-            float trimmedU = uMin + normalizedU * uRange;
-            float trimmedV = vMin + (textureV - floorf(textureV)) * vRange;
-            
-            /* Bottom vertex (inner ring) - equivalent to signs {1, -1} */
-            int idx = i * 2;
-            positions[0][idx][0] = circlePos[0] + tempRight[0] - tempUp[0];
-            positions[0][idx][1] = circlePos[1] + tempRight[1] - tempUp[1];
-            positions[0][idx][2] = circlePos[2] + tempRight[2] - tempUp[2] - 1;
-            colors[0][idx] = (EDGE_OPACITY << 24) | baseColor;
-            uvs[0][idx].x = trimmedU;
-            uvs[0][idx].y = trimmedV;
-            // ++idx;
-            /* Top vertex (outer ring) - equivalent to signs {1, 1} */
-            positions[0][idx + 1][0] = circlePos[0] + tempRight[0] + tempUp[0];
-            positions[0][idx + 1][1] = circlePos[1] + tempRight[1] + tempUp[1];
-            positions[0][idx + 1][2] = circlePos[2] + tempRight[2] + tempUp[2] + 1;
-            colors[0][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
-            uvs[0][idx + 1].x = trimmedU - 0.4f;
-            uvs[0][idx + 1].y = trimmedV;
-            // ++idx;
-            /* Rotate radius for next segment (but not after the last one) */
+            /* Rotate radius for next segment */
             vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
+        } else {
+            /* Determine which edge we're on */
+            int accumulatedSegs = 0;
+            int currentEdge = 0;
+            int localS = i;
+            
+            for (edge = 0; edge < 4; edge++) {
+                if (i <= accumulatedSegs + segmentsPerEdge[edge]) {
+                    currentEdge = edge;
+                    localS = i - accumulatedSegs;
+                    break;
+                }
+                accumulatedSegs += segmentsPerEdge[edge];
+            }
+            
+            VECTOR p0, p1, edgeDir;
+            vector_copy(p0, corners[currentEdge]);
+            vector_copy(p1, corners[(currentEdge + 1) & 3]);
+            
+            vector_subtract(edgeDir, p1, p0);
+            vector_normalize(edgeDir, edgeDir);
+            
+            float t = (float)localS / segmentsPerEdge[currentEdge];
+            vector_lerp(pos, p0, p1, t);
+            
+            /* Calculate tangent (perpendicular to edge) */
+            vector_outerproduct(tempRight, yAxis, edgeDir);
+            vector_normalize(tempRight, tempRight);
+            vector_copy(tempUp, yAxis);
         }
         
-        /* Draw upper ring strip */
-        gfxDrawStrip(numSegments, positions[0], colors[0], uvs[0], 1);
+        /* Texture coordinates */
+        float textureU = scrollQuad;
+        float textureV = (float)i / segmentSize;
         
-        /* === Draw lower ring (inverted alpha) === */
-        vector_copy(vRadius, halfX);
-        for (i = 0; i <= segments; i++) {
-            VECTOR circlePos;
-            vector_add(circlePos, center, vRadius);
-            /* Add y offset */
-            vector_add(circlePos, circlePos, (VECTOR){0, 0, 2, 0});
-
+        /* Apply UV trimming */
+        float normalizedU = textureU - floorf(textureU);
+        float trimmedU = uMin + normalizedU * uRange;
+        float trimmedV = vMin + (textureV - floorf(textureV)) * vRange;
+        
+        int idx = i * 2;
+        
+        /* Bottom vertex (inner ring) */
+        positions[0][idx][0] = pos[0] + tempRight[0] - tempUp[0];
+        positions[0][idx][1] = pos[1] + tempRight[1] - tempUp[1];
+        positions[0][idx][2] = pos[2] + tempRight[2] - tempUp[2] - 1;
+        colors[0][idx] = (EDGE_OPACITY << 24) | baseColor;
+        uvs[0][idx].x = trimmedU;
+        uvs[0][idx].y = trimmedV;
+        
+        /* Top vertex (outer ring) */
+        positions[0][idx + 1][0] = pos[0] + tempRight[0] + tempUp[0];
+        positions[0][idx + 1][1] = pos[1] + tempRight[1] + tempUp[1];
+        positions[0][idx + 1][2] = pos[2] + tempRight[2] + tempUp[2] + 1;
+        colors[0][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
+        uvs[0][idx + 1].x = trimmedU - 0.4f;
+        uvs[0][idx + 1].y = trimmedV;
+    }
+    
+    gfxDrawStrip(numSegments, positions[0], colors[0], uvs[0], 1);
+    
+    /* === Draw lower ring === */
+    if (isCircle) vector_copy(vRadius, halfX);
+    
+    for (i = 0; i <= segments; i++) {
+        VECTOR pos, offsetPos;
+        
+        if (isCircle) {
+            /* Calculate position on circle */
+            vector_add(pos, center, vRadius);
+            
             /* Calculate tangent */
             vector_outerproduct(tempRight, yAxis, vRadius);
             vector_normalize(tempRight, tempRight);
             vector_copy(tempUp, yAxis);
             
-            vector_scale(tempRight, tempRight, 1.0f);
-            vector_scale(tempUp, tempUp, 1.0f);
-
-            float textureU = scrollQuad;
-            float textureV = (float)i / segmentSize; // distance * (float)i - half_d;
-            
-            /* Apply UV trimming */
-            float normalizedU = textureU - floorf(textureU);
-            float trimmedU = uMin + normalizedU * uRange;
-            float trimmedV = vMin + (textureV - floorf(textureV)) * vRange;
-            
-            int idx = i * 2;
-            positions[1][idx][0] = circlePos[0] + tempRight[0] + tempUp[0];
-            positions[1][idx][1] = circlePos[1] + tempRight[1] + tempUp[1];
-            positions[1][idx][2] = circlePos[2] + tempRight[2] + tempUp[2] + 1;
-            colors[1][idx] = (EDGE_OPACITY << 24) | baseColor;
-            uvs[1][idx].x = trimmedU;
-            uvs[1][idx].y = trimmedV;
-
-            positions[1][idx + 1][0] = circlePos[0] + tempRight[0] - tempUp[0];
-            positions[1][idx + 1][1] = circlePos[1] + tempRight[1] - tempUp[1];
-            positions[1][idx + 1][2] = circlePos[2] + tempRight[2] - tempUp[2] - 1;
-            colors[1][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
-            uvs[1][idx + 1].x = trimmedU + 0.4f;
-            uvs[1][idx + 1].y = trimmedV;
-
+            /* Rotate radius for next segment */
             vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
-        }
-        
-        gfxDrawStrip(numSegments, positions[1], colors[1], uvs[1], 1);
-        
-    } else {
-        /* === SQUARE MODE === */
-        VECTOR corners[4];
-        vector_copy(corners[0], (VECTOR){center[0]-halfX[0]-halfZ[0], center[1]-halfX[1]-halfZ[1], center[2]-halfX[2]-halfZ[2], 0});
-        vector_copy(corners[1], (VECTOR){center[0]+halfX[0]-halfZ[0], center[1]+halfX[1]-halfZ[1], center[2]+halfX[2]-halfZ[2], 0});
-        vector_copy(corners[2], (VECTOR){center[0]+halfX[0]+halfZ[0], center[1]+halfX[1]+halfZ[1], center[2]+halfX[2]+halfZ[2], 0});
-        vector_copy(corners[3], (VECTOR){center[0]-halfX[0]+halfZ[0], center[1]-halfX[1]+halfZ[1], center[2]-halfX[2]+halfZ[2], 0});
-        
-        float sideLenX = vector_length(xAxis);
-        float sideLenZ = vector_length(zAxis);
-        int segX = clamp((int)(sideLenX / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
-        int segZ = clamp((int)(sideLenZ / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
-        
-        /* Calculate total perimeter for proper UV distribution */
-        float perimeter = (sideLenX + sideLenZ) * 2.0f;
-        float distance = 16.0f / perimeter;
-        
-        int vertexIndex = 0;
-        float currentV = -8.0f;
-        
-        /* Draw each edge of the square */
-        for (edge = 0; edge < 4; edge++) {
-            VECTOR p0, p1;
-            vector_copy(p0, corners[edge]);
-            vector_copy(p1, corners[(edge + 1) & 3]);
+        } else {
+            /* Determine which edge we're on */
+            int accumulatedSegs = 0;
+            int currentEdge = 0;
+            int localS = i;
             
-            int segCount = (edge % 2 == 0) ? segX : segZ;
-            
-            VECTOR edgeDir;
-            vector_subtract(edgeDir, p1, p0);
-            float edgeLength = vector_length(edgeDir);
-            vector_normalize(edgeDir, edgeDir);
-            
-            for (s = 0; s <= segCount; s++) {
-                float t = (float)s / segCount;
-                VECTOR pos;
-                vector_lerp(pos, p0, p1, t);
-                
-                /* Rotated 90 degrees: U = scroll, V = position around perimeter */
-                float textureU = scrollQuad;
-                float textureV = currentV + (t * edgeLength * distance);
-                
-                /* Apply UV trimming */
-                float normalizedU = textureU - floorf(textureU);
-                float trimmedU = uMin + normalizedU * uRange;
-                float trimmedV = textureV;
-                
-                /* Bottom vertex */
-                positions[0][vertexIndex][0] = pos[0];
-                positions[0][vertexIndex][1] = pos[1];
-                positions[0][vertexIndex][2] = pos[2] - 1;
-                colors[0][vertexIndex] = (EDGE_OPACITY << 24) | baseColor;
-                uvs[0][vertexIndex].x = trimmedU;
-                uvs[0][vertexIndex].y = trimmedV;
-                vertexIndex++;
-                
-                /* Top vertex */
-                positions[0][vertexIndex][0] = pos[0];
-                positions[0][vertexIndex][1] = pos[1];
-                positions[0][vertexIndex][2] = pos[2] + 1;
-                colors[0][vertexIndex] = (EDGE_OPACITY << 24) | baseColor;
-                uvs[0][vertexIndex].x = trimmedU - 0.4f;
-                uvs[0][vertexIndex].y = trimmedV;
-                vertexIndex++;
+            for (edge = 0; edge < 4; edge++) {
+                if (i <= accumulatedSegs + segmentsPerEdge[edge]) {
+                    currentEdge = edge;
+                    localS = i - accumulatedSegs;
+                    break;
+                }
+                accumulatedSegs += segmentsPerEdge[edge];
             }
             
-            currentV += edgeLength * distance;
-        }
-        
-        /* Draw upper ring */
-        gfxDrawStrip(ringTex, positions[0], colors[0], uvs[0], 1);
-        
-        /* Draw lower ring */
-        vertexIndex = 0;
-        currentV = -8.0f;
-        
-        for (edge = 0; edge < 4; edge++) {
-            VECTOR p0, p1;
-            vector_copy(p0, corners[edge]);
-            vector_copy(p1, corners[(edge + 1) & 3]);
+            VECTOR p0, p1, edgeDir;
+            vector_copy(p0, corners[currentEdge]);
+            vector_copy(p1, corners[(currentEdge + 1) & 3]);
             
-            int segCount = (edge % 2 == 0) ? segX : segZ;
-            
-            VECTOR edgeDir;
             vector_subtract(edgeDir, p1, p0);
-            float edgeLength = vector_length(edgeDir);
             vector_normalize(edgeDir, edgeDir);
             
-            for (s = 0; s <= segCount; s++) {
-                float t = (float)s / segCount;
-                VECTOR pos;
-                vector_lerp(pos, p0, p1, t);
-                
-                /* Add y offset */
-                VECTOR offsetPos;
-                vector_add(offsetPos, pos, (VECTOR){0, 0, 2, 0});
-                
-                float textureU = scrollQuad;
-                float textureV = currentV + (t * edgeLength * distance);
-                
-                /* Apply UV trimming */
-                float normalizedU = textureU - floorf(textureU);
-                float trimmedU = uMin + normalizedU * uRange;
-                float trimmedV = textureV;
-                
-                positions[1][vertexIndex][0] = offsetPos[0];
-                positions[1][vertexIndex][1] = offsetPos[1];
-                positions[1][vertexIndex][2] = offsetPos[2] + 1;
-                colors[1][vertexIndex] = (EDGE_OPACITY << 24) | baseColor;
-                uvs[1][vertexIndex].x = trimmedU;
-                uvs[1][vertexIndex].y = trimmedV;
-                vertexIndex++;
-                
-                positions[1][vertexIndex][0] = offsetPos[0];
-                positions[1][vertexIndex][1] = offsetPos[1];
-                positions[1][vertexIndex][2] = offsetPos[2] - 1;
-                colors[1][vertexIndex] = (EDGE_OPACITY << 24) | baseColor;
-                uvs[1][vertexIndex].x = trimmedU + 0.4f;
-                uvs[1][vertexIndex].y = trimmedV;
-                vertexIndex++;
-            }
+            float t = (float)localS / segmentsPerEdge[currentEdge];
+            vector_lerp(pos, p0, p1, t);
             
-            currentV += edgeLength * distance;
+            /* Calculate tangent */
+            vector_outerproduct(tempRight, yAxis, edgeDir);
+            vector_normalize(tempRight, tempRight);
+            vector_copy(tempUp, yAxis);
         }
         
-        gfxDrawStrip(ringTex, positions[1], colors[1], uvs[1], 1);
+        /* Add Y offset for lower ring */
+        vector_add(offsetPos, pos, (VECTOR){0, 0, 2, 0});
+        
+        /* Texture coordinates */
+        float textureU = scrollQuad;
+        float textureV = (float)i / segmentSize;
+        
+        /* Apply UV trimming */
+        float normalizedU = textureU - floorf(textureU);
+        float trimmedU = uMin + normalizedU * uRange;
+        float trimmedV = vMin + (textureV - floorf(textureV)) * vRange;
+        
+        int idx = i * 2;
+        
+        positions[1][idx][0] = offsetPos[0] + tempRight[0] + tempUp[0];
+        positions[1][idx][1] = offsetPos[1] + tempRight[1] + tempUp[1];
+        positions[1][idx][2] = offsetPos[2] + tempRight[2] + tempUp[2] + 1;
+        colors[1][idx] = (EDGE_OPACITY << 24) | baseColor;
+        uvs[1][idx].x = trimmedU;
+        uvs[1][idx].y = trimmedV;
+
+        positions[1][idx + 1][0] = offsetPos[0] + tempRight[0] - tempUp[0];
+        positions[1][idx + 1][1] = offsetPos[1] + tempRight[1] - tempUp[1];
+        positions[1][idx + 1][2] = offsetPos[2] + tempRight[2] - tempUp[2] - 1;
+        colors[1][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
+        uvs[1][idx + 1].x = trimmedU + 0.4f;
+        uvs[1][idx + 1].y = trimmedV;
     }
+    
+    gfxDrawStrip(numSegments, positions[1], colors[1], uvs[1], 1);
     
     /* Animate texture scroll */
     scrollQuad += TEXTURE_SCROLL_SPEED;
@@ -740,13 +700,12 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
     }
     
     /* Setup floor quad vertices */
-    /* Order: bottom-left, top-left, bottom-right, top-right (standard quad layout) */
     u32 floorColor = (0x30 << 24) | baseColor;
     
-    vector_copy(floorQuad.point[0], floorCorners[1]); /* bottom-left */
-    vector_copy(floorQuad.point[1], floorCorners[0]); /* top-left */
-    vector_copy(floorQuad.point[2], floorCorners[2]); /* bottom-right */
-    vector_copy(floorQuad.point[3], floorCorners[3]); /* top-right */
+    vector_copy(floorQuad.point[0], floorCorners[1]);
+    vector_copy(floorQuad.point[1], floorCorners[0]);
+    vector_copy(floorQuad.point[2], floorCorners[2]);
+    vector_copy(floorQuad.point[3], floorCorners[3]);
     
     floorQuad.point[0][3] = 1.0f;
     floorQuad.point[1][3] = 1.0f;
@@ -765,6 +724,371 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
     
     gfxDrawQuad(floorQuad, NULL);
 }
+
+
+
+
+// /* Prepare arrays for strip vertices */
+// vec3 positions[2][(MAX_SEGMENTS + 1) * 2];
+// int colors[2][(MAX_SEGMENTS + 1) * 2];
+// UV_t uvs[2][(MAX_SEGMENTS + 1) * 2];
+
+// float scrollQuad = 0;
+
+// void circleMeFinal_StripMe(Moby *this, Cuboid cube)
+// {
+//     hillPvar_t *pvar = (hillPvar_t*)this->pVar;
+//     int isCircle = pvar->isCircle;
+//     u32 baseColor = pvar->color;
+//     int i, edge, s;
+    
+//     /* Setup rotation matrix from cube */
+//     MATRIX rotMatrix;
+//     matrix_unit(rotMatrix);
+//     matrix_rotate_x(rotMatrix, rotMatrix, cube.rot[0]);
+//     matrix_rotate_y(rotMatrix, rotMatrix, cube.rot[1]);
+//     matrix_rotate_z(rotMatrix, rotMatrix, cube.rot[2]);
+    
+//     /* Extract axes from cube matrix */
+//     VECTOR center, xAxis, zAxis, yAxis, halfX, halfZ;
+//     vector_copy(center, cube.pos);
+//     vector_copy(xAxis, (VECTOR){cube.matrix.v0[0], cube.matrix.v1[0], cube.matrix.v2[0], 0});
+//     vector_copy(zAxis, (VECTOR){cube.matrix.v0[1], cube.matrix.v1[1], cube.matrix.v2[1], 0});
+//     vector_copy(yAxis, (VECTOR){cube.matrix.v0[2], cube.matrix.v1[2], cube.matrix.v2[2], 0});
+    
+//     /* Apply rotation to axes */
+//     vector_apply(xAxis, xAxis, rotMatrix);
+//     vector_apply(zAxis, zAxis, rotMatrix);
+//     vector_apply(yAxis, yAxis, rotMatrix);
+    
+//     vector_scale(halfX, xAxis, 0.5f);
+//     vector_scale(halfZ, zAxis, 0.5f);
+//     vector_normalize(yAxis, yAxis);
+    
+//     float fRadius = vector_length(halfX);
+    
+//     /* ===== Calculate segment count ===== */
+//     float circumfrence = (int)(2.0f * MATH_PI * fRadius);
+//     int segmentSize = 2;// (int)clamp(fRadius *.10f, 2, 16);
+//     int segments;
+    
+//     if (isCircle) {
+//         // segments = (int)(circumfrence / segmentSize);
+//         segments = clamp(circumfrence / segmentSize, MIN_SEGMENTS, MAX_SEGMENTS);
+//         /* Don't clamp circles - use actual segment count needed */
+//         // if (segments < MIN_SEGMENTS) segments = MIN_SEGMENTS;
+//     } else {
+//         /* For square, use average of side lengths */
+//         float sideLenX = vector_length(xAxis);
+//         float sideLenZ = vector_length(zAxis);
+//         int segX = clamp((int)(sideLenX / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
+//         int segZ = clamp((int)(sideLenZ / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
+//         segments = (segX + segZ) * 2; /* Total around perimeter */
+//     }
+    
+//     /* ===== Setup rendering ===== */
+//     int floorTex = isCircle ? FX_CIRLCE_NO_FADED_EDGE : FX_SQUARE_FLAT_1;
+//     int ringTex = FX_TIRE_TRACKS;
+    
+//     /* UV trimming to remove transparent edges */
+//     float uMin = TEXTURE_EDGE_TRIM_U;
+//     float uMax = 1.0f - TEXTURE_EDGE_TRIM_U;
+//     float vMin = TEXTURE_EDGE_TRIM_V;
+//     float vMax = 1.0f - TEXTURE_EDGE_TRIM_V;
+//     float uRange = uMax - uMin;
+//     float vRange = vMax - vMin;
+    
+//     /* Initialize strip drawing */
+//     gfxDrawStripInit();
+//     gfxAddRegister(8, 0);
+//     gfxAddRegister(0x14, 0xff9000000260);
+//     gfxAddRegister(6, gfxGetEffectTex(ringTex));
+//     gfxAddRegister(0x47, 0x513f1);
+//     gfxAddRegister(0x42, 0x8000000044);
+
+//     if (isCircle) {
+//         /* === CIRCLE MODE === */
+//         float thetaStep = (2.0f * MATH_PI) / segments;
+//         int numSegments = (segments + 1) * 2;
+//         VECTOR vRadius, tangent, tempRight, tempUp;
+//         vector_copy(vRadius, halfX);
+//         for (i = 0; i <= segments; i++) {
+//             /* Calculate position on circle */
+//             VECTOR circlePos;
+//             vector_add(circlePos, center, vRadius);
+            
+//             /* Calculate tangent for quad orientation */
+//             vector_outerproduct(tempRight, yAxis, vRadius);
+//             vector_normalize(tempRight, tempRight);
+//             vector_copy(tempUp, yAxis);
+            
+//             /* Scale tangent and up vectors (like in quad version) */
+//             vector_scale(tempRight, tempRight, 1.0f);
+//             vector_scale(tempUp, tempUp, 1.0f);
+            
+//             /* Texture coordinates - rotated 90 degrees (swap U and V) */
+//             float textureU = scrollQuad;  /* U is now the scrolling axis */
+//             float textureV = (float)i / segmentSize;
+            
+//             /* Apply UV trimming to remove transparent edges */
+//             float normalizedU = textureU - floorf(textureU);
+//             float trimmedU = uMin + normalizedU * uRange;
+//             float trimmedV = vMin + (textureV - floorf(textureV)) * vRange;
+            
+//             /* Bottom vertex (inner ring) - equivalent to signs {1, -1} */
+//             int idx = i * 2;
+//             positions[0][idx][0] = circlePos[0] + tempRight[0] - tempUp[0];
+//             positions[0][idx][1] = circlePos[1] + tempRight[1] - tempUp[1];
+//             positions[0][idx][2] = circlePos[2] + tempRight[2] - tempUp[2] - 1;
+//             colors[0][idx] = (EDGE_OPACITY << 24) | baseColor;
+//             uvs[0][idx].x = trimmedU;
+//             uvs[0][idx].y = trimmedV;
+//             // ++idx;
+//             /* Top vertex (outer ring) - equivalent to signs {1, 1} */
+//             positions[0][idx + 1][0] = circlePos[0] + tempRight[0] + tempUp[0];
+//             positions[0][idx + 1][1] = circlePos[1] + tempRight[1] + tempUp[1];
+//             positions[0][idx + 1][2] = circlePos[2] + tempRight[2] + tempUp[2] + 1;
+//             colors[0][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
+//             uvs[0][idx + 1].x = trimmedU - 0.4f;
+//             uvs[0][idx + 1].y = trimmedV;
+//             // ++idx;
+//             /* Rotate radius for next segment (but not after the last one) */
+//             vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
+//         }
+        
+//         /* Draw upper ring strip */
+//         gfxDrawStrip(numSegments, positions[0], colors[0], uvs[0], 1);
+        
+//         /* === Draw lower ring (inverted alpha) === */
+//         vector_copy(vRadius, halfX);
+//         for (i = 0; i <= segments; i++) {
+//             VECTOR circlePos;
+//             vector_add(circlePos, center, vRadius);
+//             /* Add y offset */
+//             vector_add(circlePos, circlePos, (VECTOR){0, 0, 2, 0});
+
+//             /* Calculate tangent */
+//             vector_outerproduct(tempRight, yAxis, vRadius);
+//             vector_normalize(tempRight, tempRight);
+//             vector_copy(tempUp, yAxis);
+            
+//             vector_scale(tempRight, tempRight, 1.0f);
+//             vector_scale(tempUp, tempUp, 1.0f);
+
+//             float textureU = scrollQuad;
+//             float textureV = (float)i / segmentSize;
+            
+//             /* Apply UV trimming */
+//             float normalizedU = textureU - floorf(textureU);
+//             float trimmedU = uMin + normalizedU * uRange;
+//             float trimmedV = vMin + (textureV - floorf(textureV)) * vRange;
+            
+//             int idx = i * 2;
+//             positions[1][idx][0] = circlePos[0] + tempRight[0] + tempUp[0];
+//             positions[1][idx][1] = circlePos[1] + tempRight[1] + tempUp[1];
+//             positions[1][idx][2] = circlePos[2] + tempRight[2] + tempUp[2] + 1;
+//             colors[1][idx] = (EDGE_OPACITY << 24) | baseColor;
+//             uvs[1][idx].x = trimmedU;
+//             uvs[1][idx].y = trimmedV;
+
+//             positions[1][idx + 1][0] = circlePos[0] + tempRight[0] - tempUp[0];
+//             positions[1][idx + 1][1] = circlePos[1] + tempRight[1] - tempUp[1];
+//             positions[1][idx + 1][2] = circlePos[2] + tempRight[2] - tempUp[2] - 1;
+//             colors[1][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
+//             uvs[1][idx + 1].x = trimmedU + 0.4f;
+//             uvs[1][idx + 1].y = trimmedV;
+
+//             vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
+//         }
+        
+//         gfxDrawStrip(numSegments, positions[1], colors[1], uvs[1], 1);
+        
+//     } else {
+//         /* === SQUARE MODE === */
+//         VECTOR corners[4];
+//         vector_copy(corners[0], (VECTOR){center[0]-halfX[0]-halfZ[0], center[1]-halfX[1]-halfZ[1], center[2]-halfX[2]-halfZ[2], 0});
+//         vector_copy(corners[1], (VECTOR){center[0]+halfX[0]-halfZ[0], center[1]+halfX[1]-halfZ[1], center[2]+halfX[2]-halfZ[2], 0});
+//         vector_copy(corners[2], (VECTOR){center[0]+halfX[0]+halfZ[0], center[1]+halfX[1]+halfZ[1], center[2]+halfX[2]+halfZ[2], 0});
+//         vector_copy(corners[3], (VECTOR){center[0]-halfX[0]+halfZ[0], center[1]-halfX[1]+halfZ[1], center[2]-halfX[2]+halfZ[2], 0});
+        
+//         float sideLenX = vector_length(xAxis);
+//         float sideLenZ = vector_length(zAxis);
+//         int segX = clamp((int)(sideLenX / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
+//         int segZ = clamp((int)(sideLenZ / segmentSize), MIN_SEGMENTS, MAX_SEGMENTS);
+        
+//         /* Calculate total perimeter for proper UV distribution */
+//         float perimeter = (sideLenX + sideLenZ) * 2.0f;
+//         float distance = 16.0f / perimeter;
+        
+//         int vertexIndex = 0;
+//         float currentV = -8.0f;
+        
+//         /* Draw each edge of the square */
+//         for (edge = 0; edge < 4; edge++) {
+//             VECTOR p0, p1;
+//             vector_copy(p0, corners[edge]);
+//             vector_copy(p1, corners[(edge + 1) & 3]);
+            
+//             int segCount = (edge % 2 == 0) ? segX : segZ;
+            
+//             VECTOR edgeDir;
+//             vector_subtract(edgeDir, p1, p0);
+//             float edgeLength = vector_length(edgeDir);
+//             vector_normalize(edgeDir, edgeDir);
+            
+//             for (s = 0; s <= segCount; s++) {
+//                 float t = (float)s / segCount;
+//                 VECTOR pos;
+//                 vector_lerp(pos, p0, p1, t);
+                
+//                 /* Rotated 90 degrees: U = scroll, V = position around perimeter */
+//                 float textureU = scrollQuad;
+//                 float textureV = currentV + (t * edgeLength * distance);
+                
+//                 /* Apply UV trimming */
+//                 float normalizedU = textureU - floorf(textureU);
+//                 float trimmedU = uMin + normalizedU * uRange;
+//                 float trimmedV = textureV;
+                
+//                 /* Bottom vertex */
+//                 positions[0][vertexIndex][0] = pos[0];
+//                 positions[0][vertexIndex][1] = pos[1];
+//                 positions[0][vertexIndex][2] = pos[2] - 1;
+//                 colors[0][vertexIndex] = (EDGE_OPACITY << 24) | baseColor;
+//                 uvs[0][vertexIndex].x = trimmedU;
+//                 uvs[0][vertexIndex].y = trimmedV;
+//                 vertexIndex++;
+                
+//                 /* Top vertex */
+//                 positions[0][vertexIndex][0] = pos[0];
+//                 positions[0][vertexIndex][1] = pos[1];
+//                 positions[0][vertexIndex][2] = pos[2] + 1;
+//                 colors[0][vertexIndex] = (EDGE_OPACITY << 24) | baseColor;
+//                 uvs[0][vertexIndex].x = trimmedU - 0.4f;
+//                 uvs[0][vertexIndex].y = trimmedV;
+//                 vertexIndex++;
+//             }
+            
+//             currentV += edgeLength * distance;
+//         }
+        
+//         /* Draw upper ring */
+//         gfxDrawStrip(ringTex, positions[0], colors[0], uvs[0], 1);
+        
+//         /* Draw lower ring */
+//         vertexIndex = 0;
+//         currentV = -8.0f;
+        
+//         for (edge = 0; edge < 4; edge++) {
+//             VECTOR p0, p1;
+//             vector_copy(p0, corners[edge]);
+//             vector_copy(p1, corners[(edge + 1) & 3]);
+            
+//             int segCount = (edge % 2 == 0) ? segX : segZ;
+            
+//             VECTOR edgeDir;
+//             vector_subtract(edgeDir, p1, p0);
+//             float edgeLength = vector_length(edgeDir);
+//             vector_normalize(edgeDir, edgeDir);
+            
+//             for (s = 0; s <= segCount; s++) {
+//                 float t = (float)s / segCount;
+//                 VECTOR pos;
+//                 vector_lerp(pos, p0, p1, t);
+                
+//                 /* Add y offset */
+//                 VECTOR offsetPos;
+//                 vector_add(offsetPos, pos, (VECTOR){0, 0, 2, 0});
+                
+//                 float textureU = scrollQuad;
+//                 float textureV = currentV + (t * edgeLength * distance);
+                
+//                 /* Apply UV trimming */
+//                 float normalizedU = textureU - floorf(textureU);
+//                 float trimmedU = uMin + normalizedU * uRange;
+//                 float trimmedV = textureV;
+                
+//                 positions[1][vertexIndex][0] = offsetPos[0];
+//                 positions[1][vertexIndex][1] = offsetPos[1];
+//                 positions[1][vertexIndex][2] = offsetPos[2] + 1;
+//                 colors[1][vertexIndex] = (EDGE_OPACITY << 24) | baseColor;
+//                 uvs[1][vertexIndex].x = trimmedU;
+//                 uvs[1][vertexIndex].y = trimmedV;
+//                 vertexIndex++;
+                
+//                 positions[1][vertexIndex][0] = offsetPos[0];
+//                 positions[1][vertexIndex][1] = offsetPos[1];
+//                 positions[1][vertexIndex][2] = offsetPos[2] - 1;
+//                 colors[1][vertexIndex] = (EDGE_OPACITY << 24) | baseColor;
+//                 uvs[1][vertexIndex].x = trimmedU + 0.4f;
+//                 uvs[1][vertexIndex].y = trimmedV;
+//                 vertexIndex++;
+//             }
+            
+//             currentV += edgeLength * distance;
+//         }
+        
+//         gfxDrawStrip(ringTex, positions[1], colors[1], uvs[1], 1);
+//     }
+    
+//     /* Animate texture scroll */
+//     scrollQuad += TEXTURE_SCROLL_SPEED;
+//     if (scrollQuad >= 1.0f) scrollQuad -= 1.0f;
+    
+//     /* ===== Draw floor quad ===== */
+//     QuadDef floorQuad;
+//     gfxSetupEffectTex(&floorQuad, floorTex, DRAW_TYPE_NORMAL, 0x30);
+    
+//     /* Offset floor down slightly */
+//     VECTOR offset = {0, 0, -1, 0};
+//     VECTOR rotatedOffset;
+//     vector_apply(rotatedOffset, offset, rotMatrix);
+    
+//     /* Create floor corners */
+//     VECTOR floorCorners[4];
+//     if (isCircle) {
+//         vector_copy(floorCorners[0], (VECTOR){center[0] - fRadius, center[1] - fRadius, center[2], 0});
+//         vector_copy(floorCorners[1], (VECTOR){center[0] + fRadius, center[1] - fRadius, center[2], 0});
+//         vector_copy(floorCorners[2], (VECTOR){center[0] + fRadius, center[1] + fRadius, center[2], 0});
+//         vector_copy(floorCorners[3], (VECTOR){center[0] - fRadius, center[1] + fRadius, center[2], 0});
+//     } else {
+//         vector_copy(floorCorners[0], (VECTOR){center[0]-halfX[0]-halfZ[0], center[1]-halfX[1]-halfZ[1], center[2]-halfX[2]-halfZ[2], 0});
+//         vector_copy(floorCorners[1], (VECTOR){center[0]+halfX[0]-halfZ[0], center[1]+halfX[1]-halfZ[1], center[2]+halfX[2]-halfZ[2], 0});
+//         vector_copy(floorCorners[2], (VECTOR){center[0]+halfX[0]+halfZ[0], center[1]+halfX[1]+halfZ[1], center[2]+halfX[2]+halfZ[2], 0});
+//         vector_copy(floorCorners[3], (VECTOR){center[0]-halfX[0]+halfZ[0], center[1]-halfX[1]+halfZ[1], center[2]-halfX[2]+halfZ[2], 0});
+//     }
+    
+//     /* Apply offset to all corners */
+//     for (i = 0; i < 4; i++) {
+//         vector_add(floorCorners[i], floorCorners[i], rotatedOffset);
+//     }
+    
+//     /* Setup floor quad vertices */
+//     /* Order: bottom-left, top-left, bottom-right, top-right (standard quad layout) */
+//     u32 floorColor = (0x30 << 24) | baseColor;
+    
+//     vector_copy(floorQuad.point[0], floorCorners[1]); /* bottom-left */
+//     vector_copy(floorQuad.point[1], floorCorners[0]); /* top-left */
+//     vector_copy(floorQuad.point[2], floorCorners[2]); /* bottom-right */
+//     vector_copy(floorQuad.point[3], floorCorners[3]); /* top-right */
+    
+//     floorQuad.point[0][3] = 1.0f;
+//     floorQuad.point[1][3] = 1.0f;
+//     floorQuad.point[2][3] = 1.0f;
+//     floorQuad.point[3][3] = 1.0f;
+    
+//     floorQuad.rgba[0] = floorColor;
+//     floorQuad.rgba[1] = floorColor;
+//     floorQuad.rgba[2] = floorColor;
+//     floorQuad.rgba[3] = floorColor;
+    
+//     floorQuad.uv[0] = (UV_t){0, 0};
+//     floorQuad.uv[1] = (UV_t){0, 1};
+//     floorQuad.uv[2] = (UV_t){1, 0};
+//     floorQuad.uv[3] = (UV_t){1, 1};
+    
+//     gfxDrawQuad(floorQuad, NULL);
+// }
 
 
 
