@@ -58,8 +58,8 @@ typedef struct hillPvar {
 
 Cuboid rawr = {
     .matrix = {
-        {20, 0, 0, 0},
-        {0, 20, 0, 0},
+        {200, 0, 0, 0},
+        {0, 200, 0, 0},
         {0, 0, 2, 0}
     },
     .pos = {519.58356, 398.7586, 201.38, 1},
@@ -401,9 +401,9 @@ void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
 }
 
 /* Prepare arrays for strip vertices */
-vec3 positions[2][(MAX_SEGMENTS * 2)];
-int colors[2][(MAX_SEGMENTS * 2)];
-UV_t uvs[2][(MAX_SEGMENTS * 2)];
+vec3 positions[2][(MAX_SEGMENTS + 1) * 2];
+int colors[2][(MAX_SEGMENTS + 1) * 2];
+UV_t uvs[2][(MAX_SEGMENTS + 1) * 2];
 
 float scrollQuad = 0;
 
@@ -441,12 +441,12 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
     
     /* ===== Calculate segment count ===== */
     float circumfrence = (int)(2.0f * MATH_PI * fRadius);
-    int segmentSize = (int)clamp(fRadius *.10f, 2, 16);
+    int segmentSize = 2;// (int)clamp(fRadius *.10f, 2, 16);
     int segments;
     
     if (isCircle) {
         // segments = (int)(circumfrence / segmentSize);
-        segments = clamp(fRadius * 2 / segmentSize, MIN_SEGMENTS, MAX_SEGMENTS) + 1;
+        segments = clamp(fRadius * 2 / segmentSize, MIN_SEGMENTS, MAX_SEGMENTS);
         /* Don't clamp circles - use actual segment count needed */
         // if (segments < MIN_SEGMENTS) segments = MIN_SEGMENTS;
     } else {
@@ -485,6 +485,7 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
         float half_d = distanceScale * .5;
         float distance = distanceScale / (float)segments;
 
+        int numSegments = (segments + 1) * 2;
         VECTOR vRadius, tangent, tempRight, tempUp;
         vector_copy(vRadius, halfX);
         for (i = 0; i <= segments; i++) {
@@ -532,7 +533,7 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
         }
         
         /* Draw upper ring strip */
-        gfxDrawStrip(ringTex, positions[0], colors[0], uvs[0], 1);
+        gfxDrawStrip(numSegments, positions[0], colors[0], uvs[0], 1);
         
         /* === Draw lower ring (inverted alpha) === */
         vector_copy(vRadius, halfX);
@@ -576,7 +577,7 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
             vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
         }
         
-        gfxDrawStrip(ringTex, positions[1], colors[1], uvs[1], 1);
+        gfxDrawStrip(numSegments, positions[1], colors[1], uvs[1], 1);
         
     } else {
         /* === SQUARE MODE === */
