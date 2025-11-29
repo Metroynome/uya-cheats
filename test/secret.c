@@ -24,7 +24,7 @@
 #include <libuya/sound.h>
 #include <libuya/music.h>
 
-#define HBOLT_MOBY_OCLASS			(0x1C0D)
+#define HBOLT_MOBY_OCLASS			(0x3000)
 #define HBOLT_PICKUP_RADIUS		    (3)
 #define HBOLT_PARTICLE_COLOR        (0x0000ffff)
 #define HBOLT_SPRITE_COLOR          (0x00ffffff)
@@ -48,6 +48,7 @@ struct HBoltPVar {
 };
 
 typedef struct hillPvar {
+    int cuboidIndex[32];
     short state;
     short isCircle;
     Player *playersIn[GAME_MAX_PLAYERS];
@@ -58,9 +59,9 @@ typedef struct hillPvar {
 
 Cuboid rawr = {
     .matrix = {
-        {200, 0, 0, 0},
-        {0, 200, 0, 0},
-        {0, 0, 2, 0}
+        {20, 0, 0, 0},
+        {0, 30, 0, 0},
+        {0, 0, 1, 0}
     },
     .pos = {519.58356, 398.7586, 201.38, 1},
     .imatrix = 0,
@@ -407,6 +408,8 @@ void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
 vec3 positions[2][(MAX_SEGMENTS + 1) * 2];
 int colors[2][(MAX_SEGMENTS + 1) * 2];
 UV_t uvs[2][(MAX_SEGMENTS + 1) * 2];
+int cachedSegments = -1;
+int cachedIsCircle = -1;
 
 float scrollQuad = 0;
 
@@ -447,7 +450,7 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
     int segments;
     
     if (isCircle) {
-        segments = clamp((2 * MATH_PI * fRadius) / segmentSize, MIN_SEGMENTS, MAX_SEGMENTS);
+        segments = clamp(fRadius * 2 / segmentSize, MIN_SEGMENTS, MAX_SEGMENTS);
     } else {
         /* For square, calculate total segments around perimeter */
         float sideLenX = vector_length(xAxis);
@@ -510,54 +513,84 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
     int numSegments = (segments + 1) * 2;
     VECTOR tempRight, tempUp;
     
-    /* === Draw upper ring === */
-    if (isCircle) vector_copy(vRadius, halfX);
-    
-    for (i = 0; i <= segments; i++) {
-        VECTOR pos;
+    /* === Generate positions once (only if not cached) === */
+    if (cachedSegments != segments || cachedIsCircle != isCircle) {
+        if (isCircle) vector_copy(vRadius, halfX);
         
-        if (isCircle) {
-            /* Calculate position on circle */
-            vector_add(pos, center, vRadius);
+        for (i = 0; i <= segments; i++) {
+            VECTOR pos;
             
-            /* Calculate tangent for quad orientation */
-            vector_outerproduct(tempRight, yAxis, vRadius);
-            vector_normalize(tempRight, tempRight);
-            vector_copy(tempUp, yAxis);
-            
-            /* Rotate radius for next segment */
-            vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
-        } else {
-            /* Determine which edge we're on */
-            int accumulatedSegs = 0;
-            int currentEdge = 0;
-            int localS = i;
-            
-            for (edge = 0; edge < 4; edge++) {
-                if (i <= accumulatedSegs + segmentsPerEdge[edge]) {
-                    currentEdge = edge;
-                    localS = i - accumulatedSegs;
-                    break;
+            if (isCircle) {
+                /* Calculate position on circle */
+                vector_add(pos, center, vRadius);
+                
+                /* Calculate tangent for quad orientation */
+                vector_outerproduct(tempRight, yAxis, vRadius);
+                vector_normalize(tempRight, tempRight);
+                vector_copy(tempUp, yAxis);
+                
+                /* Rotate radius for next segment */
+                vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
+            } else {
+                /* Determine which edge we're on */
+                int accumulatedSegs = 0;
+                int currentEdge = 0;
+                int localS = i;
+                
+                for (edge = 0; edge < 4; edge++) {
+                    if (i <= accumulatedSegs + segmentsPerEdge[edge]) {
+                        currentEdge = edge;
+                        localS = i - accumulatedSegs;
+                        break;
+                    }
+                    accumulatedSegs += segmentsPerEdge[edge];
                 }
-                accumulatedSegs += segmentsPerEdge[edge];
+                
+                VECTOR p0, p1, edgeDir;
+                vector_copy(p0, corners[currentEdge]);
+                vector_copy(p1, corners[(currentEdge + 1) & 3]);
+                
+                vector_subtract(edgeDir, p1, p0);
+                vector_normalize(edgeDir, edgeDir);
+                
+                float t = (float)localS / segmentsPerEdge[currentEdge];
+                vector_lerp(pos, p0, p1, t);
+                
+                /* For square, vertices are just offset in Z direction */
+                vector_copy(tempRight, (VECTOR){0, 0, 0, 0});
+                vector_copy(tempUp, (VECTOR){0, 0, 0, 0});
             }
             
-            VECTOR p0, p1, edgeDir;
-            vector_copy(p0, corners[currentEdge]);
-            vector_copy(p1, corners[(currentEdge + 1) & 3]);
+            int idx = i * 2;
             
-            vector_subtract(edgeDir, p1, p0);
-            vector_normalize(edgeDir, edgeDir);
+            /* === Upper ring positions === */
+            positions[0][idx][0] = pos[0] + tempRight[0] - tempUp[0];
+            positions[0][idx][1] = pos[1] + tempRight[1] - tempUp[1];
+            positions[0][idx][2] = pos[2] + tempRight[2] - tempUp[2] - 1;
             
-            float t = (float)localS / segmentsPerEdge[currentEdge];
-            vector_lerp(pos, p0, p1, t);
+            positions[0][idx + 1][0] = pos[0] + tempRight[0] + tempUp[0];
+            positions[0][idx + 1][1] = pos[1] + tempRight[1] + tempUp[1];
+            positions[0][idx + 1][2] = pos[2] + tempRight[2] + tempUp[2] + 1;
             
-            /* Calculate tangent (perpendicular to edge) */
-            vector_outerproduct(tempRight, yAxis, edgeDir);
-            vector_normalize(tempRight, tempRight);
-            vector_copy(tempUp, yAxis);
+            /* === Lower ring positions === */
+            VECTOR offsetPos;
+            vector_add(offsetPos, pos, (VECTOR){0, 0, 2, 0});
+            
+            positions[1][idx][0] = offsetPos[0] + tempRight[0] + tempUp[0];
+            positions[1][idx][1] = offsetPos[1] + tempRight[1] + tempUp[1];
+            positions[1][idx][2] = offsetPos[2] + tempRight[2] + tempUp[2] + 1;
+
+            positions[1][idx + 1][0] = offsetPos[0] + tempRight[0] - tempUp[0];
+            positions[1][idx + 1][1] = offsetPos[1] + tempRight[1] - tempUp[1];
+            positions[1][idx + 1][2] = offsetPos[2] + tempRight[2] - tempUp[2] - 1;
         }
         
+        cachedSegments = segments;
+        cachedIsCircle = isCircle;
+    }
+    
+    /* === Update colors and UVs every frame === */
+    for (i = 0; i <= segments; i++) {
         /* Texture coordinates */
         float textureU = scrollQuad;
         float textureV = (float)i / segmentSize;
@@ -569,102 +602,27 @@ void circleMeFinal_StripMe(Moby *this, Cuboid cube)
         
         int idx = i * 2;
         
-        /* Bottom vertex (inner ring) */
-        positions[0][idx][0] = pos[0] + tempRight[0] - tempUp[0];
-        positions[0][idx][1] = pos[1] + tempRight[1] - tempUp[1];
-        positions[0][idx][2] = pos[2] + tempRight[2] - tempUp[2] - 1;
+        /* Upper ring */
         colors[0][idx] = (EDGE_OPACITY << 24) | baseColor;
         uvs[0][idx].x = trimmedU;
         uvs[0][idx].y = trimmedV;
         
-        /* Top vertex (outer ring) */
-        positions[0][idx + 1][0] = pos[0] + tempRight[0] + tempUp[0];
-        positions[0][idx + 1][1] = pos[1] + tempRight[1] + tempUp[1];
-        positions[0][idx + 1][2] = pos[2] + tempRight[2] + tempUp[2] + 1;
         colors[0][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
         uvs[0][idx + 1].x = trimmedU - 0.4f;
         uvs[0][idx + 1].y = trimmedV;
-    }
-    
-    gfxDrawStrip(numSegments, positions[0], colors[0], uvs[0], 1);
-    
-    /* === Draw lower ring === */
-    if (isCircle) vector_copy(vRadius, halfX);
-    
-    for (i = 0; i <= segments; i++) {
-        VECTOR pos, offsetPos;
         
-        if (isCircle) {
-            /* Calculate position on circle */
-            vector_add(pos, center, vRadius);
-            
-            /* Calculate tangent */
-            vector_outerproduct(tempRight, yAxis, vRadius);
-            vector_normalize(tempRight, tempRight);
-            vector_copy(tempUp, yAxis);
-            
-            /* Rotate radius for next segment */
-            vector_rodrigues(vRadius, vRadius, yAxis, thetaStep);
-        } else {
-            /* Determine which edge we're on */
-            int accumulatedSegs = 0;
-            int currentEdge = 0;
-            int localS = i;
-            
-            for (edge = 0; edge < 4; edge++) {
-                if (i <= accumulatedSegs + segmentsPerEdge[edge]) {
-                    currentEdge = edge;
-                    localS = i - accumulatedSegs;
-                    break;
-                }
-                accumulatedSegs += segmentsPerEdge[edge];
-            }
-            
-            VECTOR p0, p1, edgeDir;
-            vector_copy(p0, corners[currentEdge]);
-            vector_copy(p1, corners[(currentEdge + 1) & 3]);
-            
-            vector_subtract(edgeDir, p1, p0);
-            vector_normalize(edgeDir, edgeDir);
-            
-            float t = (float)localS / segmentsPerEdge[currentEdge];
-            vector_lerp(pos, p0, p1, t);
-            
-            /* Calculate tangent */
-            vector_outerproduct(tempRight, yAxis, edgeDir);
-            vector_normalize(tempRight, tempRight);
-            vector_copy(tempUp, yAxis);
-        }
-        
-        /* Add Y offset for lower ring */
-        vector_add(offsetPos, pos, (VECTOR){0, 0, 2, 0});
-        
-        /* Texture coordinates */
-        float textureU = scrollQuad;
-        float textureV = (float)i / segmentSize;
-        
-        /* Apply UV trimming */
-        float normalizedU = textureU - floorf(textureU);
-        float trimmedU = uMin + normalizedU * uRange;
-        float trimmedV = vMin + (textureV - floorf(textureV)) * vRange;
-        
-        int idx = i * 2;
-        
-        positions[1][idx][0] = offsetPos[0] + tempRight[0] + tempUp[0];
-        positions[1][idx][1] = offsetPos[1] + tempRight[1] + tempUp[1];
-        positions[1][idx][2] = offsetPos[2] + tempRight[2] + tempUp[2] + 1;
+        /* Lower ring */
         colors[1][idx] = (EDGE_OPACITY << 24) | baseColor;
         uvs[1][idx].x = trimmedU;
         uvs[1][idx].y = trimmedV;
-
-        positions[1][idx + 1][0] = offsetPos[0] + tempRight[0] - tempUp[0];
-        positions[1][idx + 1][1] = offsetPos[1] + tempRight[1] - tempUp[1];
-        positions[1][idx + 1][2] = offsetPos[2] + tempRight[2] - tempUp[2] - 1;
+        
         colors[1][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
         uvs[1][idx + 1].x = trimmedU + 0.4f;
         uvs[1][idx + 1].y = trimmedV;
     }
     
+    /* === Draw both rings === */
+    gfxDrawStrip(numSegments, positions[0], colors[0], uvs[0], 1);
     gfxDrawStrip(numSegments, positions[1], colors[1], uvs[1], 1);
     
     /* Animate texture scroll */
@@ -1551,6 +1509,8 @@ void drawTheThingJulie(Moby *moby)
 
 void postDraw(Moby *moby)
 {
+    printf("\npostdraw call");
+
     int opacity = 0x80;
     hillPvar_t* pvars = (hillPvar_t*)moby->pVar;
     if (!pvars)
@@ -1586,9 +1546,15 @@ void update(Moby* moby)
         return;
 
     gfxRegistserDrawFunction(&postDraw, moby);
-
+    printf("\nregistered!");
     // force set cuboid for now
-    pvars->currentCuboid = &rawr;
+    // for (i = 0; i < 32; ++i) {
+    //     pvars->currentCuboid = &rawr;
+    // };
+    Cuboid *cuboid = spawnPointGet(pvars->cuboidIndex[0]);
+    printf("\ncuboid: %08x, pos: %d", cuboid, cuboid->pos[0]);
+    vector_copy(moby->position, cuboid->pos);
+    pvars->currentCuboid = cuboid;
 
     // handle players
     hillPlayerUpdates(moby);
@@ -1599,26 +1565,39 @@ void update(Moby* moby)
     // }
 }
 
-void spawn(VECTOR position)
+void spawn(Moby *moby)
 {
-    Moby* moby = mobySpawn(HBOLT_MOBY_OCLASS, sizeof(hillPvar_t));
+    if (moby == NULL) {
+        Moby *moby = mobySpawn(HBOLT_MOBY_OCLASS, sizeof(hillPvar_t));
+    }
     if (!moby) return;
 
+    hillPvar_t* pvars = (hillPvar_t*)moby->pVar;
+
     moby->pUpdate = &update;
-    vector_copy(moby->position, position);
-    moby->updateDist = -1;
-    moby->drawn = 1;
-    moby->opacity = 0x00;
-    moby->drawDist = 0x00;
+    moby->modeBits = 0;
 
     // update pvars
-    hillPvar_t* pvars = (hillPvar_t*)moby->pVar;
     // pvars->DestroyAtTime = gameGetTime() + (TIME_SECOND * 30);
-    memset(pvars, 0, sizeof(pvars));
+    // memset(pvars, 0, sizeof(pvars));
 
     // mobySetState(moby, 0, -1);
     // scavHuntResetBoltSpawnCooldown();
     soundPlayByOClass(1, 0, moby, MOBY_ID_OMNI_SHIELD);
+}
+
+void getHill(void)
+{
+	Moby* moby = mobyListGetStart();
+	Moby* mobyEnd = mobyListGetEnd();
+	int i = 0;
+	while (moby < mobyEnd) {
+		if (moby->oClass == 0x3000) {
+			spawn(moby);
+            break;
+		}
+		++moby;
+	}
 }
 
 void runUltimateSecret(void)
@@ -1627,6 +1606,8 @@ void runUltimateSecret(void)
         spawn(rawr.pos);
         spawned = 1;
     }
+
+    
 }
 
 void secret(void)
@@ -1640,5 +1621,9 @@ void secret(void)
     }
     Player *p = playerGetFromSlot(0);
 
-    runUltimateSecret();
+    if (!spawned) {
+        getHill();
+        spawned = 1;
+    }
+    // runUltimateSecret();
 }

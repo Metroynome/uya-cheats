@@ -401,7 +401,7 @@ int main(void)
 		// gameGetLocalSettings()->Wide = 1;
 		
 		// cycle through sprite/effect textures
-		debugTextures();
+		// debugTextures();
 
 		// Set 1k kills
 		// *(u32*)0x004A8F6C = 0x240703E8;
@@ -457,15 +457,16 @@ int main(void)
 
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
-    	DebugInGame(p);
+    	// DebugInGame(p);
     } else {
 		// DebugInMenus();
 	}
 
 	// StartBots();
 	// hud();
-	secret();
+	// secret();
 	// domination();
+	koth();
 
 	uyaPostUpdate();
 

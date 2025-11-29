@@ -4,21 +4,21 @@ EE_BIN_DIR = bin/
 EE_ELF = $(EE_BIN_DIR)test.elf
 EE_BIN = $(EE_BIN_DIR)test.bin
 EE_OBJS = functions.o main.o
-EE_OBJS += bots.o
+# EE_OBJS += bots.o
 #EE_OBJS += spectate.o
 #EE_OBJS += scavengerhunt.o
 #EE_OBJS += ctf.o
 #EE_OBJS += hud.o
 #EE_OBJS += siege.o
-#EE_OBJS += koth.o
+EE_OBJS += koth.o
 # EE_OBJS += domination.o
-EE_OBJS += secret.o
+# EE_OBJS += secret.o
 
 EE_LIBS = -luyantsc
 #EE_LIBS = -luyapal
 HEADER = '1s/^/gametitle=Ratchet and Clank: Up Your Arsenal [45FE0CC4]\n\n/'
 
-ADDRESS = 000F5000
+ADDRESS = 000b0000
 
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%)
 EE_INCS := -I../../include -I$(PS2SDK)/ports/include
