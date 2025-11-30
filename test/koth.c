@@ -483,12 +483,9 @@ void hill_setupMoby(void)
     moby->pUpdate = &hill_update;
     moby->modeBits = 0;
     moby->updateDist = -1;
-    moby->drawn = 1;
-    moby->opacity = 0x00;
-    moby->drawDist = 0x00;
 
     soundPlayByOClass(1, 0, moby, MOBY_ID_OMNI_SHIELD);
-    kothInfo.gameState = 2;
+    kothInfo.kothMoby = moby;
 }
 
 Moby *getHillMoby(void)
@@ -517,8 +514,7 @@ void koth(void)
     }
     Player *p = playerGetFromSlot(0);
 
-    if (kothInfo.gameState != 2) {
+    if (!kothInfo.kothMoby) {
         hill_setupMoby();
-        kothInfo.gameState = 1;
     }
 }
