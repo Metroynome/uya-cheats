@@ -33,10 +33,12 @@
 #define TEXTURE_EDGE_TRIM_V (0.25f)
 
 int spawned = 0;
+/* Prepare arrays for strip vertices */
 vec3 positions[2][(MAX_SEGMENTS + 1) * 2];
 int colors[2][(MAX_SEGMENTS + 1) * 2];
 UV_t uvs[2][(MAX_SEGMENTS + 1) * 2];
 int cachedSegments = -1;
+int cachedIsCircle = -1;
 float scrollQuad = 0;
 
 typedef struct kothInfo {
@@ -158,7 +160,7 @@ void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
     output[3] = v[3];
 }
 
-void hill_drawShape(Moby *this, Cuboid cube)
+void circleMeFinal_StripMe(Moby *this, Cuboid cube)
 {
     hillPvar_t *pvar = (hillPvar_t*)this->pVar;
     int isCircle = pvar->isCircle;
@@ -195,7 +197,7 @@ void hill_drawShape(Moby *this, Cuboid cube)
     int segments;
     
     if (isCircle) {
-        segments = clamp(fRadius * 2 / segmentSize, MIN_SEGMENTS, MAX_SEGMENTS);
+        segments = clamp((2 * MATH_PI * fRadius) / segmentSize, MIN_SEGMENTS, MAX_SEGMENTS);
     } else {
         /* For square, calculate total segments around perimeter */
         float sideLenX = vector_length(xAxis);
@@ -225,41 +227,39 @@ void hill_drawShape(Moby *this, Cuboid cube)
     gfxAddRegister(0x42, 0x8000000044);
 
     /* === Setup shape-specific parameters === */
-    VECTOR corners[4];
+    VECTOR corners[4], vRadius;
     int segmentsPerEdge[4];
-    VECTOR vRadius;
     float thetaStep;
     
     if (isCircle) {
         thetaStep = (2.0f * MATH_PI) / segments;
-        vector_copy(vRadius, halfX);
     } else {
         /* Calculate corners */
-        vector_copy(corners[0], (VECTOR){center[0]-halfX[0]-halfZ[0], center[1]-halfX[1]-halfZ[1], center[2]-halfX[2]-halfZ[2], 0});
-        vector_copy(corners[1], (VECTOR){center[0]+halfX[0]-halfZ[0], center[1]+halfX[1]-halfZ[1], center[2]+halfX[2]-halfZ[2], 0});
-        vector_copy(corners[2], (VECTOR){center[0]+halfX[0]+halfZ[0], center[1]+halfX[1]+halfZ[1], center[2]+halfX[2]+halfZ[2], 0});
-        vector_copy(corners[3], (VECTOR){center[0]-halfX[0]+halfZ[0], center[1]-halfX[1]+halfZ[1], center[2]-halfX[2]+halfZ[2], 0});
+        float hx0 = halfX[0], hx1 = halfX[1], hx2 = halfX[2];
+        float hz0 = halfZ[0], hz1 = halfZ[1], hz2 = halfZ[2];
+        
+        vector_copy(corners[0], (VECTOR){center[0]-hx0-hz0, center[1]-hx1-hz1, center[2]-hx2-hz2, 0});
+        vector_copy(corners[1], (VECTOR){center[0]+hx0-hz0, center[1]+hx1-hz1, center[2]+hx2-hz2, 0});
+        vector_copy(corners[2], (VECTOR){center[0]+hx0+hz0, center[1]+hx1+hz1, center[2]+hx2+hz2, 0});
+        vector_copy(corners[3], (VECTOR){center[0]-hx0+hz0, center[1]-hx1+hz1, center[2]-hx2+hz2, 0});
         
         /* Calculate segments per edge proportionally */
         float sideLenX = vector_length(xAxis);
         float sideLenZ = vector_length(zAxis);
         float perimeter = (sideLenX + sideLenZ) * 2.0f;
         
-        segmentsPerEdge[0] = (int)((sideLenX / perimeter) * segments);
-        segmentsPerEdge[1] = (int)((sideLenZ / perimeter) * segments);
-        segmentsPerEdge[2] = (int)((sideLenX / perimeter) * segments);
-        segmentsPerEdge[3] = (int)((sideLenZ / perimeter) * segments);
+        segmentsPerEdge[0] = segmentsPerEdge[2] = (int)((sideLenX / perimeter) * segments);
+        segmentsPerEdge[1] = segmentsPerEdge[3] = (int)((sideLenZ / perimeter) * segments);
         
         /* Ensure we use all segments */
-        int totalSegs = segmentsPerEdge[0] + segmentsPerEdge[1] + segmentsPerEdge[2] + segmentsPerEdge[3];
-        segmentsPerEdge[0] += (segments - totalSegs);
+        segmentsPerEdge[0] += segments - (segmentsPerEdge[0] + segmentsPerEdge[1] + segmentsPerEdge[2] + segmentsPerEdge[3]);
     }
     
     int numSegments = (segments + 1) * 2;
     VECTOR tempRight, tempUp;
     
     /* === Generate positions once (only if not cached) === */
-    if (cachedSegments != segments) {
+    if (cachedSegments != segments || cachedIsCircle != isCircle) {
         if (isCircle) vector_copy(vRadius, halfX);
         
         for (i = 0; i <= segments; i++) {
@@ -331,38 +331,43 @@ void hill_drawShape(Moby *this, Cuboid cube)
         }
         
         cachedSegments = segments;
+        cachedIsCircle = isCircle;
     }
     
+    /* === Calculate distance-based opacity === */
+    Player *player = playerGetFromSlot(0);
+    VECTOR delta;
+    vector_subtract(delta, center, player->playerPosition);
+    float distance = vector_length(delta);
+    
+    float opacityFactor = 1.0f;
+    // if (distance > 52.0f) {
+    //     opacityFactor = 1.0f - clamp((distance - 52.0f) / 12.0f, 0.0f, 1.0f);
+    // }
+    
     /* === Update colors and UVs every frame === */
+    float trimmedU = uMin + (scrollQuad - floorf(scrollQuad)) * uRange;
+    
     for (i = 0; i <= segments; i++) {
-        /* Texture coordinates */
-        float textureU = scrollQuad;
-        float textureV = (float)i / segmentSize;
-        
-        /* Apply UV trimming */
-        float normalizedU = textureU - floorf(textureU);
-        float trimmedU = uMin + normalizedU * uRange;
-        float trimmedV = vMin + (textureV - floorf(textureV)) * vRange;
-        
+        float trimmedV = vMin + (((float)i / segmentSize) - floorf((float)i / segmentSize)) * vRange;
         int idx = i * 2;
-        
-        /* Upper ring */
-        colors[0][idx] = (EDGE_OPACITY << 24) | baseColor;
-        uvs[0][idx].x = trimmedU;
-        uvs[0][idx].y = trimmedV;
-        
-        colors[0][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
-        uvs[0][idx + 1].x = trimmedU - 0.4f;
-        uvs[0][idx + 1].y = trimmedV;
-        
-        /* Lower ring */
-        colors[1][idx] = (EDGE_OPACITY << 24) | baseColor;
-        uvs[1][idx].x = trimmedU;
-        uvs[1][idx].y = trimmedV;
-        
-        colors[1][idx + 1] = (EDGE_OPACITY << 24) | baseColor;
-        uvs[1][idx + 1].x = trimmedU + 0.4f;
-        uvs[1][idx + 1].y = trimmedV;
+
+        /*
+         === Order of colors:
+         - top of upper strip
+         - bottom of upper strip
+         - top of lower strip
+         - bottom oflower strip
+        */
+        colors[1][idx] = ((0x10 * (int)opacityFactor) << 24) | baseColor;
+        colors[1][idx + 1] = ((0x30 * (int)opacityFactor) << 24) | baseColor;
+        colors[0][idx + 1] = ((0x50 * (int)opacityFactor) << 24) | baseColor;
+        colors[0][idx] = ((0x10 * (int)opacityFactor) << 24) | baseColor;
+
+        uvs[0][idx].x = uvs[1][idx].x = trimmedU;
+        uvs[0][idx].y = uvs[0][idx + 1].y = uvs[1][idx].y = uvs[1][idx + 1].y = trimmedV;
+        uvs[0][idx + 1].x = trimmedU - 0.3f;
+        uvs[1][idx + 1].x = trimmedU + 0.3f;
     }
     
     /* === Draw both rings === */
