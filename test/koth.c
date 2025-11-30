@@ -39,11 +39,19 @@ UV_t uvs[2][(MAX_SEGMENTS + 1) * 2];
 int cachedSegments = -1;
 float scrollQuad = 0;
 
+typedef struct kothInfo {
+    int gameState;
+    int foundMoby;
+    Moby *kothMoby;
+} kothInfo_t;
+kothInfo_t kothInfo;
+
 
 typedef struct hillPvar {
     int cuboidIndex[32];
-    short state;
-    short isCircle;
+    bool foundMoby;
+    bool isCircle;
+    short pad;
     Player *playersIn[GAME_MAX_PLAYERS];
     Cuboid *currentCuboid;
     int teamTime[8];
@@ -419,44 +427,38 @@ void hill_drawShape(Moby *this, Cuboid cube)
     gfxDrawQuad(floorQuad, NULL);
 }
 
-void hill_doDraw(Moby *moby)
-{
-    hillPvar_t *pvar = (hillPvar_t*)moby->pVar;
-	int i;
-    // Check if needs to be circle or square
-    float len = vector_length(rawr.matrix.v2);
-    if (len > 1.0001) {
-        pvar->isCircle = 1;
-    }
-
-    hill_drawShape(moby, *pvar->currentCuboid);
-
-}
-
 void hill_postDraw(Moby *moby)
 {
-    int opacity = 0x80;
     hillPvar_t* pvars = (hillPvar_t*)moby->pVar;
     if (!pvars)
         return;
 
-    hill_doDraw(moby);
+    if (vector_length(pvars->currentCuboid->matrix.v2) > 1.0001)
+        pvars->isCircle = 1;
+
+    hill_drawShape(moby, *pvars->currentCuboid);
 }
 
-void hill_update(Moby* moby)
+void hill_update(Moby * moby)
 {
-    VECTOR t;
-    int i;
+    printf("\nhill_update: start");
     hillPvar_t *pvars = (hillPvar_t*)moby->pVar;
     if (!pvars)
         return;
 
-    gfxRegistserDrawFunction(&hill_postDraw, moby);
+    if (!pvars->currentCuboid) {
+        if (!pvars->foundMoby) {
+            pvars->currentCuboid = &rawr;
+        } else {
+            Cuboid *cuboid = spawnPointGet(pvars->cuboidIndex[0]);
+            vector_copy(moby->position, cuboid->pos);
+            pvars->currentCuboid = cuboid;
+        }
+    }
 
-    Cuboid *cuboid = spawnPointGet(pvars->cuboidIndex[0]);
-    printf("\ncuboid: %08x, pos: %d", cuboid, cuboid->pos[0]);
-    vector_copy(moby->position, cuboid->pos);
-    pvars->currentCuboid = cuboid;
+    printf("\ncuboid: %08x, pos: %d", pvars->currentCuboid, pvars->currentCuboid->pos[0]);
+
+    gfxRegistserDrawFunction(&hill_postDraw, moby);
 
     // handle players
     hillPlayerUpdates(moby);
@@ -467,38 +469,41 @@ void hill_update(Moby* moby)
     // }
 }
 
-void hill_setupMoby(Moby *moby)
+void hill_setupMoby(void)
 {
-    if (moby == NULL) {
-        Moby *moby = mobySpawn(HILL_OCLASS, sizeof(hillPvar_t));
+    Moby *moby = getHillMoby();;
+    if (moby == 0) {
+        moby = mobySpawn(HILL_OCLASS, sizeof(hillPvar_t));
     }
     if (!moby) return;
 
+    printf("\nmoby: %08x", moby);
+
+    hillPvar_t *pvars = (hillPvar_t*)moby->pVar;
     moby->pUpdate = &hill_update;
     moby->modeBits = 0;
+    moby->updateDist = -1;
+    moby->drawn = 1;
+    moby->opacity = 0x00;
+    moby->drawDist = 0x00;
 
     soundPlayByOClass(1, 0, moby, MOBY_ID_OMNI_SHIELD);
+    kothInfo.gameState = 2;
 }
 
-void getHillMoby(void)
+Moby *getHillMoby(void)
 {
 	Moby* moby = mobyListGetStart();
 	Moby* mobyEnd = mobyListGetEnd();
-	bool foundHillMoby = false;
     int i = 0;
 	while (moby < mobyEnd) {
 		if (moby->oClass == 0x3000) {
-            foundHillMoby = true;
+            return moby;
             break;
 		}
 		++moby;
 	}
-    if (foundHillMoby) {
-        hill_setupMoby(moby);
-    } else {
-        hill_setupMoby(NULL);
-    }
-    return;
+    return 0;
 }
 
 void koth(void)
@@ -512,8 +517,8 @@ void koth(void)
     }
     Player *p = playerGetFromSlot(0);
 
-    if (!spawned) {
-        getHillMoby();
-        spawned = 1;
+    if (kothInfo.gameState != 2) {
+        hill_setupMoby();
+        kothInfo.gameState = 1;
     }
 }
