@@ -464,9 +464,9 @@ int main(void)
 
 	// StartBots();
 	// hud();
-	// secret();
+	secret();
 	// domination();
-	koth();
+	// koth();
 
 	uyaPostUpdate();
 
