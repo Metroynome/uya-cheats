@@ -374,107 +374,76 @@ int debugTextures(void)
 	testSpritesOrEffects(SpriteOrEffect, texture, SCREEN_WIDTH * 0.3, SCREEN_HEIGHT * .50, 0);
 }
 
-
-typedef struct  TeamScore {
-    int team;
-    int score;
-} TeamScore_t;
-
-void sortDesc(TeamScore_t* output, TeamScore_t* input)
+	int raw_scores[8] = {23, 77, 95, 50, 83, 31, 5, 55};
+void scoreboard(int *scores)
 {
-    int i, j, max_idx;
-    TeamScore_t temp;
-    
-    /* Copy input to output */
-    for (i = 0; i < 8; i++) {
-        output[i] = input[i];
-    }
-    
-    /* Sort output array by score */
-    for (i = 0; i < 7; i++) {
-        max_idx = i;
-        for (j = i + 1; j < 8; j++) {
-            if (output[j].score > output[max_idx].score) {
-                max_idx = j;
-            }
-        }
-        temp = output[i];
-        output[i] = output[max_idx];
-        output[max_idx] = temp;
-    }
-}
-
-void scoreboard(void)
-{
-	int opacity = 0x60;
+	float maxScore = 0;
+    int opacity = 0x60;
     u32 bgColor = 0x18608f;
     u32 textColor = 0x69cbf2;
-	float bgScorebarLerp = .25;
-
+    float bgScorebarLerp = 0.25;
+    
+    /* Layout constants */
     float anchorX = 0.8105;
     float anchorY = 0.03;
     float width = 0.1621;
     float height = 0.05055;
-    float padding = .0025;
-    float rowHeight = height * SCREEN_HEIGHT;
-
-    float scoreBarW = (width * .5) - (padding * 3);
-    float scoreBarH = (height * .3333) * 2;
+    float padding = 0.0025;
+    float scoreBarW = (width * 0.5) - (padding * 3);
+    float scoreBarH = (height * 0.3333) * 2;
     float scoreBarX = anchorX + (width * 0.5) + padding;
     float textX = anchorX + (width * 0.5);
-
-	int i;
-
-	int raw_scores[8] = {23, 77, 95, 50, 83, 31, 5, 55};
-	TeamScore_t scores[8];
-	TeamScore_t sortedScores[8];
-	for (i = 0; i < 8; i++) {
-		scores[i].team = i;
-		scores[i].score = raw_scores[i];
-	}
-	sortDesc(sortedScores, scores);
-
-	// calculate max score
-	/*
-		if not timed, Max Score should equal score set by player.
-		if timed, and no score is set, max score should be all scores added together.
-	*/
-    int maxScore = 0;
-    for (i = 0; i < 8; i++)
-        maxScore += scores[i].score;
-
-	char buf[32];
-    GameSettings* gs = gameGetSettings();
-    int numTeams = 8;
-	for (i = 0; i < numTeams; ++i) {
-		// set to either team's score, or players curret score.
-		int currentScore = sortedScores[i].score;
-		int currentTeam = sortedScores[i].team;
-	
-		// calculate Y valus
+    
+    /* Initialize scores and calculate max */
+	typedef struct {int team; int score;} TeamScore;
+	int i, j, max_idx;
+    TeamScore sortedScores[8];    
+    for (i = 0; i < 8; i++) {
+        sortedScores[i].team = i;
+        sortedScores[i].score = scores[i];
+    }
+    
+    /* Sort by score (descending) */
+    TeamScore temp;
+    for (i = 0; i < 7; i++) {
+        max_idx = i;
+        for (j = i + 1; j < 8; j++) {
+            if (sortedScores[j].score > sortedScores[max_idx].score) {
+                max_idx = j;
+            }
+        }
+        temp = sortedScores[i];
+        sortedScores[i] = sortedScores[max_idx];
+        sortedScores[max_idx] = temp;
+    }
+    
+    /* Draw scoreboard */
+    char buf[32];
+    for (i = 0; i < 8; i++) {
+        int currentScore = sortedScores[i].score;
+        int currentTeam = sortedScores[i].team;
+        
+        /* Calculate positions */
         float rowYnorm = anchorY + i * (height + padding);
-		float scoreBarYnorm = rowYnorm + (height - scoreBarH) * 0.5f;
-		float textYnorm = rowYnorm + (height * 0.5f) - .005;
-		
-		// determin scorebar
-		float fill = (float)currentScore / (float)maxScore;
+        float scoreBarYnorm = rowYnorm + (height - scoreBarH) * 0.5;
+        float textYnorm = rowYnorm + (height * 0.5) - 0.005;
+	    float fill = (float)currentScore / (float)maxScore;
+		if (!maxScore) fill = (float)currentScore / (float)sortedScores[0].score;
 
-		// set text scale based on how big number is.
-		float textScale = 1;
-		if (currentScore > 9999) {
-			textScale = .50;
-		} else if (currentScore > 999 && currentScore < 10000) {
-			textScale = .75;
-		}
-
-		// draw background
+        /* Set text scale */
+        float textScale = currentScore > 9999 ? 0.5 : (currentScore > 999 ? 0.75 : 1.0);
+        
+        /* Draw background */
         gfxPixelSpaceBox(anchorX * SCREEN_WIDTH, rowYnorm * SCREEN_HEIGHT, width * SCREEN_WIDTH, height * SCREEN_HEIGHT, (opacity << 24) | bgColor);
-        // draw background scorebar
-		gfxPixelSpaceBox(scoreBarX * SCREEN_WIDTH, scoreBarYnorm * SCREEN_HEIGHT, scoreBarW * SCREEN_WIDTH, scoreBarH * SCREEN_HEIGHT, (opacity << 24) | colorLerp((opacity << 24) | TEAM_COLORS[currentTeam], (opacity << 24) | 0x00000000, bgScorebarLerp));
-		// draw foreground scorebar
-		gfxPixelSpaceBox(scoreBarX * SCREEN_WIDTH, scoreBarYnorm * SCREEN_HEIGHT, (scoreBarW * SCREEN_WIDTH) * fill, scoreBarH * SCREEN_HEIGHT, (opacity << 24) | TEAM_COLORS[currentTeam]);
-		// draw score
-        snprintf(buf, sizeof(buf), "%d", (int)currentScore);
+        
+        /* Draw background score bar */
+        gfxPixelSpaceBox(scoreBarX * SCREEN_WIDTH, scoreBarYnorm * SCREEN_HEIGHT, scoreBarW * SCREEN_WIDTH, scoreBarH * SCREEN_HEIGHT, (opacity << 24) | colorLerp((opacity << 24) | TEAM_COLORS[currentTeam], (opacity << 24) | 0x00000000, bgScorebarLerp));
+        
+        /* Draw foreground score bar */
+        gfxPixelSpaceBox(scoreBarX * SCREEN_WIDTH, scoreBarYnorm * SCREEN_HEIGHT, (scoreBarW * SCREEN_WIDTH) * fill, scoreBarH * SCREEN_HEIGHT, (opacity << 24) | TEAM_COLORS[currentTeam]);
+        
+        /* Draw score text */
+        snprintf(buf, sizeof(buf), "%d", currentScore);
         gfxScreenSpaceText(textX * SCREEN_WIDTH, textYnorm * SCREEN_HEIGHT, textScale, textScale, (opacity << 24) | textColor, buf, -1, TEXT_ALIGN_MIDDLERIGHT, FONT_BOLD);
     }
 }
@@ -499,7 +468,7 @@ int main(void)
 		if (!p)
 			return 0;
 
-		scoreboard();
+		scoreboard(raw_scores);
 
 		// force lock-strafe (controller 1)
 		// *(u8*)0x001A5a34 = 1;
