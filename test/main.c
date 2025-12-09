@@ -374,6 +374,70 @@ int debugTextures(void)
 	testSpritesOrEffects(SpriteOrEffect, texture, SCREEN_WIDTH * 0.3, SCREEN_HEIGHT * .50, 0);
 }
 
+
+void scoreboard(void)
+{
+	/*
+		if not timed, Max Score should equal score set by player.
+		if timed, and no score is set, max score should be all scores added together.
+	*/
+	int maxScore = 10000;
+
+
+	int opacity = 0x60;
+    u32 bgColor = 0x18608f;
+    u32 textColor = 0x69cbf2;
+	float bgScorebarLerp = .25;
+
+    float anchorX = 0.8105;
+    float anchorY = 0.03;
+    float width = 0.1621;
+    float height = 0.05055;
+    float padding = .0025;
+    float rowHeight = height * SCREEN_HEIGHT;
+
+    float scoreBarW = (width * .5) - (padding * 3);
+    float scoreBarH = (height * .3333) * 2;
+    float scoreBarX = anchorX + (width * 0.5) + padding;
+    float textX = anchorX + (width * 0.5);
+
+	char buf[32];
+    GameSettings* gs = gameGetSettings();
+    int numTeams = 8;
+    int i;
+	for (i = 0; i < numTeams; ++i) {
+		// set to either team's score, or players curret score.
+		int currentScore = 9999;
+	
+		// calculate Y valus
+        float rowYnorm = anchorY + i * (height + padding);
+		float scoreBarYnorm = rowYnorm + (height - scoreBarH) * 0.5f;
+		float textYnorm = rowYnorm + (height * 0.5f) - .005;
+		
+		// determin scorebar
+		float fill = (float)currentScore / (float)maxScore;
+
+		// set text scale based on how big number is.
+		float textScale = 1;
+		if (currentScore > 9999) {
+			textScale = .50;
+		} else if (currentScore > 999 && currentScore < 10000) {
+			textScale = .75;
+		}
+
+		// draw background
+        gfxPixelSpaceBox(anchorX * SCREEN_WIDTH, rowYnorm * SCREEN_HEIGHT, width * SCREEN_WIDTH, height * SCREEN_HEIGHT, (opacity << 24) | bgColor);
+        // draw background scorebar
+		gfxPixelSpaceBox(scoreBarX * SCREEN_WIDTH, scoreBarYnorm * SCREEN_HEIGHT, scoreBarW * SCREEN_WIDTH, scoreBarH * SCREEN_HEIGHT, (opacity << 24) | colorLerp((opacity << 24) | TEAM_COLORS[i], (opacity << 24) | 0x00000000, bgScorebarLerp));
+		// draw foreground scorebar
+		gfxPixelSpaceBox(scoreBarX * SCREEN_WIDTH, scoreBarYnorm * SCREEN_HEIGHT, (scoreBarW * SCREEN_WIDTH) * fill, scoreBarH * SCREEN_HEIGHT, (opacity << 24) | TEAM_COLORS[i]);
+		// draw score
+        snprintf(buf, sizeof(buf), "%d", (int)currentScore);
+        gfxScreenSpaceText(textX * SCREEN_WIDTH, textYnorm * SCREEN_HEIGHT, textScale, textScale, (opacity << 24) | textColor, buf, -1, TEXT_ALIGN_MIDDLERIGHT, FONT_BOLD);
+    }
+}
+
+
 int main(void)
 {
 	((void (*)(void))0x00126780)();
@@ -393,6 +457,7 @@ int main(void)
 		if (!p)
 			return 0;
 
+		scoreboard();
 
 		// force lock-strafe (controller 1)
 		// *(u8*)0x001A5a34 = 1;
@@ -464,7 +529,7 @@ int main(void)
 
 	// StartBots();
 	// hud();
-	secret();
+	// secret();
 	// domination();
 	// koth();
 
