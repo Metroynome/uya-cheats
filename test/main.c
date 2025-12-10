@@ -374,10 +374,10 @@ int debugTextures(void)
 	testSpritesOrEffects(SpriteOrEffect, texture, SCREEN_WIDTH * 0.3, SCREEN_HEIGHT * .50, 0);
 }
 
-	int raw_scores[8] = {23, 77, 95, 50, 83, 31, 5, 55};
+int raw_scores[8] = {23, 77, 95, 50, 83, 31, 5, 55};
 void scoreboard(int *scores)
 {
-	float maxScore = 0;
+	int maxScore = 0;
     int opacity = 0x60;
     u32 bgColor = 0x18608f;
     u32 textColor = 0x69cbf2;
@@ -394,20 +394,47 @@ void scoreboard(int *scores)
     float scoreBarX = anchorX + (width * 0.5) + padding;
     float textX = anchorX + (width * 0.5);
     
-    /* Initialize scores and calculate max */
-	typedef struct {int team; int score;} TeamScore;
+    /* Initialize scores */
 	int i, j, max_idx;
-    TeamScore sortedScores[8];    
-    for (i = 0; i < 8; i++) {
-        sortedScores[i].team = i;
-        sortedScores[i].score = scores[i];
-    }
+	typedef struct {int team; int score;} TeamScore;
+	static TeamScore sortedScores[8];    
+	GameSettings *s = gameGetSettings();
+	GameOptions *o = gameGetOptions();
+	int numRows = 0;
+	if (o->GameFlags.MultiplayerGameFlags.Teams) {
+		/* Add only teams that have players */
+		for (i = 0; i < 8; ++i) {
+			int hasPlayers = 0;
+			for (j = 0; j < s->PlayerCount; ++j) {
+				Player *player = playerGetFromSlot(j);
+				if (player && player->mpTeam == i) {
+					hasPlayers = 1;
+					break;
+				}
+			}
+			if (hasPlayers) {
+				sortedScores[numRows].team = i;
+				sortedScores[numRows].score = scores[i];
+				numRows++;
+			}
+		}
+	} else {
+		/* Add only active players */
+		for (i = 0; i < s->PlayerCount; ++i) {
+			Player *player = playerGetFromSlot(i);
+			if (player) {
+				sortedScores[numRows].team = i;
+				sortedScores[numRows].score = scores[i];
+				numRows++;
+			}
+		}
+	}
     
     /* Sort by score (descending) */
     TeamScore temp;
-    for (i = 0; i < 7; i++) {
+    for (i = 0; i < 7; ++i) {
         max_idx = i;
-        for (j = i + 1; j < 8; j++) {
+        for (j = i + 1; j < 8; ++j) {
             if (sortedScores[j].score > sortedScores[max_idx].score) {
                 max_idx = j;
             }
@@ -416,10 +443,10 @@ void scoreboard(int *scores)
         sortedScores[i] = sortedScores[max_idx];
         sortedScores[max_idx] = temp;
     }
-    
+
     /* Draw scoreboard */
     char buf[32];
-    for (i = 0; i < 8; i++) {
+    for (i = 0; i < numRows; ++i) {
         int currentScore = sortedScores[i].score;
         int currentTeam = sortedScores[i].team;
         
