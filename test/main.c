@@ -375,9 +375,8 @@ int debugTextures(void)
 }
 
 int raw_scores[8] = {23, 77, 95, 50, 83, 31, 5, 55};
-void scoreboard(int *scores)
+void scoreboard(int maxScore, int *scores)
 {
-	int maxScore = 0;
     int opacity = 0x60;
     u32 bgColor = 0x18608f;
     u32 textColor = 0x69cbf2;
@@ -495,7 +494,7 @@ int main(void)
 		if (!p)
 			return 0;
 
-		scoreboard(raw_scores);
+		scoreboard(50, raw_scores);
 
 		// force lock-strafe (controller 1)
 		// *(u8*)0x001A5a34 = 1;
