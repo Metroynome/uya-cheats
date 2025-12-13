@@ -276,25 +276,28 @@ typedef struct LineStatic {
     /* 0x16 */ char pad[2];
     /* 0x18 */ int scrollFrames;
     /* 0x1c */ float textureOffset;
+    float pointRandomOffset;
 } LineStatic_t;
 
 typedef struct LineEndPoint {
     /* 0x00 */ VECTOR pos;
     /* 0x10 */ int color;
     /* 0x11 */ bool lerpColor;
-    /* 0x12 */ char pad[3];
+    bool fadeEnds;
+    /* 0x12 */ char pad[2];
 } LineEndPoint_t;
 
 // Default style
 LineStatic_t DefaultLineStyle = {
-    .numSegments = 10,
+    .numSegments = 8,
     .texture = FX_BASELIGHT,
     .textureRepeatDistance = 0,
-    .lineWidth = 1,
+    .lineWidth = 2,
     .billboard = 1,
     .rotateTexture = 1,
     .scrollFrames = 1800,
     .textureOffset = 0,
+    .pointRandomOffset = 1,
 };
 
 void drawLine(LineEndPoint_t *pEndPoints, int numEndPoints, LineStatic_t *pStyle)
@@ -456,6 +459,30 @@ void drawLine(LineEndPoint_t *pEndPoints, int numEndPoints, LineStatic_t *pStyle
             stripPos[vertexIndex + 1][1] = pos[1] + right[1];
             stripPos[vertexIndex + 1][2] = pos[2] + right[2];
 
+            // Apply random offset if enabled
+            if (pStyle->pointRandomOffset > 0.0f) {
+                // Generate random direction using vertex index as seed
+                float angle1 = (float)((vertexIndex * 137) % 360) * (MATH_PI / 180.0f);
+                float angle2 = (float)((vertexIndex * 211) % 360) * (MATH_PI / 180.0f);
+                
+                VECTOR randomDir;
+                randomDir[0] = cosf(angle1) * cosf(angle2);
+                randomDir[1] = sinf(angle2);
+                randomDir[2] = sinf(angle1) * cosf(angle2);
+                randomDir[3] = 0;
+                
+                vector_scale(randomDir, randomDir, pStyle->pointRandomOffset);
+                
+                // Apply offset to both vertices
+                stripPos[vertexIndex][0] += randomDir[0];
+                stripPos[vertexIndex][1] += randomDir[1];
+                stripPos[vertexIndex][2] += randomDir[2];
+                
+                stripPos[vertexIndex + 1][0] += randomDir[0];
+                stripPos[vertexIndex + 1][1] += randomDir[1];
+                stripPos[vertexIndex + 1][2] += randomDir[2];
+            }
+
             // Calculate UVs
             float currentDistance = distanceAccum + segmentLength * t;
             float uvCoord;
@@ -488,7 +515,20 @@ void drawLine(LineEndPoint_t *pEndPoints, int numEndPoints, LineStatic_t *pStyle
             } else {
                 color = pEndPoints[i].color;
             }
-            
+
+            // Apply fade at endpoints if enabled
+            if (pEndPoints[i].fadeEnds && t < 0.2f) {
+                // Fade start of segment (first 20%)
+                float fadeT = t / 0.2f;
+                color = colorLerp(color & 0x00FFFFFF, color, fadeT);  // Fade from transparent
+            }
+
+            if (pEndPoints[i + 1].fadeEnds && t > 0.8f) {
+                // Fade end of segment (last 20%)
+                float fadeT = (t - 0.8f) / 0.2f;
+                color = colorLerp(color, color & 0x00FFFFFF, fadeT);  // Fade to transparent
+            }
+
             stripColor[vertexIndex] = color;
             stripColor[vertexIndex + 1] = color;
 
@@ -537,6 +577,7 @@ void doTheLines()
         vector_copy(lines.endpointsPtr[i].pos, lines.cubes[i]->pos);
         lines.endpointsPtr[i].color = 0x80000000 | TEAM_COLORS[i];
         lines.endpointsPtr[i].lerpColor = true;
+        lines.endpointsPtr[i].fadeEnds = true;
     }
     vector_copy(lines.endpointsPtr[1].pos, playerGetFromSlot(0)->pMoby->position);
     // LineEndPoint_t endpoints[2];
