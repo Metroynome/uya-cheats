@@ -274,6 +274,8 @@ typedef struct LineStatic {
     /* 0x14 */ bool billboard;
     /* 0x15 */ bool rotateTexture;
     /* 0x16 */ char pad[2];
+    /* 0x18 */ int scrollFrames;
+    /* 0x1c */ float textureOffset;
 } LineStatic_t;
 
 typedef struct LineEndPoint {
@@ -291,6 +293,8 @@ LineStatic_t DefaultLineStyle = {
     .lineWidth = 1,
     .billboard = 1,
     .rotateTexture = 1,
+    .scrollFrames = 1800,
+    .textureOffset = 0,
 };
 
 void drawLine(LineEndPoint_t *pEndPoints, int numEndPoints, LineStatic_t *pStyle)
@@ -305,6 +309,16 @@ void drawLine(LineEndPoint_t *pEndPoints, int numEndPoints, LineStatic_t *pStyle
     gfxAddRegister(6, gfxGetEffectTex(pStyle->texture));
     gfxAddRegister(0x47, 0x513f1);
     gfxAddRegister(0x42, 0x8000000044);
+
+    // Calculate animated texture offset
+    float animatedUVOffset = pStyle->textureOffset;
+    
+    if (pStyle->scrollFrames != 0) {
+        float scrollDirection = (pStyle->scrollFrames < 0) ? 1.0f : -1.0f;
+        int absFrames = (pStyle->scrollFrames < 0) ? -pStyle->scrollFrames : pStyle->scrollFrames;
+        
+        animatedUVOffset += scrollDirection * ((float)(gameGetTime() % absFrames) / (float)absFrames);
+    }
 
     // Count total segments needed
     int totalSegments = 0;
@@ -454,17 +468,17 @@ void drawLine(LineEndPoint_t *pEndPoints, int numEndPoints, LineStatic_t *pStyle
                 uvCoord = currentDistance / pStyle->textureRepeatDistance;
             }
 
-            // Apply UV coordinates with optional 90 degree rotation
+            // Apply UV coordinates with optional 90 degree rotation and animation
             if (pStyle->rotateTexture) {
-                stripUV[vertexIndex].x = uvCoord;
+                stripUV[vertexIndex].x = uvCoord + animatedUVOffset;
                 stripUV[vertexIndex].y = 0.0f;
-                stripUV[vertexIndex + 1].x = uvCoord;
+                stripUV[vertexIndex + 1].x = uvCoord + animatedUVOffset;
                 stripUV[vertexIndex + 1].y = 1.0f;
             } else {
                 stripUV[vertexIndex].x = 0.0f;
-                stripUV[vertexIndex].y = uvCoord;
+                stripUV[vertexIndex].y = uvCoord + animatedUVOffset;
                 stripUV[vertexIndex + 1].x = 1.0f;
-                stripUV[vertexIndex + 1].y = uvCoord;
+                stripUV[vertexIndex + 1].y = uvCoord + animatedUVOffset;
             }
 
             // Calculate color (with optional interpolation)
