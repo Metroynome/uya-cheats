@@ -205,7 +205,7 @@ void customFlagLogic(Moby* flagMoby)
         if (!player)
             continue;
         // Don't allow input from players whom are dead
-        if (playerDeobfuscate(&player->stateType, 0, 0) == PLAYER_TYPE_DEATH)
+        if (playerGetState(player) == PLAYER_TYPE_DEATH)
             return;
 
         // skip player if they've only been alive for < 180ms
@@ -217,7 +217,7 @@ void customFlagLogic(Moby* flagMoby)
 			continue;
 
     	// skip player if in vehicle
-		if (player->vehicle && playerDeobfuscate(&player->state, 0, 0) == PLAYER_STATE_VEHICLE)
+		if (player->vehicle && playerGetState(player) == PLAYER_STATE_VEHICLE)
 			continue;
 
         // skip if player is on teleport pad
@@ -264,14 +264,14 @@ void customFlagLogic(Moby* flagMoby)
     //                 if (player->stateType == 0) {
     //                     stateType = 0;
     //                 } else {
-    //                     stateType = playerDeobfuscate(&player->stateType, 0, 0);
+    //                     stateType = playerGetState(player);
     //                     if (((stateType != PLAYER_TYPE_DEATH) && (player->timers.timeAlive > 180)) && !player->vehicle) {
     //                         FLAG_AT_BASE = 0;
     //                         if (player->camera && player->camera->camHeroData.critterMode) {
     //                             if (!player->state) {
     //                                 stateType = 0;
     //                             } else {
-    //                                 stateType = playerDeobfuscate(&player->state, 0, 0);
+    //                                 stateType = playerGetState(player);
     //                                 if (stateType == PLAYER_STATE_VEHICLE) {
     //                                     FLAG_AT_BASE = 1;
     //                                 }
@@ -364,7 +364,7 @@ void customFlagLogic(Moby* flagMoby)
 	// 		continue;
 
 	// 	// skip player if in vehicle
-	// 	if (player->vehicle && playerDeobfuscate(&player->state, 0, 0) == PLAYER_STATE_VEHICLE)
+	// 	if (player->vehicle && playerGetState(player) == PLAYER_STATE_VEHICLE)
 	// 		continue;
 
 	// 	// skip if player state is in vehicle and critterMode is on
@@ -796,7 +796,7 @@ void runCTF(void) {
 	}
 
 	GameSettings *gs = gameGetSettings();
-	if (gs->GameType != GAMERULE_CTF)
+	if (gs->GameType != GAMETYPE_CTF)
 		return;
 
 	runMidFlag();

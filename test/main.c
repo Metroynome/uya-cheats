@@ -494,7 +494,7 @@ int main(void)
 		if (!p)
 			return 0;
 
-		scoreboard(50, raw_scores);
+		// scoreboard(50, raw_scores);
 
 		// force lock-strafe (controller 1)
 		// *(u8*)0x001A5a34 = 1;
@@ -554,9 +554,6 @@ int main(void)
         
 		// betterHealthBoxes_Move();
 
-		// runCTF();
-		// runSiege();
-
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
     	// DebugInGame(p);
@@ -566,9 +563,11 @@ int main(void)
 
 	// StartBots();
 	// hud();
-	// secret();
+	secret();
 	// domination();
 	// koth();
+	// runCTF();
+	// runSiege();
 
 	uyaPostUpdate();
 
