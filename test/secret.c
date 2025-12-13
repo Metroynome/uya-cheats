@@ -260,110 +260,280 @@ void drawSegment(VECTOR pointA, VECTOR pointB, VECTOR circleCenter)
     testEffectQuad(1, rotPos, FX_TIRE_TRACKS + 1, 0x40ffffff, 0);
 }
 
-void drawLine(VECTOR a, VECTOR b, int numSegments, int billboard)
+typedef enum LineStyles {
+    LINE_STYLE_DEFAULT = 0,
+    LINE_STYLE_CUSTOM = 1,
+    LINE_STYLE_NUM_STYLES = 2
+} LineStyles_e;
+
+typedef struct LineStatic {
+    /* 0x00 */ int numSegments;
+    /* 0x04 */ int texture;
+    /* 0x08 */ float textureRepeatDistance;
+    /* 0x0c */ float lineWidth;
+    /* 0x14 */ bool billboard;
+    /* 0x15 */ bool rotateTexture;
+    /* 0x16 */ char pad[2];
+} LineStatic_t;
+
+typedef struct LineEndPoint {
+    /* 0x00 */ VECTOR pos;
+    /* 0x10 */ int color;
+    /* 0x11 */ bool lerpColor;
+    /* 0x12 */ char pad[3];
+} LineEndPoint_t;
+
+// Default style
+LineStatic_t DefaultLineStyle = {
+    .numSegments = 10,
+    .texture = FX_BASELIGHT,
+    .textureRepeatDistance = 0,
+    .lineWidth = 1,
+    .billboard = 1,
+    .rotateTexture = 1,
+};
+
+void drawLine(LineEndPoint_t *pEndPoints, int numEndPoints, LineStatic_t *pStyle)
 {
-    // init drawing
+    if (numEndPoints < 2) return;
+    if (!pStyle) pStyle = &DefaultLineStyle;
+
+    // Initialize drawing state
     gfxDrawStripInit();
     gfxAddRegister(8, 0);
     gfxAddRegister(0x14, 0xff9000000260);
-    gfxAddRegister(6, gfxGetEffectTex(FX_GADGETRON));
+    gfxAddRegister(6, gfxGetEffectTex(pStyle->texture));
     gfxAddRegister(0x47, 0x513f1);
     gfxAddRegister(0x42, 0x8000000044);
 
-    // get number of segments
-    VECTOR delta;
-    vector_subtract(delta, b, a);
-    float totalLength = vector_length(delta);
-    
-    int actualSegments = numSegments;
-    float textureRepeatDistance = 2.0f;  // Texture repeats every 2 units
-    
-    // If numSegments is 0 or -1, base it on distance with fixed repeat rate
-    if (numSegments <= 0) {
-        actualSegments = (int)(totalLength / textureRepeatDistance);
-        if (actualSegments < 1) actualSegments = 1;
+    // Count total segments needed
+    int totalSegments = 0;
+    int i;
+    for (i = 0; i < numEndPoints - 1; i++) {
+        VECTOR delta;
+        vector_subtract(delta, pEndPoints[i + 1].pos, pEndPoints[i].pos);
+        float len = vector_length(delta);
+
+        int segs = pStyle->numSegments;
+        if (segs <= 0) {
+            segs = (int)(len / pStyle->textureRepeatDistance);
+            if (segs < 1) segs = 1;
+        }
+        totalSegments += segs;
     }
-    
-    int numPoints = (actualSegments + 1) * 2;  // +1 because segments need endpoints
-    
+
+    int numPoints = (totalSegments + 1) * 2;
     vec3 stripPos[numPoints];
     int stripColor[numPoints];
     UV_t stripUV[numPoints];
 
-    // Calculate perpendicular offset for width
-    VECTOR forward, right;
-    vector_copy(forward, delta);
-    vector_normalize(forward, forward);
-    
-    if (billboard) {
-        // Billboard to camera - use camera's right vector
-        MATRIX* cameraMtx = &playerGetFromSlot(0)->camera->uMtx;
-        right[0] = cameraMtx[0][0];
-        right[1] = cameraMtx[1][0];
-        right[2] = cameraMtx[2][0];
-        right[3] = 0;
-        
-        // Make sure right is perpendicular to forward
-        VECTOR temp;
-        vector_outerproduct(temp, forward, right);
-        vector_outerproduct(right, temp, forward);
-        vector_normalize(right, right);
-    } else {
-        // Use standard up vector
-        VECTOR up = {0, 1, 0, 0};  // Y-up
-        vector_outerproduct(right, forward, up);
-        vector_normalize(right, right);
-    }
-    
-    float lineWidth = .5;
-    vector_scale(right, right, lineWidth);
+    float distanceAccum = 0.0f;
+    int vertexIndex = 0;
 
-    // Fill vertex data
-    int i;
-    for (i = 0; i < numPoints; i += 2) {
-        int segmentIndex = i / 2;
-        float t = (float)segmentIndex / (float)actualSegments;
-        VECTOR midPoint;
+    // Build geometry for each line segment
+    for (i = 0; i < numEndPoints - 1; i++) {
+        VECTOR a, b, delta, forward;
+        vector_copy(a, pEndPoints[i].pos);
+        vector_copy(b, pEndPoints[i + 1].pos);
+        vector_subtract(delta, b, a);
         
-        // Interpolate between a and b
-        midPoint[0] = a[0] + delta[0] * t;
-        midPoint[1] = a[1] + delta[1] * t;
-        midPoint[2] = a[2] + delta[2] * t;
-        
-        // Left vertex
-        stripPos[i][0] = midPoint[0] - right[0];
-        stripPos[i][1] = midPoint[1] - right[1];
-        stripPos[i][2] = midPoint[2] - right[2];
-        
-        // Right vertex
-        stripPos[i + 1][0] = midPoint[0] + right[0];
-        stripPos[i + 1][1] = midPoint[1] + right[1];
-        stripPos[i + 1][2] = midPoint[2] + right[2];
-        
-        // Set colors (white, fully opaque)
-        stripColor[i] = 0x80FFFFFF;
-        stripColor[i + 1] = 0x80FFFFFF;
-        
-        // Set UVs based on actual world distance, not segment index
-        // This prevents flickering when line length changes
-        float actualDistance = totalLength * t;
-        float uvY;
-        
-        if (numSegments > 0) {
-            // Fixed segment count - use segment-based UVs
-            uvY = (float)segmentIndex;
-        } else {
-            // Auto-calculate - use distance-based UVs
-            uvY = actualDistance / textureRepeatDistance;
+        float segmentLength = vector_length(delta);
+        vector_copy(forward, delta);
+        vector_normalize(forward, forward);
+
+        int numSegs = pStyle->numSegments;
+        if (numSegs <= 0) {
+            numSegs = (int)(segmentLength / pStyle->textureRepeatDistance);
+            if (numSegs < 1) numSegs = 1;
         }
-        
-        stripUV[i].x = 0;
-        stripUV[i].y = uvY;
-        stripUV[i + 1].x = 1;
-        stripUV[i + 1].y = uvY;
+
+        // Generate vertices along this segment
+        int s;
+        for (s = 0; s <= numSegs; s++) {
+            // Skip duplicate vertex at segment joins
+            if (i > 0 && s == 0) continue;
+
+            float t = (float)s / (float)numSegs;
+            
+            // Calculate position along segment
+            VECTOR pos;
+            pos[0] = a[0] + delta[0] * t;
+            pos[1] = a[1] + delta[1] * t;
+            pos[2] = a[2] + delta[2] * t;
+
+            // Calculate perpendicular direction (right vector)
+            VECTOR right;
+            
+            // Use miter joint at corner vertices
+            if (i > 0 && s == 0) {
+                // Get directions of previous and current segments
+                VECTOR prevDir, currDir;
+                vector_subtract(prevDir, pEndPoints[i].pos, pEndPoints[i - 1].pos);
+                vector_subtract(currDir, pEndPoints[i + 1].pos, pEndPoints[i].pos);
+                vector_normalize(prevDir, prevDir);
+                vector_normalize(currDir, currDir);
+
+                // Calculate right vectors for both segments
+                VECTOR prevRight, currRight;
+                
+                if (pStyle->billboard) {
+                    MATRIX *cameraMtx = &playerGetFromSlot(0)->camera->uMtx;
+                    VECTOR camRight = {cameraMtx[0][0], cameraMtx[1][0], cameraMtx[2][0], 0};
+                    
+                    VECTOR temp;
+                    vector_outerproduct(temp, prevDir, camRight);
+                    vector_outerproduct(prevRight, temp, prevDir);
+                    vector_normalize(prevRight, prevRight);
+                    
+                    vector_outerproduct(temp, currDir, camRight);
+                    vector_outerproduct(currRight, temp, currDir);
+                    vector_normalize(currRight, currRight);
+                } else {
+                    VECTOR up = {0, 1, 0, 0};
+                    vector_outerproduct(prevRight, prevDir, up);
+                    vector_normalize(prevRight, prevRight);
+                    vector_outerproduct(currRight, currDir, up);
+                    vector_normalize(currRight, currRight);
+                }
+
+                // Calculate miter vector (average of the two rights)
+                VECTOR miter;
+                miter[0] = prevRight[0] + currRight[0];
+                miter[1] = prevRight[1] + currRight[1];
+                miter[2] = prevRight[2] + currRight[2];
+                miter[3] = 0;
+                vector_normalize(miter, miter);
+
+                // Scale miter to maintain consistent width
+                float dot = vector_innerproduct(miter, currRight);
+                if (dot < 0.25f) dot = 0.25f; // Clamp to prevent excessive scaling
+                float miterScale = 1.0f / dot;
+                
+                vector_scale(right, miter, miterScale);
+            } else {
+                // Regular vertex - use standard perpendicular
+                if (pStyle->billboard) {
+                    MATRIX *cameraMtx = &playerGetFromSlot(0)->camera->uMtx;
+                    right[0] = cameraMtx[0][0];
+                    right[1] = cameraMtx[1][0];
+                    right[2] = cameraMtx[2][0];
+                    right[3] = 0;
+                    
+                    VECTOR temp;
+                    vector_outerproduct(temp, forward, right);
+                    vector_outerproduct(right, temp, forward);
+                    vector_normalize(right, right);
+                } else {
+                    VECTOR up = {0, 1, 0, 0};
+                    vector_outerproduct(right, forward, up);
+                    vector_normalize(right, right);
+                }
+            }
+
+            // Apply line width
+            vector_scale(right, right, pStyle->lineWidth * 0.5f);
+
+            // Create left and right vertices
+            stripPos[vertexIndex][0] = pos[0] - right[0];
+            stripPos[vertexIndex][1] = pos[1] - right[1];
+            stripPos[vertexIndex][2] = pos[2] - right[2];
+
+            stripPos[vertexIndex + 1][0] = pos[0] + right[0];
+            stripPos[vertexIndex + 1][1] = pos[1] + right[1];
+            stripPos[vertexIndex + 1][2] = pos[2] + right[2];
+
+            // Calculate UVs
+            float currentDistance = distanceAccum + segmentLength * t;
+            float uvCoord;
+            
+            if (pStyle->numSegments > 0) {
+                // Fixed segment count - use vertex index
+                uvCoord = (float)(vertexIndex / 2);
+            } else {
+                // Auto-calculated - use actual distance
+                uvCoord = currentDistance / pStyle->textureRepeatDistance;
+            }
+
+            // Apply UV coordinates with optional 90 degree rotation
+            if (pStyle->rotateTexture) {
+                stripUV[vertexIndex].x = uvCoord;
+                stripUV[vertexIndex].y = 0.0f;
+                stripUV[vertexIndex + 1].x = uvCoord;
+                stripUV[vertexIndex + 1].y = 1.0f;
+            } else {
+                stripUV[vertexIndex].x = 0.0f;
+                stripUV[vertexIndex].y = uvCoord;
+                stripUV[vertexIndex + 1].x = 1.0f;
+                stripUV[vertexIndex + 1].y = uvCoord;
+            }
+
+            // Calculate color (with optional interpolation)
+            int color;
+            if (pEndPoints[i].lerpColor) {
+                color = colorLerp(pEndPoints[i].color, pEndPoints[i + 1].color, t);
+            } else {
+                color = pEndPoints[i].color;
+            }
+            
+            stripColor[vertexIndex] = color;
+            stripColor[vertexIndex + 1] = color;
+
+            vertexIndex += 2;
+        }
+
+        distanceAccum += segmentLength;
     }
-    
-    gfxDrawStrip(numPoints, stripPos, stripColor, stripUV, 1);
+
+    gfxDrawStrip(vertexIndex, stripPos, stripColor, stripUV, 1);
+}
+
+typedef struct LinesYo {
+    int init;
+    int numCubes;
+    LineEndPoint_t *endpointsPtr;
+    Cuboid *cubes[8];
+} LinesYo_t;
+LinesYo_t lines;
+
+void getCuboidIndex(void)
+{
+    GameData *d = gameGetData();
+    int i;
+    for (i = 0; i < 8; ++i) {
+        int cube = d->allYourBaseGameData->nodeResurrectionPts[i];
+        lines.cubes[i] = spawnPointGet(cube);
+        ++lines.numCubes;
+    }
+}
+
+void doTheLines()
+{
+    if (!lines.init) {
+        getCuboidIndex();
+        lines.init = 1;
+    }
+
+	if (!lines.endpointsPtr) {
+		lines.endpointsPtr = malloc(sizeof(LineEndPoint_t) * 32);
+	}
+
+    int i;
+    // lines.numCubes = 2;
+    for(i = 0; i < lines.numCubes; ++i) {
+        vector_copy(lines.endpointsPtr[i].pos, lines.cubes[i]->pos);
+        lines.endpointsPtr[i].color = 0x80000000 | TEAM_COLORS[i];
+        lines.endpointsPtr[i].lerpColor = true;
+    }
+    vector_copy(lines.endpointsPtr[1].pos, playerGetFromSlot(0)->pMoby->position);
+    // LineEndPoint_t endpoints[2];
+    // vector_copy(endpoints[0].pos, playerGetFromSlot(0)->pMoby->position);
+    // vector_copy(endpoints[1].pos, rawr.pos);
+    // endpoints[0].color = 0x800000FF;
+    // endpoints[0].lerpColor = true;
+    // endpoints[1].color = 0x80FFFFFF;
+    // endpoints[1].lerpColor = true;
+
+    drawLine(lines.endpointsPtr, lines.numCubes, NULL); 
 }
 
 void faceMe(VECTOR point[8])
@@ -881,7 +1051,7 @@ void drawTheThingJulie(Moby *moby)
     // circleMeFinal_StripMe(moby, rawr); // rodrigues rotation (DO NOT EDIT, WORKS)
     // edgeMe(worldCorners);
     // drawCylinder(rawr.pos, 20, 6, 0x60ffffff, FX_RETICLE_1);
-    drawLine(playerGetFromSlot(0)->pMoby->position, rawr.pos, 0, true);
+    doTheLines();
 
 }
 
