@@ -277,14 +277,16 @@ typedef struct LineStatic {
     /* 0x18 */ int scrollFrames;
     /* 0x1c */ float textureOffset;
     float pointRandomOffset;
+    float widthStart;
+    float widthEnd;
 } LineStatic_t;
 
 typedef struct LineEndPoint {
     /* 0x00 */ VECTOR pos;
     /* 0x10 */ int color;
     /* 0x11 */ bool lerpColor;
-    bool fadeEnds;
-    /* 0x12 */ char pad[2];
+    char pad[3];
+    float fadeEnds;
 } LineEndPoint_t;
 
 // Default style
@@ -297,7 +299,9 @@ LineStatic_t DefaultLineStyle = {
     .rotateTexture = 1,
     .scrollFrames = 1800,
     .textureOffset = 0,
-    .pointRandomOffset = 1,
+    .pointRandomOffset = 2,
+    .widthStart = 1,
+    .widthEnd = 3,
 };
 
 void drawLine(LineEndPoint_t *pEndPoints, int numEndPoints, LineStatic_t *pStyle)
@@ -380,7 +384,7 @@ void drawLine(LineEndPoint_t *pEndPoints, int numEndPoints, LineStatic_t *pStyle
 
             // Calculate perpendicular direction (right vector)
             VECTOR right;
-            
+
             // Use miter joint at corner vertices
             if (i > 0 && s == 0) {
                 // Get directions of previous and current segments
@@ -447,10 +451,14 @@ void drawLine(LineEndPoint_t *pEndPoints, int numEndPoints, LineStatic_t *pStyle
                 }
             }
 
-            // Apply line width
-            vector_scale(right, right, pStyle->lineWidth * 0.5f);
+            // Apply line width with variation along segment
+            float widthMultiplier = 1.0f;
+            if (pStyle->widthStart != 1.0f || pStyle->widthEnd != 1.0f) {
+                widthMultiplier = pStyle->widthStart + (pStyle->widthEnd - pStyle->widthStart) * t;
+            }
+            vector_scale(right, right, pStyle->lineWidth * widthMultiplier * 0.5f);
 
-            // Create left and right vertices
+            // Create left and right vertices WITH oscillation
             stripPos[vertexIndex][0] = pos[0] - right[0];
             stripPos[vertexIndex][1] = pos[1] - right[1];
             stripPos[vertexIndex][2] = pos[2] - right[2];
@@ -459,11 +467,11 @@ void drawLine(LineEndPoint_t *pEndPoints, int numEndPoints, LineStatic_t *pStyle
             stripPos[vertexIndex + 1][1] = pos[1] + right[1];
             stripPos[vertexIndex + 1][2] = pos[2] + right[2];
 
-            // Apply random offset if enabled
-            if (pStyle->pointRandomOffset > 0.0f) {
+            // Apply random offset if enabled (but not at endpoints)
+            if (pStyle->pointRandomOffset > 0.0f && !(i == 0 && s == 0) && !(i == numEndPoints - 2 && s == numSegs)) {
                 // Generate random direction using vertex index as seed
-                float angle1 = (float)((vertexIndex * 137) % 360) * (MATH_PI / 180.0f);
-                float angle2 = (float)((vertexIndex * 211) % 360) * (MATH_PI / 180.0f);
+                float angle1 = (float)((vertexIndex * 137) % 360) * (3.14159f / 180.0f);
+                float angle2 = (float)((vertexIndex * 211) % 360) * (3.14159f / 180.0f);
                 
                 VECTOR randomDir;
                 randomDir[0] = cosf(angle1) * cosf(angle2);
@@ -517,15 +525,15 @@ void drawLine(LineEndPoint_t *pEndPoints, int numEndPoints, LineStatic_t *pStyle
             }
 
             // Apply fade at endpoints if enabled
-            if (pEndPoints[i].fadeEnds && t < 0.2f) {
-                // Fade start of segment (first 20%)
-                float fadeT = t / 0.2f;
+            if (pEndPoints[i].fadeEnds > 0.0f && t < pEndPoints[i].fadeEnds) {
+                // Fade start of segment
+                float fadeT = t / pEndPoints[i].fadeEnds;
                 color = colorLerp(color & 0x00FFFFFF, color, fadeT);  // Fade from transparent
             }
 
-            if (pEndPoints[i + 1].fadeEnds && t > 0.8f) {
-                // Fade end of segment (last 20%)
-                float fadeT = (t - 0.8f) / 0.2f;
+            if (pEndPoints[i + 1].fadeEnds > 0.0f && t > (1.0f - pEndPoints[i + 1].fadeEnds)) {
+                // Fade end of segment
+                float fadeT = (t - (1.0f - pEndPoints[i + 1].fadeEnds)) / pEndPoints[i + 1].fadeEnds;
                 color = colorLerp(color, color & 0x00FFFFFF, fadeT);  // Fade to transparent
             }
 
@@ -549,6 +557,26 @@ typedef struct LinesYo {
 } LinesYo_t;
 LinesYo_t lines;
 
+void getMPConfigMoby(void)
+{
+	Moby* moby = mobyListGetStart();
+	Moby* mobyEnd = mobyListGetEnd();
+	int i = 0;
+	while (moby < mobyEnd) {
+		if (moby->oClass == MOBY_ID_MP_PLAYER_CONFIG) {
+            MultiplayerConfig_t *mp = (MultiplayerConfig_t *)moby->pVar;
+            int i;
+            for (i = 0; i < 8; ++i) {
+                lines.cubes[i] = spawnPointGet(mp->node);
+                ++lines.numCubes;
+                // printf("\ni: %d, %08x",i , lines.cubes[i]);
+            }
+            break;
+		}
+		++moby;
+	}
+}
+
 void getCuboidIndex(void)
 {
     GameData *d = gameGetData();
@@ -563,6 +591,7 @@ void getCuboidIndex(void)
 void doTheLines()
 {
     if (!lines.init) {
+        // getMPConfigMoby();
         getCuboidIndex();
         lines.init = 1;
     }
@@ -575,11 +604,11 @@ void doTheLines()
     // lines.numCubes = 2;
     for(i = 0; i < lines.numCubes; ++i) {
         vector_copy(lines.endpointsPtr[i].pos, lines.cubes[i]->pos);
-        lines.endpointsPtr[i].color = 0x80000000 | TEAM_COLORS[i];
-        lines.endpointsPtr[i].lerpColor = true;
-        lines.endpointsPtr[i].fadeEnds = true;
+        lines.endpointsPtr[i].color = 0x80ffffff; // 0x80000000 | TEAM_COLORS[i];
+        lines.endpointsPtr[i].lerpColor = false;
+        lines.endpointsPtr[i].fadeEnds = 0;
     }
-    vector_copy(lines.endpointsPtr[1].pos, playerGetFromSlot(0)->pMoby->position);
+    // vector_copy(lines.endpointsPtr[1].pos, playerGetFromSlot(0)->pMoby->position);
     // LineEndPoint_t endpoints[2];
     // vector_copy(endpoints[0].pos, playerGetFromSlot(0)->pMoby->position);
     // vector_copy(endpoints[1].pos, rawr.pos);
