@@ -379,12 +379,19 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 
     float horizontalDist = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
     float targetY = atan2f(delta[0], delta[1]);
+    float len = sqrtf(horizontalDist * horizontalDist + delta[2] * delta[2]);
+    float targetX = asinf(-delta[2] / len);  // Using asinf like Deadlocked
+    
     sPlayer->Yaw = lerpfAngle(sPlayer->Yaw, targetY, 0.05);
     
-    // Try pitch first, then yaw (opposite order)
+    // Print pitch value to verify calculation
+    int pitchInt = (int)(targetX * 100);
+    printf("Bot %d - pitch:%d\n", sPlayer->Idx, pitchInt);
+    
     MATRIX m;
     matrix_unit(m);
-    matrix_rotate_z(m, m, sPlayer->Yaw);    // Then yaw
+	matrix_rotate_y(m, m, targetX);
+    matrix_rotate_z(m, m, sPlayer->Yaw);
     memcpy(&target->camera->uMtx, m, sizeof(VECTOR) * 3);
     vector_copy(target->fps.cameraDir, &m[4]);
 
@@ -394,7 +401,7 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     if (playerIsDead(sPlayer->Player)) {
         pad->btns &= ~PAD_CROSS;
     }
-	pad->btns &= ~PAD_CIRCLE;
+    pad->btns &= ~PAD_CIRCLE;
 }
 
 //=====================================================
