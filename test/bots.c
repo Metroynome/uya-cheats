@@ -376,24 +376,27 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     // face player
     vector_copy(delta, player->playerPosition);
     vector_subtract(delta, delta, target->playerPosition);
-
+	delta[2] -= 1.5;
     float horizontalDist = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
-    float targetY = atan2f(delta[0], delta[1]);
+    float targetYaw = atan2f(delta[0], delta[1]);
     float len = sqrtf(horizontalDist * horizontalDist + delta[2] * delta[2]);
-    float targetX = asinf(-delta[2] / len);  // Using asinf like Deadlocked
+    float targetPitch = asinf(-delta[2] / len);
     
-    sPlayer->Yaw = lerpfAngle(sPlayer->Yaw, targetY, 0.05);
-    
-    // Print pitch value to verify calculation
-    int pitchInt = (int)(targetX * 100);
+    sPlayer->Yaw = lerpfAngle(sPlayer->Yaw, targetYaw, 0.5);
+    sPlayer->Pitch = targetPitch;
+
+    // Debug - check pitch value when looking down
+    int pitchInt = (int)(sPlayer->Pitch * 100);
     printf("Bot %d - pitch:%d\n", sPlayer->Idx, pitchInt);
     
     MATRIX m;
     matrix_unit(m);
-	matrix_rotate_y(m, m, targetX);
+    matrix_rotate_y(m, m, targetPitch);
     matrix_rotate_z(m, m, sPlayer->Yaw);
     memcpy(&target->camera->uMtx, m, sizeof(VECTOR) * 3);
     vector_copy(target->fps.cameraDir, &m[4]);
+    target->fps.vars.cameraY.rotation = sPlayer->Pitch;
+    target->fps.vars.cameraZ.rotation = sPlayer->Yaw;
 
     struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
     int jumping = 0;
