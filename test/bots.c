@@ -375,27 +375,18 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     
     // face player
     vector_copy(delta, player->playerPosition);
-    delta[2] += 1;  // Aim at head height
     vector_subtract(delta, delta, target->playerPosition);
-    float len = vector_length(delta);
 
-    // Calculate yaw and pitch
     float horizontalDist = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
-    float targetY = atan2f(delta[0], delta[1]);  // Yaw
-    float targetX = asinf(-delta[2] / len);  // Pitch
-    
+    float targetY = atan2f(delta[0], delta[1]);
     sPlayer->Yaw = lerpfAngle(sPlayer->Yaw, targetY, 0.05);
-    // sPlayer->Pitch = lerpfAngle(sPlayer->Pitch, targetX, 0.05);
     
     // Try pitch first, then yaw (opposite order)
     MATRIX m;
     matrix_unit(m);
-    matrix_rotate_y(m, m, targetX);  // Pitch first
     matrix_rotate_z(m, m, sPlayer->Yaw);    // Then yaw
-    
     memcpy(&target->camera->uMtx, m, sizeof(VECTOR) * 3);
     vector_copy(target->fps.cameraDir, &m[4]);
-    target->fps.vars.cameraY.rotation = sPlayer->Yaw;
 
     struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
     int jumping = 0;
