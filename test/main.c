@@ -561,9 +561,9 @@ int main(void)
 		// DebugInMenus();
 	}
 
-	// StartBots();
+	StartBots();
 	// hud();
-	secret();
+	// secret();
 	// domination();
 	// koth();
 	// runCTF();

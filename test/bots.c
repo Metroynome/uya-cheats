@@ -306,53 +306,104 @@ void modeInitTarget(SimulatedPlayer_t * sPlayer)
 	sprintf(gs->PlayerNames[sPlayer->Player->fps.vars.cam_slot], "Fake %d", sPlayer->Idx);
 }
 
+// void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
+// {
+// 	int i;
+// 	VECTOR delta, targetPos;
+// 	Player* player = playerGetFromSlot(0);
+// 	if (!sPlayer || !player || !sPlayer->Active)
+// 		return;
+
+// 	Player* target = sPlayer->Player;
+// 	Moby* targetMoby = target->pMoby;
+// 	struct TrainingTargetMobyPVar* pvar = &sPlayer->Vars;
+// 	if (!pvar)
+// 		return;
+
+// 	// set to lock-strafe
+// 	*(u8*)(0x001A5a34 + (sPlayer->Idx * 4)) = 1;
+	
+// 	// face player
+// 	vector_copy(delta, player->playerPosition);
+// 	delta[2] += 1;
+// 	vector_subtract(delta, delta, target->playerPosition);
+// 	float len = vector_length(delta);
+// 	float targetY = atan2f(delta[1] / len, delta[0] / len);
+// 	float targetX = asinf(-delta[2] / len);
+// 	sPlayer->Yaw = lerpfAngle(sPlayer->Yaw, targetYaw, 0.05);
+
+// 	MATRIX m;
+// 	matrix_unit(m);
+// 	matrix_rotate_z(m, m, targetPitch);
+// 	matrix_rotate_y(m, m, sPlayer->Yaw);
+// 	memcpy(&target->camera->uMtx, m, sizeof(VECTOR) * 3);
+// 	vector_copy(target->fps.cameraDir, &m[4]);
+// 	target->fps.vars.cameraY.rotation = sPlayer->Yaw;
+
+// 	// === following works! ===
+// 	// target->camera->uMtx = player->camera->uMtx;
+// 	// memcpy(target->fps.cameraDir, player->fps.cameraDir, sizeof(VECTOR));
+//     // target->fps.vars.cameraY.rotation = player->fps.vars.cameraY.rotation;
+//     // target->fps.vars.cameraZ.rotation = player->fps.vars.cameraZ.rotation;
+
+// 	struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
+// 	int jumping = 0;
+// 	int Health = ((int)playerGetHealth(sPlayer->Player) <= 0);
+// 	if (playerIsDead(sPlayer->Player)) {
+// 		pad->btns &= ~PAD_CROSS;
+// 	}
+// 	// shoot!
+// 	// pad->btns &= ~PAD_CIRCLE;
+// }
+
 void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 {
-	int i;
-	VECTOR delta, targetPos;
-	Player* player = playerGetFromSlot(0);
-	if (!sPlayer || !player || !sPlayer->Active)
-		return;
+    int i;
+    VECTOR delta, targetPos;
+    Player* player = playerGetFromSlot(0);
+    if (!sPlayer || !player || !sPlayer->Active)
+        return;
 
-	Player* target = sPlayer->Player;
-	Moby* targetMoby = target->pMoby;
-	struct TrainingTargetMobyPVar* pvar = &sPlayer->Vars;
-	if (!pvar)
-		return;
+    Player* target = sPlayer->Player;
+    Moby* targetMoby = target->pMoby;
+    struct TrainingTargetMobyPVar* pvar = &sPlayer->Vars;
+    if (!pvar)
+        return;
 
-	// set to lock-strafe
-	*(u8*)(0x001A5a34 + (sPlayer->Idx * 4)) = 1;
-	
-	// face player
-	vector_copy(delta, player->playerPosition);
-	delta[2] += 1;
-	vector_subtract(delta, delta, target->playerPosition);
-	float len = vector_length(delta);
-	float targetYaw = atan2f(delta[1] / len, delta[0] / len);
-	float targetPitch = asinf(-delta[2] / len);
-	sPlayer->Yaw = lerpfAngle(sPlayer->Yaw, targetYaw, 0.05);
+    // set to lock-strafe
+    *(u8*)(0x001A5a34 + (sPlayer->Idx * 4)) = 1;
+    
+    // face player
+    vector_copy(delta, player->playerPosition);
+    delta[2] += 1;  // Aim at head height
+    vector_subtract(delta, delta, target->playerPosition);
+    float len = vector_length(delta);
 
-	MATRIX m;
-	matrix_unit(m);
-	matrix_rotate_y(m, m, targetPitch);
-	matrix_rotate_z(m, m, sPlayer->Yaw);
-	// memcpy(target->camera->uMtx, m, sizeof(VECTOR) * 3);
-	// vector_copy(target->fps.cameraDir, &m[4]);
-	// target->fps.vars.cameraY.rotation = sPlayer->Yaw;
+    // Calculate yaw and pitch
+    float horizontalDist = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
+    float targetY = atan2f(delta[0], delta[1]);  // Yaw
+    float targetX = asinf(-delta[2] / len);  // Pitch
+    
+    sPlayer->Yaw = lerpfAngle(sPlayer->Yaw, targetY, 0.05);
+    // sPlayer->Pitch = lerpfAngle(sPlayer->Pitch, targetX, 0.05);
+    
+    // Try pitch first, then yaw (opposite order)
+    MATRIX m;
+    matrix_unit(m);
+    matrix_rotate_y(m, m, targetX);  // Pitch first
+    matrix_rotate_z(m, m, sPlayer->Yaw);    // Then yaw
+    
+    memcpy(&target->camera->uMtx, m, sizeof(VECTOR) * 3);
+    vector_copy(target->fps.cameraDir, &m[4]);
+    target->fps.vars.cameraY.rotation = sPlayer->Yaw;
 
-	target->camera->uMtx = player->camera->uMtx;
-	memcpy(target->fps.cameraDir, player->fps.cameraDir, sizeof(VECTOR));
-    target->fps.vars.cameraY.rotation = player->fps.vars.cameraY.rotation;
-    target->fps.vars.cameraZ.rotation = player->fps.vars.cameraZ.rotation;
-
-	struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
-	int jumping = 0;
-	int Health = ((int)playerGetHealth(sPlayer->Player) <= 0);
-	if (playerIsDead(sPlayer->Player)) {
-		pad->btns &= ~PAD_CROSS;
-	}
-	// shoot!
-	// pad->btns &= ~PAD_CIRCLE;
+    struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
+    int jumping = 0;
+    int Health = ((int)playerGetHealth(sPlayer->Player) <= 0);
+    if (playerIsDead(sPlayer->Player)) {
+        pad->btns &= ~PAD_CROSS;
+    }
+	pad->btns &= ~PAD_CIRCLE;
 }
 
 //=====================================================
