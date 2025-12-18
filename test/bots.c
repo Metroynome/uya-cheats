@@ -20,114 +20,114 @@
 
 VariableAddress_t vaInit_RunUpdateFunctions = {
 #if UYA_PAL
-	.Lobby = 0,
-	.Bakisi = 0,
-	.Hoven = 0,
-	.OutpostX12 = 0,
-    .KorgonOutpost = 0,
-	.Metropolis = 0,
-	.BlackwaterCity = 0,
-	.CommandCenter = 0,
-    .BlackwaterDocks = 0,
-    .AquatosSewers = 0,
-    .MarcadiaPalace = 0,
+	.Lobby = 0x0061ce78,
+	.Bakisi = 0x004eed70,
+	.Hoven = 0x004f0e88,
+	.OutpostX12 = 0x004e6760,
+	.KorgonOutpost = 0x004e3ef8,
+	.Metropolis = 0x004e3248,
+	.BlackwaterCity = 0x004e0ae0,
+	.CommandCenter = 0x004e0aa8,
+	.BlackwaterDocks = 0x004e3328,
+	.AquatosSewers = 0x004e2628,
+	.MarcadiaPalace = 0x004e1fa8,
 #else
-	.Lobby = 0,
+	.Lobby = 0x0061a700,
 	.Bakisi = 0x004ec650,
-	.Hoven = 0,
+	.Hoven = 0x004ee6a8,
 	.OutpostX12 = 0x004e3fc0,
-    .KorgonOutpost = 0,
-	.Metropolis = 0,
-	.BlackwaterCity = 0,
-	.CommandCenter = 0,
-    .BlackwaterDocks = 0,
-    .AquatosSewers = 0,
-    .MarcadiaPalace = 0,
+	.KorgonOutpost = 0x004e17d8,
+	.Metropolis = 0x004e0b28,
+	.BlackwaterCity = 0x004de340,
+	.CommandCenter = 0x004de4c8,
+	.BlackwaterDocks = 0x004e0d08,
+	.AquatosSewers = 0x004e0048,
+	.MarcadiaPalace = 0x004df988,
 #endif
 };
 
 VariableAddress_t vaInit_StopPlayerUpdateFunctions = {
 #if UYA_PAL
-	.Lobby = 0,
-	.Bakisi = 0,
-	.Hoven = 0,
-	.OutpostX12 = 0,
-    .KorgonOutpost = 0,
-	.Metropolis = 0,
-	.BlackwaterCity = 0,
-	.CommandCenter = 0,
-    .BlackwaterDocks = 0,
-    .AquatosSewers = 0,
-    .MarcadiaPalace = 0,
+	.Lobby = 0x0061cd60,
+	.Bakisi = 0x004eec58,
+	.Hoven = 0x004f0d70,
+	.OutpostX12 = 0x004e6648,
+	.KorgonOutpost = 0x004e3de0,
+	.Metropolis = 0x004e3130,
+	.BlackwaterCity = 0x004e09c8,
+	.CommandCenter = 0x004e0990,
+	.BlackwaterDocks = 0x004e3210,
+	.AquatosSewers = 0x004e2510,
+	.MarcadiaPalace = 0x004e1e90,
 #else
-	.Lobby = 0,
+	.Lobby = 0x0061a5e8,
 	.Bakisi = 0x004ec538,
-	.Hoven = 0,
+	.Hoven = 0x004ee590,
 	.OutpostX12 = 0x004e3ea8,
-    .KorgonOutpost = 0,
-	.Metropolis = 0,
-	.BlackwaterCity = 0,
-	.CommandCenter = 0,
-    .BlackwaterDocks = 0,
-    .AquatosSewers = 0,
-    .MarcadiaPalace = 0,
+	.KorgonOutpost = 0x004e16c0,
+	.Metropolis = 0x004e0a10,
+	.BlackwaterCity = 0x004de228,
+	.CommandCenter = 0x004de3b0,
+	.BlackwaterDocks = 0x004e0bf0,
+	.AquatosSewers = 0x004dff30,
+	.MarcadiaPalace = 0x004df870,
 #endif
 };
 
 VariableAddress_t vaCreateHero = {
 #if UYA_PAL
-	.Lobby = 0,
-	.Bakisi = 0,
-	.Hoven = 0,
-	.OutpostX12 = 0,
-    .KorgonOutpost = 0,
-	.Metropolis = 0,
-	.BlackwaterCity = 0,
-	.CommandCenter = 0,
-    .BlackwaterDocks = 0,
-    .AquatosSewers = 0,
-    .MarcadiaPalace = 0,
+	.Lobby = 0x00661a40,
+	.Bakisi = 0x00533b40,
+	.Hoven = 0x00535c58,
+	.OutpostX12 = 0x0052b530,
+	.KorgonOutpost = 0x00528cc8,
+	.Metropolis = 0x00528018,
+	.BlackwaterCity = 0x005258b0,
+	.CommandCenter = 0x00525670,
+	.BlackwaterDocks = 0x00527ef0,
+	.AquatosSewers = 0x005271f0,
+	.MarcadiaPalace = 0x00526b70,
 #else
-	.Lobby = 0,
+	.Lobby = 0x0065f168,
 	.Bakisi = 0x005312c0,
-	.Hoven = 0,
+	.Hoven = 0x00533318,
 	.OutpostX12 = 0x00528c30,
-    .KorgonOutpost = 0,
-	.Metropolis = 0,
-	.BlackwaterCity = 0,
-	.CommandCenter = 0,
-    .BlackwaterDocks = 0,
-    .AquatosSewers = 0,
-    .MarcadiaPalace = 0,
+	.KorgonOutpost = 0x00526448,
+	.Metropolis = 0x00525798,
+	.BlackwaterCity = 0x00522fb0,
+	.CommandCenter = 0x00522f30,
+	.BlackwaterDocks = 0x00525770,
+	.AquatosSewers = 0x00524ab0,
+	.MarcadiaPalace = 0x005243f0,
 #endif
 };
 
 
 VariableAddress_t vaPAD_PadUpdate = {
 #if UYA_PAL
-	.Lobby = 0,
-	.Bakisi = 0,
-	.Hoven = 0,
-	.OutpostX12 = 0,
-    .KorgonOutpost = 0,
-	.Metropolis = 0,
-	.BlackwaterCity = 0,
-	.CommandCenter = 0,
-    .BlackwaterDocks = 0,
-    .AquatosSewers = 0,
-    .MarcadiaPalace = 0,
+	.Lobby = 0x005c34a8,
+	.Bakisi = 0x00495c60,
+	.Hoven = 0x00497d78,
+	.OutpostX12 = 0x0048d650,
+	.KorgonOutpost = 0x0048ad20,
+	.Metropolis = 0x0048a138,
+	.BlackwaterCity = 0x004879d0,
+	.CommandCenter = 0x004879c8,
+	.BlackwaterDocks = 0x0048a248,
+	.AquatosSewers = 0x00489548,
+	.MarcadiaPalace = 0x00488ec8,
 #else
-	.Lobby = 0,
+	.Lobby = 0x005c1258,
 	.Bakisi = 0x00493a68,
-	.Hoven = 0,
+	.Hoven = 0x00495ac0,
 	.OutpostX12 = 0x0048b3d8,
-    .KorgonOutpost = 0,
-	.Metropolis = 0,
-	.BlackwaterCity = 0,
-	.CommandCenter = 0,
-    .BlackwaterDocks = 0,
-    .AquatosSewers = 0,
-    .MarcadiaPalace = 0,
+	.KorgonOutpost = 0x00488b28,
+	.Metropolis = 0x00487f40,
+	.BlackwaterCity = 0x00485758,
+	.CommandCenter = 0x00485910,
+	.BlackwaterDocks = 0x00488150,
+	.AquatosSewers = 0x00487490,
+	.MarcadiaPalace = 0x00486dd0,
 #endif
 };
 
@@ -385,10 +385,6 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     sPlayer->Yaw = lerpfAngle(sPlayer->Yaw, targetYaw, 0.5);
     sPlayer->Pitch = targetPitch;
 
-    // Debug - check pitch value when looking down
-    int pitchInt = (int)(sPlayer->Pitch * 100);
-    printf("Bot %d - pitch:%d\n", sPlayer->Idx, pitchInt);
-    
     MATRIX m;
     matrix_unit(m);
     matrix_rotate_y(m, m, targetPitch);
@@ -485,7 +481,7 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 	gameSettings->PlayerSkins[id] = 0;
 	gameSettings->PlayerTeams[id] = TargetTeam;
 
-	POKE_U32(0x002412f0 + (4 * id), (void*)&sPlayer->Pad);
+	POKE_U32(((u32)PAD_POINTER + 0xc) + (4 * id), (void*)&sPlayer->Pad);
 
 	// local hero
 	((void (*)(int))GetAddress(&vaCreateHero))(id);
@@ -495,7 +491,7 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 
 	players[id] = sPlayer->Player;
 
-	POKE_U32(0x002412f0 + (4 * id), 0);
+	POKE_U32(((u32)PAD_POINTER + 0xc) + (4 * id), 0);
 
 	sPlayer->Player->pPad = (void*)&sPlayer->Pad;
 	sPlayer->Player->fps.vars.cam_slot = id;
