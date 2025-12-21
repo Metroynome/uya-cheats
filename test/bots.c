@@ -17,6 +17,14 @@
 #include <libuya/utils.h>
 #include <libuya/interop.h>
 #include <libuya/math3d.h>
+#include "training.h"
+
+#define BOT_PAD_LOCATION ((u32)PAD_POINTER + 0xc)
+
+void modeProcessPlayer(int pIndex);
+void modeTick(void);
+void modeInitTarget(SimulatedPlayer_t *sPlayer);
+void modeUpdateTarget(SimulatedPlayer_t *sPlayer);
 
 VariableAddress_t vaInit_RunUpdateFunctions = {
 #if UYA_PAL
@@ -101,7 +109,6 @@ VariableAddress_t vaCreateHero = {
 	.MarcadiaPalace = 0x005243f0,
 #endif
 };
-
 
 VariableAddress_t vaPAD_PadUpdate = {
 #if UYA_PAL
@@ -215,195 +222,19 @@ VariableAddress_t vaPadProcessValue = {
 #endif
 };
 
-const int SimPlayerCount = 3;
-const int TargetTeam = 1; // Red Team
 int Initialized = 0;
 
-struct TrainingTargetMobyPVar
-{
-	VECTOR SpawnPos;
-	VECTOR Velocity;
-	int State;
-	u32 LifeTicks;
-	int TimeCreated;
-	float Jitter;
-	float StrafeSpeed;
-	float JumpSpeed;
+extern int TargetTeam;
+extern const int SimPlayerCount;
+extern SimulatedPlayer_t SimPlayers[];
+
+const char* TRAINING_AGGRO_NAMES[] = {
+	[TRAINING_AGGRESSION_AGGRO] "AGGRO",
+	[TRAINING_AGGRESSION_AGGRO_NO_DAMAGE] "NO DAMAGE",
+	[TRAINING_AGGRESSION_PASSIVE] "PASSIVE",
+	[TRAINING_AGGRESSION_IDLE] "IDLE",
 };
 
-typedef struct SimulatedPlayer {
-	struct PAD Pad;
-	struct TrainingTargetMobyPVar Vars;
-	Player* Player;
-	u32 TicksToRespawn;
-	u32 TicksToJump;
-	u32 TicksToJumpFor;
-	u32 TicksToStrafeSwitch;
-	u32 TicksToStrafeQuickSwitchFor;
-	u32 TicksToStrafeStop;
-	u32 TicksToStrafeStopFor;
-	u32 TicksToStrafeStoppedFor;
-	u32 TicksToFire;
-	u32 TicksFireDelay;
-	u32 TicksToCycle;
-	u32 TicksToAimYaw;
-	u32 TicksToAimPitch;
-	u32 TicksToTbag;
-	u32 TicksAimNearPlayer;
-	int SniperFireStopForTicks;
-	int StrafeDir;
-	int Idx;
-	int CycleIdx;
-	int Points;
-	float YawOff;
-	float Yaw;
-	float YawVel;
-	float YawAcc;
-	float PitchOff;
-	float Pitch;
-	float PitchVel;
-	float PitchAcc;
-	char Created;
-	char Active;
-} SimulatedPlayer_t;
-
-typedef struct TrainingState
-{
-	int InitializedTime;
-	int Points;
-	int Kills;
-	int Hits;
-	int ShotsFired;
-	int BestCombo;
-	int TargetsDestroyed;
-	int GameOver;
-	int WinningTeam;
-	int IsHost;
-	// enum TRAINING_TYPE TrainingType;
-	int TargetLastSpawnIdx;
-	int ComboCounter;
-	long TimeLastSpawn;
-	long TimeLastKill;
-} TrainingState_t;
-
-TrainingState_t State;
-SimulatedPlayer_t SimPlayers[];
-
-void modeProcessPlayer(int pIndex)
-{
-	
-}
-
-void modeInitTarget(SimulatedPlayer_t * sPlayer)
-{
-	GameSettings * gs = gameGetSettings();
-
-	// init vars
-	struct TrainingTargetMobyPVar * pvar = &sPlayer->Vars;
-
-	sPlayer->Active = 1;
-
-	sprintf(gs->PlayerNames[sPlayer->Player->fps.vars.cam_slot], "Fake %d", sPlayer->Idx);
-}
-
-// void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
-// {
-// 	int i;
-// 	VECTOR delta, targetPos;
-// 	Player* player = playerGetFromSlot(0);
-// 	if (!sPlayer || !player || !sPlayer->Active)
-// 		return;
-
-// 	Player* target = sPlayer->Player;
-// 	Moby* targetMoby = target->pMoby;
-// 	struct TrainingTargetMobyPVar* pvar = &sPlayer->Vars;
-// 	if (!pvar)
-// 		return;
-
-// 	// set to lock-strafe
-// 	*(u8*)(0x001A5a34 + (sPlayer->Idx * 4)) = 1;
-	
-// 	// face player
-// 	vector_copy(delta, player->playerPosition);
-// 	delta[2] += 1;
-// 	vector_subtract(delta, delta, target->playerPosition);
-// 	float len = vector_length(delta);
-// 	float targetY = atan2f(delta[1] / len, delta[0] / len);
-// 	float targetX = asinf(-delta[2] / len);
-// 	sPlayer->Yaw = lerpfAngle(sPlayer->Yaw, targetYaw, 0.05);
-
-// 	MATRIX m;
-// 	matrix_unit(m);
-// 	matrix_rotate_z(m, m, targetPitch);
-// 	matrix_rotate_y(m, m, sPlayer->Yaw);
-// 	memcpy(&target->camera->uMtx, m, sizeof(VECTOR) * 3);
-// 	vector_copy(target->fps.cameraDir, &m[4]);
-// 	target->fps.vars.cameraY.rotation = sPlayer->Yaw;
-
-// 	// === following works! ===
-// 	// target->camera->uMtx = player->camera->uMtx;
-// 	// memcpy(target->fps.cameraDir, player->fps.cameraDir, sizeof(VECTOR));
-//     // target->fps.vars.cameraY.rotation = player->fps.vars.cameraY.rotation;
-//     // target->fps.vars.cameraZ.rotation = player->fps.vars.cameraZ.rotation;
-
-// 	struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
-// 	int jumping = 0;
-// 	int Health = ((int)playerGetHealth(sPlayer->Player) <= 0);
-// 	if (playerIsDead(sPlayer->Player)) {
-// 		pad->btns &= ~PAD_CROSS;
-// 	}
-// 	// shoot!
-// 	// pad->btns &= ~PAD_CIRCLE;
-// }
-
-void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
-{
-    int i;
-    VECTOR delta, targetPos;
-    Player* player = playerGetFromSlot(0);
-    if (!sPlayer || !player || !sPlayer->Active)
-        return;
-
-    Player* target = sPlayer->Player;
-    Moby* targetMoby = target->pMoby;
-    struct TrainingTargetMobyPVar* pvar = &sPlayer->Vars;
-    if (!pvar)
-        return;
-
-    // set to lock-strafe
-    *(u8*)(0x001A5a34 + (sPlayer->Idx * 4)) = 1;
-    
-    // face player
-    vector_copy(delta, player->playerPosition);
-    vector_subtract(delta, delta, target->playerPosition);
-	delta[2] -= 1.5;
-    float horizontalDist = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
-    float targetYaw = atan2f(delta[0], delta[1]);
-    float len = sqrtf(horizontalDist * horizontalDist + delta[2] * delta[2]);
-    float targetPitch = asinf(-delta[2] / len);
-    
-    sPlayer->Yaw = lerpfAngle(sPlayer->Yaw, targetYaw, 0.5);
-    sPlayer->Pitch = targetPitch;
-
-    MATRIX m;
-    matrix_unit(m);
-    matrix_rotate_y(m, m, targetPitch);
-    matrix_rotate_z(m, m, sPlayer->Yaw);
-    memcpy(&target->camera->uMtx, m, sizeof(VECTOR) * 3);
-    vector_copy(target->fps.cameraDir, &m[4]);
-    target->fps.vars.cameraY.rotation = sPlayer->Pitch;
-    target->fps.vars.cameraZ.rotation = sPlayer->Yaw;
-
-    struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
-    int jumping = 0;
-    int Health = ((int)playerGetHealth(sPlayer->Player) <= 0);
-    if (playerIsDead(sPlayer->Player)) {
-        pad->btns &= ~PAD_CROSS;
-    }
-    pad->btns &= ~PAD_CIRCLE;
-}
-
-//=====================================================
 void frameTick(void)
 {
 	int i = 0;
@@ -437,17 +268,18 @@ void frameTick(void)
 	// 	gfxScreenSpaceText(479, 57, 0.8, 0.8, 0x80FFFFFF, buf, -1, 1);
 	// }
 
-	// modeTick();
+	modeTick();
 }
 
 void gameTick(void)
 {
 	int i;
-
-	for (i = 0; i < SimPlayerCount; ++i)
-	{
-		if (!SimPlayers[i].Active || ((int)playerGetHealth(SimPlayers[i].Player) <= 0)) {
+	for (i = 0; i < SimPlayerCount; ++i) {
+		if (!SimPlayers[i].Active || playerIsDead(SimPlayers[i].Player)) {
 			spawnTarget(&SimPlayers[i]);
+			// if (!playerGetRespawnTimer(SimPlayers[i].Player)) {
+			// 	spawnTarget(&SimPlayers[i]);
+			// }
 		}
 	}
 }
@@ -481,7 +313,7 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 	gameSettings->PlayerSkins[id] = 0;
 	gameSettings->PlayerTeams[id] = TargetTeam;
 
-	POKE_U32(((u32)PAD_POINTER + 0xc) + (4 * id), (void*)&sPlayer->Pad);
+	POKE_U32(BOT_PAD_LOCATION + (4 * id), (void*)&sPlayer->Pad);
 
 	// local hero
 	((void (*)(int))GetAddress(&vaCreateHero))(id);
@@ -491,7 +323,7 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 
 	players[id] = sPlayer->Player;
 
-	POKE_U32(((u32)PAD_POINTER + 0xc) + (4 * id), 0);
+	POKE_U32(BOT_PAD_LOCATION + (4 * id), 0);
 
 	sPlayer->Player->pPad = (void*)&sPlayer->Pad;
 	sPlayer->Player->fps.vars.cam_slot = id;
@@ -554,7 +386,7 @@ void spawnTarget(SimulatedPlayer_t* sPlayer)
 	if (sPlayer->Active)
 		playerSetHealth(sPlayer->Player, 0);
 
-	// playerRespawn(sPlayer->Player);
+	playerRespawn(sPlayer->Player);
 	modeInitTarget(sPlayer);
 }
 
@@ -601,7 +433,7 @@ void InitBots(void)
 	// 	*(u32*)Addr = 0x1000000E;
 
 
-	// Other Hooks Go Here
+	modeInitialize();
 
 	// give a small delay before finalizing the initialization.
 	// this helps prevent the slow loaders from desyncing
