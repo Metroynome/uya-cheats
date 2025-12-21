@@ -235,55 +235,6 @@ const char* TRAINING_AGGRO_NAMES[] = {
 	[TRAINING_AGGRESSION_IDLE] "IDLE",
 };
 
-void frameTick(void)
-{
-	int i = 0;
-	char buf[32];
-	int nowTime = gameGetTime();
-	GameData* gameData = gameGetData();
-	GameOptions* gameOptions = gameGetOptions();
-
-	// 
-	for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
-		modeProcessPlayer(i);
-	}
-
-	// draw counter
-	//snprintf(buf, 32, "%d/%d", State.TargetsDestroyed, TARGET_GOAL);
-	//gfxScreenSpaceText(15, SCREEN_HEIGHT - 15, 1, 1, 0x80FFFFFF, buf, -1, 6);
-
-	// compute time left
-	// float secondsLeft = ((gameOptions->GameFlags.MultiplayerGameFlags.Timelimit * TIME_MINUTE) - (nowTime - gameData->TimeStart)) / (float)TIME_SECOND;
-	// if (secondsLeft < 0)
-	// 	secondsLeft = 0;
-	// int secondsLeftInt = (int)secondsLeft;
-	// float timeSecondsRounded = secondsLeftInt;
-	// if ((secondsLeft - timeSecondsRounded) > 0.5)
-	// 	timeSecondsRounded += 1;
-
-	// draw timer
-	// if (shouldDrawHud()) {
-	// 	sprintf(buf, "%02d:%02d", secondsLeftInt/60, secondsLeftInt%60);
-	// 	gfxScreenSpaceText(479+1, 57+1, 0.8, 0.8, 0x80000000, buf, -1, 1);
-	// 	gfxScreenSpaceText(479, 57, 0.8, 0.8, 0x80FFFFFF, buf, -1, 1);
-	// }
-
-	modeTick();
-}
-
-void gameTick(void)
-{
-	int i;
-	for (i = 0; i < SimPlayerCount; ++i) {
-		if (!SimPlayers[i].Active || playerIsDead(SimPlayers[i].Player)) {
-			spawnTarget(&SimPlayers[i]);
-			// if (!playerGetRespawnTimer(SimPlayers[i].Player)) {
-			// 	spawnTarget(&SimPlayers[i]);
-			// }
-		}
-	}
-}
-
 void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 {
 	int id = idx + 1;
@@ -458,6 +409,55 @@ void InitBots(void)
 	}
 
 	Initialized = 1;
+}
+
+void frameTick(void)
+{
+	int i = 0;
+	char buf[32];
+	int nowTime = gameGetTime();
+	GameData* gameData = gameGetData();
+	GameOptions* gameOptions = gameGetOptions();
+
+	// 
+	for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
+		modeProcessPlayer(i);
+	}
+
+	// draw counter
+	//snprintf(buf, 32, "%d/%d", State.TargetsDestroyed, TARGET_GOAL);
+	//gfxScreenSpaceText(15, SCREEN_HEIGHT - 15, 1, 1, 0x80FFFFFF, buf, -1, 6);
+
+	// compute time left
+	// float secondsLeft = ((gameOptions->GameFlags.MultiplayerGameFlags.Timelimit * TIME_MINUTE) - (nowTime - gameData->TimeStart)) / (float)TIME_SECOND;
+	// if (secondsLeft < 0)
+	// 	secondsLeft = 0;
+	// int secondsLeftInt = (int)secondsLeft;
+	// float timeSecondsRounded = secondsLeftInt;
+	// if ((secondsLeft - timeSecondsRounded) > 0.5)
+	// 	timeSecondsRounded += 1;
+
+	// draw timer
+	// if (shouldDrawHud()) {
+	// 	sprintf(buf, "%02d:%02d", secondsLeftInt/60, secondsLeftInt%60);
+	// 	gfxScreenSpaceText(479+1, 57+1, 0.8, 0.8, 0x80000000, buf, -1, 1);
+	// 	gfxScreenSpaceText(479, 57, 0.8, 0.8, 0x80FFFFFF, buf, -1, 1);
+	// }
+
+	modeTick();
+}
+
+void gameTick(void)
+{
+	int i;
+	for (i = 0; i < SimPlayerCount; ++i) {
+		if (!SimPlayers[i].Active || playerIsDead(SimPlayers[i].Player)) {
+			spawnTarget(&SimPlayers[i]);
+			// if (!playerGetRespawnTimer(SimPlayers[i].Player)) {
+			// 	spawnTarget(&SimPlayers[i]);
+			// }
+		}
+	}
 }
 
 void StartBots(void) // gameStart

@@ -25,8 +25,8 @@
 #define MAX_SPAWNED_TARGETS (3)
 #define TARGET_RESPAWN_DELAY (TIME_SECOND * 1)
 #define TARGET_POINTS_LIFETIME (TIME_SECOND * 20)
-#define TARGET_LIFETIME_TICKS (GAME_FPS * 60)
-#define TICKS_TO_RESPAWN (GAME_FPS * 0.5)
+#define TARGET_LIFETIME_TICKS (TPS * 60)
+#define TICKS_TO_RESPAWN (TPS * 0.5)
 #define TIMELIMIT_MINUTES (5)
 #define SIZEOF_PLAYER_OBJECT (0x4500)
 #define TARGET_TEAM (TEAM_RED)
@@ -61,9 +61,9 @@ void modeOnGadgetFired(int gadgetId)
 int modeGetJumpTicks(void)
 {
 	if (rand(2))
-		return randRangeInt(GAME_FPS * 2, GAME_FPS * 5);
+		return randRangeInt(TPS * 2, TPS * 5);
 
-	return randRangeInt(5, GAME_FPS * 1);
+	return randRangeInt(5, TPS * 1);
 }
 
 //--------------------------------------------------------------------------
@@ -76,7 +76,7 @@ void modeOnTargetHit(SimulatedPlayer_t* target, MobyColDamage* colDamage)
 void modeOnTargetKilled(SimulatedPlayer_t* target, MobyColDamage* colDamage)
 {
 	target->TicksToRespawn = TICKS_TO_RESPAWN;
-	// State.TargetsDestroyed += 1;
+	State.TargetsDestroyed += 1;
 	target->Active = 0;
 }
 
@@ -100,11 +100,11 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 	if (State.AggroMode == TRAINING_AGGRESSION_IDLE)
 		return;
 
-	u32 jumpTicks = timeDecTimer(&sPlayer->TicksToJump);
-	u32 jumpTicksFor = timeDecTimer(&sPlayer->TicksToJumpFor);
-	u32 strafeSwitchTicks = timeDecTimer(&sPlayer->TicksToStrafeSwitch);
-	u32 strafeStopTicks = timeDecTimer(&sPlayer->TicksToStrafeStop);
-	u32 strafeStopTicksFor = timeDecTimer(&sPlayer->TicksToStrafeStopFor);
+	u32 jumpTicks = timeDecTimerShort(&sPlayer->TicksToJump);
+	u32 jumpTicksFor = timeDecTimerShort(&sPlayer->TicksToJumpFor);
+	u32 strafeSwitchTicks = timeDecTimerShort(&sPlayer->TicksToStrafeSwitch);
+	u32 strafeStopTicks = timeDecTimerShort(&sPlayer->TicksToStrafeStop);
+	u32 strafeStopTicksFor = timeDecTimerShort(&sPlayer->TicksToStrafeStopFor);
 
     // face player
     vector_copy(delta, player->playerPosition);
@@ -173,6 +173,9 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 	pad->ljoy_h = (u8)(((clamp(-delta[1] * 1.5, -1, 1) + 1) / 2) * 255);
 	pad->ljoy_v = (u8)(((clamp(-delta[0] * 1.5, -1, 1) + 1) / 2) * 255);
 
+
+	// shoot
+	pad->btns &= ~PAD_CIRCLE;
 }
 
 void modeInitTarget(SimulatedPlayer_t * sPlayer)
