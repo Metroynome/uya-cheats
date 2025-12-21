@@ -24,7 +24,8 @@
 
 
 #define MAX_SPAWNED_TARGETS (3)
-#define TARGET_SPAWN_DISTANCE (5)
+#define TARGET_SPAWN_DISTANCE (5.0f)
+#define TARGET_HEALTH (1)
 #define TARGET_RESPAWN_DELAY (TIME_SECOND * 1)
 #define TARGET_POINTS_LIFETIME (TIME_SECOND * 20)
 #define TARGET_LIFETIME_TICKS (TPS * 60)
@@ -35,10 +36,10 @@
 
 // Distance-based behavior
 // based off of bot to player distance
-#define STRAFE_DISTANCE_MIN (4)
-#define STRAFE_DISTANCE_MAX (15)
-#define WANDER_DISTANCE_MIN (30)     
-#define WANDER_DISTANCE_MAX (40)
+#define STRAFE_DISTANCE_MIN (4.0f)
+#define STRAFE_DISTANCE_MAX (15.0f)
+#define WANDER_DISTANCE_MIN (30.0f)     
+#define WANDER_DISTANCE_MAX (40.0f)
 
 VariableAddress_t vaResurrectSpawnDistance = {
 #if UYA_PAL
@@ -260,7 +261,7 @@ void modeInitTarget(SimulatedPlayer_t * sPlayer)
 
 	sPlayer->Active = 1;
 	sPlayer->TicksToJump = modeGetJumpTicks();
-	playerSetHealth(sPlayer->Player, 1);
+	playerSetHealth(sPlayer->Player, TARGET_HEALTH);
 	vector_copy(pvar->SpawnPos, sPlayer->Player->playerPosition);
 	sPlayer->Points = 0;
 	
