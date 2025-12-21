@@ -551,9 +551,10 @@ void drawLine(LineEndPoint_t *pEndPoints, int numEndPoints, LineStatic_t *pStyle
 
 typedef struct LinesYo {
     int init;
-    int numCubes;
+    int numLines;
     LineEndPoint_t *endpointsPtr;
     Cuboid *cubes[8];
+    VECTOR *playerPos[8];
 } LinesYo_t;
 LinesYo_t lines;
 
@@ -568,7 +569,7 @@ void getMPConfigMoby(void)
             int i;
             for (i = 0; i < 8; ++i) {
                 lines.cubes[i] = spawnPointGet(mp->node);
-                ++lines.numCubes;
+                ++lines.numLines;
                 // printf("\ni: %d, %08x",i , lines.cubes[i]);
             }
             break;
@@ -584,15 +585,27 @@ void getCuboidIndex(void)
     for (i = 0; i < 8; ++i) {
         int cube = d->allYourBaseGameData->nodeResurrectionPts[i];
         lines.cubes[i] = spawnPointGet(cube);
-        ++lines.numCubes;
+        ++lines.numLines;
     }
 }
 
-void doTheLines()
+void getPlayerPos(void)
+{
+    int i;
+    for (i = 0; i < 8; ++i) {
+        Player *p = playerGetFromSlot(i);
+        if (!p) continue;
+        lines.playerPos[i] = &p->pMoby->position;
+        ++lines.numLines;
+    }
+}
+
+void doTheLines(void)
 {
     if (!lines.init) {
         // getMPConfigMoby();
-        getCuboidIndex();
+        // getCuboidIndex();
+        GetPlayerPos();
         lines.init = 1;
     }
 
@@ -601,12 +614,18 @@ void doTheLines()
 	}
 
     int i;
-    // lines.numCubes = 2;
-    for(i = 0; i < lines.numCubes; ++i) {
-        vector_copy(lines.endpointsPtr[i].pos, lines.cubes[i]->pos);
-        lines.endpointsPtr[i].color = 0x80ffffff; // 0x80000000 | TEAM_COLORS[i];
-        lines.endpointsPtr[i].lerpColor = false;
-        lines.endpointsPtr[i].fadeEnds = 0;
+    for(i = 0; i < lines.numLines; ++i) {
+        if (lines.cubes) {
+            vector_copy(lines.endpointsPtr[i].pos, lines.cubes[i]->pos);
+            lines.endpointsPtr[i].color = 0x80000000 | TEAM_COLORS[i];
+            lines.endpointsPtr[i].lerpColor = false;
+            lines.endpointsPtr[i].fadeEnds = 0;
+        } else if (lines.playerPos) {
+            vector_copy(lines.endpointsPtr[i].pos, lines.cubes[i]->pos);
+            lines.endpointsPtr[i].color = 0x80ffffff; // 0x80000000 | TEAM_COLORS[i];
+            lines.endpointsPtr[i].lerpColor = false;
+            lines.endpointsPtr[i].fadeEnds = 0;
+        }
     }
     // vector_copy(lines.endpointsPtr[1].pos, playerGetFromSlot(0)->pMoby->position);
     // LineEndPoint_t endpoints[2];
@@ -617,7 +636,7 @@ void doTheLines()
     // endpoints[1].color = 0x80FFFFFF;
     // endpoints[1].lerpColor = true;
 
-    drawLine(lines.endpointsPtr, lines.numCubes, NULL); 
+    drawLine(lines.endpointsPtr, lines.numLines, NULL); 
 }
 
 void faceMe(VECTOR point[8])
