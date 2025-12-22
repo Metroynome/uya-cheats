@@ -147,6 +147,11 @@ typedef struct SimulatedPlayer {
 	u32 TicksToFire;
 	u32 TicksFireDelay;
 	u32 TicksToCycle;
+	u32 TicksToWrench;
+	u32 TicksToThrowWrench;
+	u32 UsingWrench;
+	u32 HasWrenched;
+	float LastDistanceToPlayer;
 	u32 TicksToAimYaw;
 	u32 TicksToAimPitch;
 	u32 TicksToTbag;

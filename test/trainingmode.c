@@ -173,36 +173,84 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     if (sPlayer->TicksToStrafeSwitch > 0) sPlayer->TicksToStrafeSwitch--;
     if (sPlayer->TicksToStrafeStop > 0) sPlayer->TicksToStrafeStop--;
     if (sPlayer->TicksToStrafeStopFor > 0) sPlayer->TicksToStrafeStopFor--;
+    if (sPlayer->TicksToThrowWrench > 0) sPlayer->TicksToThrowWrench--;
+
+    // Track player's approach speed to detect intentional closing
+    float previousDistance = sPlayer->LastDistanceToPlayer;
+    float approachSpeed = previousDistance - distanceToPlayer;  // Positive = player getting closer
+    sPlayer->LastDistanceToPlayer = distanceToPlayer;
 
     // Jump logic
     if (sPlayer->TicksToJump == 0) {
         sPlayer->TicksToJump = modeGetJumpTicks();
-        sPlayer->TicksToJumpFor = 3;  // Press jump for 3 frames
+        sPlayer->TicksToJumpFor = 3;
+    }
+
+    // Check if we should switch back to gun after wrenching
+    if (sPlayer->HasWrenched && !sPlayer->UsingWrench && distanceToPlayer >= STRAFE_DISTANCE_MIN) {
+        pad->btns &= ~PAD_TRIANGLE;  // Press Triangle to put away wrench
+        sPlayer->HasWrenched = 0;  // Reset flag
     }
 
     VECTOR moveTarget;
-	if (distanceToPlayer > WANDER_DISTANCE_MAX) {
-		// sPlayer->TicksToStrafeStopFor = 1;
-		sPlayer->TicksToJumpFor = 0;
+    int shouldWrench = 0;
+    
+    if (distanceToPlayer > WANDER_DISTANCE_MAX) {
+        sPlayer->TicksToJumpFor = 0;
         vector_copy(moveTarget, player->playerPosition);
-	} else if (distanceToPlayer > WANDER_DISTANCE_MIN) {
-        // Very far - wander around current position
+    } else if (distanceToPlayer > WANDER_DISTANCE_MIN) {
         vector_fromyaw(moveTarget, yaw + MATH_PI/2);
         vector_scale(moveTarget, moveTarget, (sPlayer->StrafeDir ? -1 : 1) * 8);
         vector_add(moveTarget, target->playerPosition, moveTarget);
     } else if (distanceToPlayer > STRAFE_DISTANCE_MAX) {
-        // Far - walk directly toward player
         vector_copy(moveTarget, player->playerPosition);
     } else if (distanceToPlayer >= STRAFE_DISTANCE_MIN) {
-        // Close - strafe around player
         vector_fromyaw(moveTarget, yaw + MATH_PI/2);
         vector_scale(moveTarget, moveTarget, (sPlayer->StrafeDir ? -1 : 1) * 5);
         vector_add(moveTarget, player->playerPosition, moveTarget);
-    } else {
-        // Too close - back up
-        vector_fromyaw(moveTarget, yaw + MATH_PI);
-        vector_scale(moveTarget, moveTarget, 3);
-        vector_add(moveTarget, target->playerPosition, moveTarget);
+    } else if (distanceToPlayer <= 1.5) {  // Wrench range
+        // Player is very close
+        // Only wrench if player is actively approaching (not if bot accidentally got close)
+        if (approachSpeed > 0.1 && sPlayer->TicksToThrowWrench == 0 && !sPlayer->HasWrenched) {
+            sPlayer->TicksToThrowWrench = 30;  // Wrench for 30 frames
+            sPlayer->UsingWrench = 1;
+			sPlayer->HasWrenched = 1;
+        }
+        
+        shouldWrench = (sPlayer->UsingWrench && sPlayer->TicksToThrowWrench > 0);
+        
+        if (shouldWrench) {
+            // Stay in place while wrenching
+            vector_copy(moveTarget, target->playerPosition);
+        } else {
+            // Back away after wrenching or if too close
+            vector_fromyaw(moveTarget, yaw + MATH_PI);  // Move backward
+            vector_scale(moveTarget, moveTarget, 3);
+            vector_add(moveTarget, target->playerPosition, moveTarget);
+        }
+    } else if (approachSpeed <= 0.1){
+		// back away
+		vector_fromyaw(moveTarget, yaw + MATH_PI);  // Move backward
+		vector_scale(moveTarget, moveTarget, 3);
+		vector_add(moveTarget, target->playerPosition, moveTarget);
+        // Default - move toward player
+        // vector_copy(moveTarget, player->playerPosition);
+    }
+
+    // Handle wrench attack
+    if (shouldWrench) {
+        // Stop all movement
+        pad->ljoy_h = 0x7F;
+        pad->ljoy_v = 0x7F;
+        
+        // Press square to wrench
+        pad->btns &= ~PAD_SQUARE;
+        
+        // Still face the player but don't move
+        return;
+    } else if (sPlayer->UsingWrench) {
+        // Done wrenching
+        sPlayer->UsingWrench = 0;
     }
 
     // Get direction to move target
@@ -210,12 +258,12 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     delta[2] = 0;
     float distanceToMoveTarget = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
 
-	// jump
+    // Jump
     if (sPlayer->TicksToJumpFor > 0) {
         pad->btns &= ~PAD_CROSS;
     }
 
-    // Switch strafe direction when close to target or timer expires
+    // Switch strafe direction
     if (distanceToMoveTarget < 0.5 || sPlayer->TicksToStrafeSwitch == 0) {
         sPlayer->StrafeDir = !sPlayer->StrafeDir;
         sPlayer->TicksToStrafeSwitch = randRangeInt(15, TPS * 1);
@@ -234,7 +282,6 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
         sPlayer->TicksToStrafeStopFor = randRangeInt(5, 30);
     }
     
-    // Apply stop if active
     if (sPlayer->TicksToStrafeStopFor > 0) {
         delta[0] = delta[1] = 0;
     }
