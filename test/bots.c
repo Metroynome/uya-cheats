@@ -271,6 +271,7 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 
 	Player * newPlayer = players[id];
 	sPlayer->Player = newPlayer;
+	sPlayer->vtable = playerGetVTable(sPlayer->Player);
 
 	players[id] = sPlayer->Player;
 

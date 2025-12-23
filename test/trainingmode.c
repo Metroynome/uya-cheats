@@ -38,8 +38,8 @@
 // based off of bot to player distance
 #define STRAFE_DISTANCE_MIN (4.0f)
 #define STRAFE_DISTANCE_MAX (15.0f)
-#define WANDER_DISTANCE_MIN (30.0f)     
-#define WANDER_DISTANCE_MAX (40.0f)
+#define WANDER_DISTANCE_MIN -1 // (30.0f)     
+#define WANDER_DISTANCE_MAX -1// (40.0f)
 
 VariableAddress_t vaResurrectSpawnDistance = {
 #if UYA_PAL
@@ -160,30 +160,6 @@ int modeUpdateTarget_Wrench(SimulatedPlayer_t *sPlayer, Player* player, struct p
     return 0;  // Not currently wrenching
 }
 
-// Helper function for movement target calculation
-void modeUpdateTarget_CalculateMovement(SimulatedPlayer_t *sPlayer, Player* player, Player* target, VECTOR moveTarget, float distanceToPlayer, float yaw, float approachSpeed)
-{
-    if (distanceToPlayer > WANDER_DISTANCE_MAX) {
-        sPlayer->TicksToJumpFor = 0;
-        vector_copy(moveTarget, player->playerPosition);
-    } else if (distanceToPlayer > WANDER_DISTANCE_MIN) {
-        vector_fromyaw(moveTarget, yaw + MATH_PI/2);
-        vector_scale(moveTarget, moveTarget, (sPlayer->StrafeDir ? -1 : 1) * 8);
-        vector_add(moveTarget, target->playerPosition, moveTarget);
-    } else if (distanceToPlayer > STRAFE_DISTANCE_MAX) {
-        vector_copy(moveTarget, player->playerPosition);
-    } else if (distanceToPlayer >= STRAFE_DISTANCE_MIN) {
-        vector_fromyaw(moveTarget, yaw + MATH_PI/2);
-        vector_scale(moveTarget, moveTarget, (sPlayer->StrafeDir ? -1 : 1) * 5);
-        vector_add(moveTarget, player->playerPosition, moveTarget);
-    } else {
-        // Default: back away to maintain safe distance
-        vector_fromyaw(moveTarget, yaw + MATH_PI);
-        vector_scale(moveTarget, moveTarget, 3);
-        vector_add(moveTarget, target->playerPosition, moveTarget);
-    }
-}
-
 // Helper function for aiming
 void modeUpdateTarget_Aiming(SimulatedPlayer_t *sPlayer, Player* player, Player* target, VECTOR delta)
 {
@@ -209,86 +185,17 @@ void modeUpdateTarget_Aiming(SimulatedPlayer_t *sPlayer, Player* player, Player*
     target->fps.vars.cameraZ.rotation = sPlayer->Yaw;
 }
 
-// Helper function for jumping
-void modeUpdateTarget_Jump(SimulatedPlayer_t *sPlayer, struct padButtonStatus* pad)
-{
-    if (sPlayer->TicksToJump == 0) {
-        sPlayer->TicksToJump = modeGetJumpTicks();
-        sPlayer->TicksToJumpFor = 3;
-    }
-    
-    if (sPlayer->TicksToJumpFor > 0) {
-        pad->btns &= ~PAD_CROSS;
-    }
-}
-
-
-
-
-
-
-// Fixed: Always check from bot's height, not target height
-int modeUpdateTarget_IsPathSafe(SimulatedPlayer_t *sPlayer, Player* target, VECTOR from, VECTOR to)
-{
-    VECTOR adjustedFrom, adjustedTo;
-    
-    // Copy positions but keep them at bot's current height for path check
-    vector_copy(adjustedFrom, from);
-    vector_copy(adjustedTo, to);
-    adjustedFrom[2] = from[2] + 1.0f;  // Bot's height + 1
-    adjustedTo[2] = from[2] + 1.0f;    // Keep at bot's height, NOT target height!
-    
-    // Use moving sphere to check path horizontally
-    float result = CollMovingSphere(0.5f, adjustedFrom, adjustedTo, 0x0840, target->pMoby);
-    
-    if (result < 1.0f) {
-        // Wall/obstacle in the way
-        return 0;
-    }
-    
-    // Check ground below the horizontal destination point
-    VECTOR rayStart, rayEnd;
-    vector_copy(rayStart, to);
-    rayStart[2] = from[2] + 2.0f;  // Start from bot's current height + 2
-    
-    vector_copy(rayEnd, to);
-    rayEnd[2] = from[2] - 6.0f;    // Check down from bot's height
-    
-    int hit = CollLine_Fix(rayStart, rayEnd, 0x0840, target->pMoby, 0);
-    
-    if (!hit) {
-        return 0;  // No ground = void/gap
-    }
-    
-    // Check surface type
-    int hotspot = CollHotspot();
-    if (hotspot == 0x1 || hotspot == 0x2) {
-        return 0;  // Death plane or water
-    }
-    
-    // Check if ground is too far below bot's current position
-    float* hitPos = CollLine_Fix_GetHitPosition();
-    float dropDistance = from[2] - hitPos[2];  // Use bot's height, not target
-    
-    if (dropDistance > 4.0f) {
-        return 0;  // Too big a drop
-    }
-    
-    // Check if ground is too far above (can't climb)
-    float climbDistance = hitPos[2] - from[2];
-    if (climbDistance > 2.0f) {
-        return 0;  // Too high to climb
-    }
-    
-    return 1;  // Path is safe
-}
-
-// Updated avoidance using the better collision detection
 void modeUpdateTarget_AvoidHazards(SimulatedPlayer_t *sPlayer, Player* target, VECTOR moveTarget, float yaw)
 {
-    // Check if path to move target is safe
-    if (modeUpdateTarget_IsPathSafe(sPlayer, target, target->playerPosition, moveTarget)) {
-        return;  // Path is safe, no changes needed
+    // ONLY check hazards if we're moving a significant distance
+    VECTOR delta;
+    vector_subtract(delta, moveTarget, target->playerPosition);
+    delta[2] = 0;
+    float moveDistance = vector_length(delta);
+    
+    // If barely moving, don't bother checking
+    if (moveDistance < 1.0f) {
+        return;
     }
     
     // Path is unsafe! Try alternative directions
@@ -301,24 +208,272 @@ void modeUpdateTarget_AvoidHazards(SimulatedPlayer_t *sPlayer, Player* target, V
         yaw + MATH_PI      // 180° behind
     };
     
-	int i;
+    int i;
     for (i = 0; i < 5; i++) {
         vector_fromyaw(testPos, testAngles[i]);
         vector_scale(testPos, testPos, 3.0f);
         vector_add(testPos, target->playerPosition, testPos);
-        
-        if (modeUpdateTarget_IsPathSafe(sPlayer, target, target->playerPosition, testPos)) {
-            // Found safe direction
-            vector_copy(moveTarget, testPos);
-            return;
-        }
+        vector_copy(moveTarget, testPos);
+        return;
     }
     
     // No safe direction - stay put
     vector_copy(moveTarget, target->playerPosition);
 }
 
-// Main update function (now much cleaner!)
+
+
+
+// Add to your #defines at the top
+#define SWINGSHOT_DETECTION_DISTANCE 15.0f
+#define SWINGSHOT_MIN_HEIGHT 2.0f
+#define SWINGSHOT_MAX_HEIGHT 8.0f
+
+// Function to check if there's a swingshot orb nearby
+Moby* modeUpdateTarget_FindSwingshotOrb(SimulatedPlayer_t *sPlayer, Player* target, VECTOR direction, float searchDistance)
+{
+    Moby* moby;
+    Moby* closestOrb = NULL;
+    float closestDist = 999999.0f;
+    VECTOR targetPos, delta;
+    
+    // Get the first moby in the list
+    moby = mobyListGetStart();
+    Moby* end = mobyListGetEnd();
+    
+    // Calculate search position ahead of bot
+    vector_copy(targetPos, target->playerPosition);
+    vector_scale(direction, direction, searchDistance);
+    vector_add(targetPos, targetPos, direction);
+    
+    // Search for swingshot orbs
+    while (moby < end) {
+        if (moby->oClass == MOBY_ID_SWINGSHOT_ORB) {
+            // Check if orb is in front of us
+            vector_subtract(delta, moby->position, target->playerPosition);
+            delta[2] = 0;  // Only horizontal distance
+            float dist = vector_length(delta);
+            
+            if (dist < searchDistance && dist < closestDist) {
+                // Check if orb is at a reasonable height above bot
+                float heightDiff = moby->position[2] - target->playerPosition[2];
+                
+                if (heightDiff >= SWINGSHOT_MIN_HEIGHT && heightDiff <= SWINGSHOT_MAX_HEIGHT) {
+                    // Check if orb is roughly in the direction we're moving
+                    vector_normalize(delta, delta);
+                    VECTOR dirNorm;
+                    vector_copy(dirNorm, direction);
+                    vector_normalize(dirNorm, dirNorm);
+                    
+                    float dot = vector_innerproduct(delta, dirNorm);
+                    if (dot > 0.7f) {  // Within ~45 degrees
+                        closestOrb = moby;
+                        closestDist = dist;
+                    }
+                }
+            }
+        }
+        moby++;
+    }
+    
+    return closestOrb;
+}
+
+// Check if there's a gap beyond the swingshot
+int modeUpdateTarget_IsGapBeyondSwingshot(SimulatedPlayer_t *sPlayer, Player* target, Moby* swingshotOrb)
+{
+    VECTOR checkPos, direction, rayStart, rayEnd;
+    
+    // Get direction from bot to swingshot
+    vector_subtract(direction, swingshotOrb->position, target->playerPosition);
+    direction[2] = 0;
+    vector_normalize(direction, direction);
+    
+    // Check position beyond the swingshot (5 units past it)
+    vector_copy(checkPos, swingshotOrb->position);
+    vector_scale(direction, direction, 5.0f);
+    vector_add(checkPos, checkPos, direction);
+    
+    // Raycast down from beyond swingshot
+    vector_copy(rayStart, checkPos);
+    rayStart[2] = swingshotOrb->position[2];  // Start at swingshot height
+    
+    vector_copy(rayEnd, checkPos);
+    rayEnd[2] = target->playerPosition[2] - 10.0f;  // Check way down
+    
+    int hit = CollLine_Fix(rayStart, rayEnd, 0x0840, target->pMoby, 0);
+    
+    if (!hit) {
+        return 1;  // No ground = gap exists
+    }
+    
+    // Check if ground is very far down (big drop)
+    float* hitPos = CollLine_Fix_GetHitPosition();
+    float dropDistance = swingshotOrb->position[2] - hitPos[2];
+    
+    if (dropDistance > 5.0f) {
+        return 1;  // Big drop = gap
+    }
+    
+    return 0;  // No gap
+}
+
+// Main swingshot logic
+int modeUpdateTarget_HandleSwingshot(SimulatedPlayer_t *sPlayer, Player* target, VECTOR moveDirection, struct padButtonStatus* pad)
+{
+    VECTOR direction;
+    Moby* swingshotOrb;
+    
+    // If already swinging, just hold R1
+    if (sPlayer->IsSwinging) {
+        // Check if we should release
+        VECTOR deltaToOrb;
+        vector_subtract(deltaToOrb, sPlayer->SwingshotOrb->position, target->playerPosition);
+        float distToOrb = vector_length(deltaToOrb);
+        
+        // Release when we're past the orb and moving away
+        if (distToOrb < 3.0f) {
+            sPlayer->SwingReleaseTimer = 5;  // Release in 5 frames
+        }
+        
+        if (sPlayer->SwingReleaseTimer > 0) {
+            sPlayer->SwingReleaseTimer--;
+            if (sPlayer->SwingReleaseTimer == 0) {
+                // Release swing
+                pad->btns |= PAD_R1;  // Stop pressing R1
+                sPlayer->IsSwinging = 0;
+                sPlayer->SwingshotOrb = NULL;
+                return 0;
+            }
+        }
+        
+        // Keep holding R1 to swing
+        pad->btns &= ~PAD_R1;
+        return 1;  // Still swinging
+    }
+    
+    // Not swinging yet - check if we should start
+    vector_copy(direction, moveDirection);
+    vector_normalize(direction, direction);
+    
+    // Look for swingshot orb ahead
+    swingshotOrb = modeUpdateTarget_FindSwingshotOrb(sPlayer, target, direction, SWINGSHOT_DETECTION_DISTANCE);
+    
+    if (!swingshotOrb) {
+        return 0;  // No swingshot nearby
+    }
+    
+    // Check if there's a gap beyond the swingshot
+    if (!modeUpdateTarget_IsGapBeyondSwingshot(sPlayer, target, swingshotOrb)) {
+        return 0;  // No gap, don't need to swing
+    }
+    
+    // Found swingshot over gap! Start swinging
+    VECTOR deltaToOrb;
+    vector_subtract(deltaToOrb, swingshotOrb->position, target->playerPosition);
+    float distToOrb = sqrtf(deltaToOrb[0] * deltaToOrb[0] + deltaToOrb[1] * deltaToOrb[1]);
+    
+    // Start swinging when close enough
+    if (distToOrb < 8.0f) {
+        sPlayer->IsSwinging = 1;
+        sPlayer->SwingshotOrb = swingshotOrb;
+        sPlayer->SwingReleaseTimer = 0;
+        pad->btns &= ~PAD_R1;  // Press R1
+        return 1;  // Started swinging
+    }
+    
+    return 0;  // Not close enough yet
+}
+
+
+
+
+
+// Add to your #defines
+#define JUMP_PAD_SEARCH_DISTANCE 20.0f
+#define HEIGHT_DIFF_FOR_JUMP_PAD 1.0f
+
+// Add to SimulatedPlayer_t struct:
+// Moby* targetJumpPad;
+
+void modeUpdateTarget_HandleJumpPad(SimulatedPlayer_t *sPlayer, Player* player, Player* target, VECTOR moveTarget, struct padButtonStatus* pad)
+{
+    Moby *moby;
+    VECTOR delta;
+
+    // Decrement cooldown timer
+    if (sPlayer->jumpPadSearchCooldown > 0) {
+        --sPlayer->jumpPadSearchCooldown;
+    }
+
+    // Only search if we don't have a target AND cooldown expired
+    if (!sPlayer->targetJumpPad && sPlayer->jumpPadSearchCooldown == 0) {
+        // check height distance difference for of player and bot
+        float heightDiff = player->playerPosition[2] - sPlayer->Player->playerPosition[2];
+        if (heightDiff >= HEIGHT_DIFF_FOR_JUMP_PAD) {
+            // check if bot is horizontally close to player
+            vector_copy(delta, player->playerPosition);
+            vector_subtract(delta, delta, sPlayer->Player->playerPosition);
+            delta[2] = 0;
+            float horizontalDist = vector_length(delta);
+            
+            if (horizontalDist <= 30.0f) {
+                // Look for nearby jump pad    
+                moby = mobyListGetStart();
+                Moby* end = mobyListGetEnd();
+                while (moby < end) {
+                    if (moby->oClass == MOBY_ID_JUMP_PAD) {
+                        // Calculate distance to jump pad
+                        vector_subtract(delta, moby->position, sPlayer->Player->playerPosition);
+                        float dist = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
+                        if (dist < JUMP_PAD_SEARCH_DISTANCE && (sPlayer->Player->playerPosition[2] + 0.5f) > moby->position[2]) {
+                            sPlayer->targetJumpPad = moby;
+                            break;
+                        }
+                    }
+                    moby++;
+                }
+                
+                // Set cooldown whether we found one or not
+                sPlayer->jumpPadSearchCooldown = TPS * 5; // Search every 5s
+            }
+        }
+    }
+
+    // Use the jump pad if we have one
+    if (sPlayer->targetJumpPad) {
+        vector_copy(moveTarget, sPlayer->targetJumpPad->position);
+        
+        if (sPlayer->Player->mobys.ground == sPlayer->targetJumpPad) {
+            pad->btns &= ~PAD_CROSS;
+            sPlayer->targetJumpPad = NULL;
+        }
+    }
+}
+
+void modeUpdateTarget_CalculateMovement(SimulatedPlayer_t *sPlayer, Player* player, Player* target, VECTOR moveTarget, float distanceToPlayer, float yaw, float approachSpeed)
+{
+    if (distanceToPlayer > WANDER_DISTANCE_MAX) {
+        sPlayer->TicksToJumpFor = 0;
+        vector_copy(moveTarget, player->playerPosition);
+    } else if (distanceToPlayer > WANDER_DISTANCE_MIN) {
+        vector_fromyaw(moveTarget, yaw + MATH_PI/2);
+        vector_scale(moveTarget, moveTarget, (sPlayer->StrafeDir ? -1 : 1) * 8);
+        vector_add(moveTarget, target->playerPosition, moveTarget);
+    } else if (distanceToPlayer > STRAFE_DISTANCE_MAX) {
+        sPlayer->TicksToJumpFor = 0;
+        vector_copy(moveTarget, player->playerPosition);
+    } else if (distanceToPlayer >= STRAFE_DISTANCE_MIN) {
+        vector_fromyaw(moveTarget, yaw + MATH_PI/2);
+        vector_scale(moveTarget, moveTarget, (sPlayer->StrafeDir ? -1 : 1) * 5);
+        vector_add(moveTarget, player->playerPosition, moveTarget);
+    } else {
+        vector_fromyaw(moveTarget, yaw + MATH_PI);
+        vector_scale(moveTarget, moveTarget, 3);
+        vector_add(moveTarget, target->playerPosition, moveTarget);
+    }
+}
+
 void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 {
     int i;
@@ -334,10 +489,11 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     if (!pvar)
         return;
 
-    // set to lock-strafe
     *(u8*)(0x001A5a34 + (sPlayer->Idx * 4)) = 1;
 
-    // Decrement all timers
+    // set easy to get deobfuscated state
+    sPlayer->state = playerGetState(sPlayer->Player);
+
     if (sPlayer->TicksToJump > 0) sPlayer->TicksToJump--;
     if (sPlayer->TicksToJumpFor > 0) sPlayer->TicksToJumpFor--;
     if (sPlayer->TicksToStrafeSwitch > 0) sPlayer->TicksToStrafeSwitch--;
@@ -345,48 +501,99 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     if (sPlayer->TicksToStrafeStopFor > 0) sPlayer->TicksToStrafeStopFor--;
     if (sPlayer->TicksToThrowWrench > 0) sPlayer->TicksToThrowWrench--;
 
-    // Calculate distance
     vector_copy(delta, player->playerPosition);
     vector_subtract(delta, delta, target->playerPosition);
     delta[2] -= 1.5;
     float distanceToPlayer = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
 
-    // Track approach speed
     float previousDistance = sPlayer->LastDistanceToPlayer;
     float approachSpeed = previousDistance - distanceToPlayer;
     sPlayer->LastDistanceToPlayer = distanceToPlayer;
 
-    // Always aim at player
     modeUpdateTarget_Aiming(sPlayer, player, target, delta);
     
-    float yaw = atan2f(delta[0], delta[1]);  // Recalculate yaw for other functions
+    float yaw = atan2f(delta[0], delta[1]);
 
-    // Handle wrench behavior (returns 1 if currently wrenching)
+    // check if ledge grab, if so, jump.
+    if (sPlayer->state >= 23 && sPlayer->state <= 26)
+        sPlayer->vtable->UpdateState(sPlayer->Player, PLAYER_STATE_LEDGE_JUMP, 1, 1, 0);
+
     if (modeUpdateTarget_Wrench(sPlayer, player, pad, distanceToPlayer, approachSpeed, yaw)) {
-        return;  // Exit early if wrenching
+        return;
     }
 
-    // Jump logic
-    // modeUpdateTarget_Jump(sPlayer, pad);
-
-    // Calculate movement target
     VECTOR moveTarget;
+
+    // Handle jump pad logic
+    modeUpdateTarget_HandleJumpPad(sPlayer, player, target, moveTarget, pad);
+    
+    // If we have a jump pad target, go straight to it with no other behaviors
+    if (sPlayer->targetJumpPad) {
+        // Calculate direction to jump pad
+        vector_subtract(delta, moveTarget, target->playerPosition);
+        delta[2] = 0;
+        
+        // Transform to local space
+        MATRIX m;
+        matrix_unit(m);
+        matrix_rotate_z(m, m, -yaw);
+        vector_apply(delta, delta, m);
+        delta[2] = 0;
+        vector_normalize(delta, delta);
+        
+        // Move straight toward jump pad - no strafing, no jumping
+        pad->ljoy_h = (u8)(((clamp(-delta[1], -1, 1) + 1) / 2) * 255);
+        pad->ljoy_v = (u8)(((clamp(-delta[0], -1, 1) + 1) / 2) * 255);
+        
+        return;  // Skip all other movement logic
+    }
+    
+    // Normal movement if no jump pad
     modeUpdateTarget_CalculateMovement(sPlayer, player, target, moveTarget, distanceToPlayer, yaw, approachSpeed);
 
+    // Check for swingshot BEFORE hazard avoidance
+    VECTOR moveDirection;
+    vector_subtract(moveDirection, moveTarget, target->playerPosition);
+    moveDirection[2] = 0;
+    
+    int isSwinging = modeUpdateTarget_HandleSwingshot(sPlayer, target, moveDirection, pad);
+    
+    if (isSwinging) {
+        // While swinging, keep moving forward
+        vector_normalize(moveDirection, moveDirection);
+        MATRIX m;
+        matrix_unit(m);
+        matrix_rotate_z(m, m, -yaw);
+        vector_apply(moveDirection, moveDirection, m);
+        
+        pad->ljoy_h = (u8)(((clamp(-moveDirection[1], -1, 1) + 1) / 2) * 255);
+        pad->ljoy_v = (u8)(((clamp(-moveDirection[0], -1, 1) + 1) / 2) * 255);
+        return;  // Skip rest of movement logic while swinging
+    }
+
+    // Continue with normal movement...
     modeUpdateTarget_AvoidHazards(sPlayer, target, moveTarget, yaw);
 
-    // Get direction to move target
+    
+    // Normal jump logic (only if not ledge jumping)
+    if (sPlayer->TicksToJump == 0) {
+        sPlayer->TicksToJump = modeGetJumpTicks();
+        sPlayer->TicksToJumpFor = 3;
+    }
+    
+    if (sPlayer->TicksToJumpFor > 0) {
+        pad->btns &= ~PAD_CROSS;
+    }
+
     vector_subtract(delta, moveTarget, target->playerPosition);
     delta[2] = 0;
     float distanceToMoveTarget = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
 
-    // Switch strafe direction
     if (distanceToMoveTarget < 0.5 || sPlayer->TicksToStrafeSwitch == 0) {
         sPlayer->StrafeDir = !sPlayer->StrafeDir;
         sPlayer->TicksToStrafeSwitch = randRangeInt(15, TPS * 1);
     }
 
-    // Transform movement to local space
     MATRIX m;
     matrix_unit(m);
     matrix_rotate_z(m, m, -yaw);
@@ -394,7 +601,6 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     delta[2] = 0;
     vector_normalize(delta, delta);
 
-    // Random stop logic
     if (sPlayer->TicksToStrafeStop == 0) {
         sPlayer->TicksToStrafeStop = randRangeInt(TPS * 2, TPS * 5);
         sPlayer->TicksToStrafeStopFor = randRangeInt(5, 30);
@@ -404,7 +610,6 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
         delta[0] = delta[1] = 0;
     }
 
-    // Set analog stick values
     pad->ljoy_h = (u8)(((clamp(-delta[1] * 1.5, -1, 1) + 1) / 2) * 255);
     pad->ljoy_v = (u8)(((clamp(-delta[0] * 1.5, -1, 1) + 1) / 2) * 255);
 }

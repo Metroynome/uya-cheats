@@ -136,6 +136,8 @@ typedef struct SimulatedPlayer {
 	struct PAD Pad;
 	struct TrainingTargetMobyPVar Vars;
 	Player* Player;
+	 PlayerVTable* vtable;
+	int state;
 	u32 TicksToRespawn;
 	u32 TicksToJump;
 	u32 TicksToJumpFor;
@@ -172,6 +174,13 @@ typedef struct SimulatedPlayer {
 	float PitchAcc;
 	char Created;
 	char Active;
+
+    // Swingshot fields
+    char IsSwinging;
+    int SwingReleaseTimer;
+    Moby* SwingshotOrb;
+	u32 jumpPadSearchCooldown;
+	Moby* targetJumpPad;	
 } SimulatedPlayer_t;
 
 struct TrainingGameData {
