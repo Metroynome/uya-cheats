@@ -124,6 +124,201 @@ void modeOnTargetKilled(SimulatedPlayer_t* target, MobyColDamage* colDamage)
 	target->Active = 0;
 }
 
+// Helper function for wrench behavior
+int modeUpdateTarget_Wrench(SimulatedPlayer_t *sPlayer, Player* player, struct padButtonStatus* pad, float distanceToPlayer, float approachSpeed, float yaw)
+{
+    // Check if currently wrenching
+    int shouldWrench = (sPlayer->UsingWrench && sPlayer->TicksToThrowWrench > 0);
+    
+    if (shouldWrench) {
+        // Stop all movement while wrenching
+        pad->ljoy_h = 0x7F;
+        pad->ljoy_v = 0x7F;
+        
+        // Press square to wrench
+        pad->btns &= ~PAD_SQUARE;
+        
+        return 1;  // Return 1 to signal we're wrenching (caller should return early)
+    } else if (sPlayer->UsingWrench) {
+        // Done wrenching
+        sPlayer->UsingWrench = 0;
+    }
+    
+    // Check if we should switch back to gun after wrenching
+    if (sPlayer->HasWrenched && !sPlayer->UsingWrench && distanceToPlayer >= STRAFE_DISTANCE_MIN) {
+        pad->btns &= ~PAD_TRIANGLE;
+        sPlayer->HasWrenched = 0;
+    }
+    
+    // Trigger wrench if player rushing in
+    if (distanceToPlayer <= 1.5 && approachSpeed > 0.1 && sPlayer->TicksToThrowWrench == 0 && !sPlayer->HasWrenched) {
+        sPlayer->TicksToThrowWrench = 30;
+        sPlayer->UsingWrench = 1;
+        sPlayer->HasWrenched = 1;
+    }
+    
+    return 0;  // Not currently wrenching
+}
+
+// Helper function for movement target calculation
+void modeUpdateTarget_CalculateMovement(SimulatedPlayer_t *sPlayer, Player* player, Player* target, VECTOR moveTarget, float distanceToPlayer, float yaw, float approachSpeed)
+{
+    if (distanceToPlayer > WANDER_DISTANCE_MAX) {
+        sPlayer->TicksToJumpFor = 0;
+        vector_copy(moveTarget, player->playerPosition);
+    } else if (distanceToPlayer > WANDER_DISTANCE_MIN) {
+        vector_fromyaw(moveTarget, yaw + MATH_PI/2);
+        vector_scale(moveTarget, moveTarget, (sPlayer->StrafeDir ? -1 : 1) * 8);
+        vector_add(moveTarget, target->playerPosition, moveTarget);
+    } else if (distanceToPlayer > STRAFE_DISTANCE_MAX) {
+        vector_copy(moveTarget, player->playerPosition);
+    } else if (distanceToPlayer >= STRAFE_DISTANCE_MIN) {
+        vector_fromyaw(moveTarget, yaw + MATH_PI/2);
+        vector_scale(moveTarget, moveTarget, (sPlayer->StrafeDir ? -1 : 1) * 5);
+        vector_add(moveTarget, player->playerPosition, moveTarget);
+    } else {
+        // Default: back away to maintain safe distance
+        vector_fromyaw(moveTarget, yaw + MATH_PI);
+        vector_scale(moveTarget, moveTarget, 3);
+        vector_add(moveTarget, target->playerPosition, moveTarget);
+    }
+}
+
+// Helper function for aiming
+void modeUpdateTarget_Aiming(SimulatedPlayer_t *sPlayer, Player* player, Player* target, VECTOR delta)
+{
+    vector_copy(delta, player->playerPosition);
+    vector_subtract(delta, delta, target->playerPosition);
+    delta[2] -= 1.5;
+    
+    float horizontalDist = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
+    float yaw = atan2f(delta[0], delta[1]);
+    float len = sqrtf(horizontalDist * horizontalDist + delta[2] * delta[2]);
+    float targetPitch = asinf(-delta[2] / len);
+    
+    sPlayer->Yaw = lerpfAngle(sPlayer->Yaw, yaw, 0.5);
+    sPlayer->Pitch = targetPitch;
+
+    MATRIX m;
+    matrix_unit(m);
+    matrix_rotate_y(m, m, sPlayer->Pitch);
+    matrix_rotate_z(m, m, sPlayer->Yaw);
+    memcpy(&target->camera->uMtx, m, sizeof(VECTOR) * 3);
+    vector_copy(target->fps.cameraDir, &m[4]);
+    target->fps.vars.cameraY.rotation = sPlayer->Pitch;
+    target->fps.vars.cameraZ.rotation = sPlayer->Yaw;
+}
+
+// Helper function for jumping
+void modeUpdateTarget_Jump(SimulatedPlayer_t *sPlayer, struct padButtonStatus* pad)
+{
+    if (sPlayer->TicksToJump == 0) {
+        sPlayer->TicksToJump = modeGetJumpTicks();
+        sPlayer->TicksToJumpFor = 3;
+    }
+    
+    if (sPlayer->TicksToJumpFor > 0) {
+        pad->btns &= ~PAD_CROSS;
+    }
+}
+
+
+
+
+
+
+// Fixed: Always check from bot's height, not target height
+int modeUpdateTarget_IsPathSafe(SimulatedPlayer_t *sPlayer, Player* target, VECTOR from, VECTOR to)
+{
+    VECTOR adjustedFrom, adjustedTo;
+    
+    // Copy positions but keep them at bot's current height for path check
+    vector_copy(adjustedFrom, from);
+    vector_copy(adjustedTo, to);
+    adjustedFrom[2] = from[2] + 1.0f;  // Bot's height + 1
+    adjustedTo[2] = from[2] + 1.0f;    // Keep at bot's height, NOT target height!
+    
+    // Use moving sphere to check path horizontally
+    float result = CollMovingSphere(0.5f, adjustedFrom, adjustedTo, 0x0840, target->pMoby);
+    
+    if (result < 1.0f) {
+        // Wall/obstacle in the way
+        return 0;
+    }
+    
+    // Check ground below the horizontal destination point
+    VECTOR rayStart, rayEnd;
+    vector_copy(rayStart, to);
+    rayStart[2] = from[2] + 2.0f;  // Start from bot's current height + 2
+    
+    vector_copy(rayEnd, to);
+    rayEnd[2] = from[2] - 6.0f;    // Check down from bot's height
+    
+    int hit = CollLine_Fix(rayStart, rayEnd, 0x0840, target->pMoby, 0);
+    
+    if (!hit) {
+        return 0;  // No ground = void/gap
+    }
+    
+    // Check surface type
+    int hotspot = CollHotspot();
+    if (hotspot == 0x1 || hotspot == 0x2) {
+        return 0;  // Death plane or water
+    }
+    
+    // Check if ground is too far below bot's current position
+    float* hitPos = CollLine_Fix_GetHitPosition();
+    float dropDistance = from[2] - hitPos[2];  // Use bot's height, not target
+    
+    if (dropDistance > 4.0f) {
+        return 0;  // Too big a drop
+    }
+    
+    // Check if ground is too far above (can't climb)
+    float climbDistance = hitPos[2] - from[2];
+    if (climbDistance > 2.0f) {
+        return 0;  // Too high to climb
+    }
+    
+    return 1;  // Path is safe
+}
+
+// Updated avoidance using the better collision detection
+void modeUpdateTarget_AvoidHazards(SimulatedPlayer_t *sPlayer, Player* target, VECTOR moveTarget, float yaw)
+{
+    // Check if path to move target is safe
+    if (modeUpdateTarget_IsPathSafe(sPlayer, target, target->playerPosition, moveTarget)) {
+        return;  // Path is safe, no changes needed
+    }
+    
+    // Path is unsafe! Try alternative directions
+    VECTOR testPos;
+    float testAngles[] = {
+        yaw - MATH_PI/4,   // 45° left
+        yaw + MATH_PI/4,   // 45° right  
+        yaw - MATH_PI/2,   // 90° left
+        yaw + MATH_PI/2,   // 90° right
+        yaw + MATH_PI      // 180° behind
+    };
+    
+	int i;
+    for (i = 0; i < 5; i++) {
+        vector_fromyaw(testPos, testAngles[i]);
+        vector_scale(testPos, testPos, 3.0f);
+        vector_add(testPos, target->playerPosition, testPos);
+        
+        if (modeUpdateTarget_IsPathSafe(sPlayer, target, target->playerPosition, testPos)) {
+            // Found safe direction
+            vector_copy(moveTarget, testPos);
+            return;
+        }
+    }
+    
+    // No safe direction - stay put
+    vector_copy(moveTarget, target->playerPosition);
+}
+
+// Main update function (now much cleaner!)
 void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
 {
     int i;
@@ -142,31 +337,6 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     // set to lock-strafe
     *(u8*)(0x001A5a34 + (sPlayer->Idx * 4)) = 1;
 
-    // face player
-    vector_copy(delta, player->playerPosition);
-    vector_subtract(delta, delta, target->playerPosition);
-    delta[2] -= 1.5;
-    
-    // Calculate distance to player (horizontal only)
-    float distanceToPlayer = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
-    
-    float horizontalDist = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
-    float yaw = atan2f(delta[0], delta[1]);
-    float len = sqrtf(horizontalDist * horizontalDist + delta[2] * delta[2]);
-    float targetPitch = asinf(-delta[2] / len);
-    
-    sPlayer->Yaw = lerpfAngle(sPlayer->Yaw, yaw, 0.5);
-    sPlayer->Pitch = targetPitch;
-
-    MATRIX m;
-    matrix_unit(m);
-    matrix_rotate_y(m, m, sPlayer->Pitch);
-    matrix_rotate_z(m, m, sPlayer->Yaw);
-    memcpy(&target->camera->uMtx, m, sizeof(VECTOR) * 3);
-    vector_copy(target->fps.cameraDir, &m[4]);
-    target->fps.vars.cameraY.rotation = sPlayer->Pitch;
-    target->fps.vars.cameraZ.rotation = sPlayer->Yaw;
-
     // Decrement all timers
     if (sPlayer->TicksToJump > 0) sPlayer->TicksToJump--;
     if (sPlayer->TicksToJumpFor > 0) sPlayer->TicksToJumpFor--;
@@ -175,93 +345,40 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     if (sPlayer->TicksToStrafeStopFor > 0) sPlayer->TicksToStrafeStopFor--;
     if (sPlayer->TicksToThrowWrench > 0) sPlayer->TicksToThrowWrench--;
 
-    // Track player's approach speed to detect intentional closing
+    // Calculate distance
+    vector_copy(delta, player->playerPosition);
+    vector_subtract(delta, delta, target->playerPosition);
+    delta[2] -= 1.5;
+    float distanceToPlayer = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
+
+    // Track approach speed
     float previousDistance = sPlayer->LastDistanceToPlayer;
-    float approachSpeed = previousDistance - distanceToPlayer;  // Positive = player getting closer
+    float approachSpeed = previousDistance - distanceToPlayer;
     sPlayer->LastDistanceToPlayer = distanceToPlayer;
 
-    // Jump logic
-    if (sPlayer->TicksToJump == 0) {
-        sPlayer->TicksToJump = modeGetJumpTicks();
-        sPlayer->TicksToJumpFor = 3;
-    }
-
-    // Check if we should switch back to gun after wrenching
-    if (sPlayer->HasWrenched && !sPlayer->UsingWrench && distanceToPlayer >= STRAFE_DISTANCE_MIN) {
-        pad->btns &= ~PAD_TRIANGLE;  // Press Triangle to put away wrench
-        sPlayer->HasWrenched = 0;  // Reset flag
-    }
-
-    VECTOR moveTarget;
-    int shouldWrench = 0;
+    // Always aim at player
+    modeUpdateTarget_Aiming(sPlayer, player, target, delta);
     
-    if (distanceToPlayer > WANDER_DISTANCE_MAX) {
-        sPlayer->TicksToJumpFor = 0;
-        vector_copy(moveTarget, player->playerPosition);
-    } else if (distanceToPlayer > WANDER_DISTANCE_MIN) {
-        vector_fromyaw(moveTarget, yaw + MATH_PI/2);
-        vector_scale(moveTarget, moveTarget, (sPlayer->StrafeDir ? -1 : 1) * 8);
-        vector_add(moveTarget, target->playerPosition, moveTarget);
-    } else if (distanceToPlayer > STRAFE_DISTANCE_MAX) {
-        vector_copy(moveTarget, player->playerPosition);
-    } else if (distanceToPlayer >= STRAFE_DISTANCE_MIN) {
-        vector_fromyaw(moveTarget, yaw + MATH_PI/2);
-        vector_scale(moveTarget, moveTarget, (sPlayer->StrafeDir ? -1 : 1) * 5);
-        vector_add(moveTarget, player->playerPosition, moveTarget);
-    } else if (distanceToPlayer <= 1.5) {  // Wrench range
-        // Player is very close
-        // Only wrench if player is actively approaching (not if bot accidentally got close)
-        if (approachSpeed > 0.1 && sPlayer->TicksToThrowWrench == 0 && !sPlayer->HasWrenched) {
-            sPlayer->TicksToThrowWrench = 30;  // Wrench for 30 frames
-            sPlayer->UsingWrench = 1;
-			sPlayer->HasWrenched = 1;
-        }
-        
-        shouldWrench = (sPlayer->UsingWrench && sPlayer->TicksToThrowWrench > 0);
-        
-        if (shouldWrench) {
-            // Stay in place while wrenching
-            vector_copy(moveTarget, target->playerPosition);
-        } else {
-            // Back away after wrenching or if too close
-            vector_fromyaw(moveTarget, yaw + MATH_PI);  // Move backward
-            vector_scale(moveTarget, moveTarget, 3);
-            vector_add(moveTarget, target->playerPosition, moveTarget);
-        }
-    } else if (approachSpeed <= 0.1){
-		// back away
-		vector_fromyaw(moveTarget, yaw + MATH_PI);  // Move backward
-		vector_scale(moveTarget, moveTarget, 3);
-		vector_add(moveTarget, target->playerPosition, moveTarget);
-        // Default - move toward player
-        // vector_copy(moveTarget, player->playerPosition);
+    float yaw = atan2f(delta[0], delta[1]);  // Recalculate yaw for other functions
+
+    // Handle wrench behavior (returns 1 if currently wrenching)
+    if (modeUpdateTarget_Wrench(sPlayer, player, pad, distanceToPlayer, approachSpeed, yaw)) {
+        return;  // Exit early if wrenching
     }
 
-    // Handle wrench attack
-    if (shouldWrench) {
-        // Stop all movement
-        pad->ljoy_h = 0x7F;
-        pad->ljoy_v = 0x7F;
-        
-        // Press square to wrench
-        pad->btns &= ~PAD_SQUARE;
-        
-        // Still face the player but don't move
-        return;
-    } else if (sPlayer->UsingWrench) {
-        // Done wrenching
-        sPlayer->UsingWrench = 0;
-    }
+    // Jump logic
+    // modeUpdateTarget_Jump(sPlayer, pad);
+
+    // Calculate movement target
+    VECTOR moveTarget;
+    modeUpdateTarget_CalculateMovement(sPlayer, player, target, moveTarget, distanceToPlayer, yaw, approachSpeed);
+
+    modeUpdateTarget_AvoidHazards(sPlayer, target, moveTarget, yaw);
 
     // Get direction to move target
     vector_subtract(delta, moveTarget, target->playerPosition);
     delta[2] = 0;
     float distanceToMoveTarget = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
-
-    // Jump
-    if (sPlayer->TicksToJumpFor > 0) {
-        pad->btns &= ~PAD_CROSS;
-    }
 
     // Switch strafe direction
     if (distanceToMoveTarget < 0.5 || sPlayer->TicksToStrafeSwitch == 0) {
@@ -270,6 +387,7 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     }
 
     // Transform movement to local space
+    MATRIX m;
     matrix_unit(m);
     matrix_rotate_z(m, m, -yaw);
     vector_apply(delta, delta, m);
