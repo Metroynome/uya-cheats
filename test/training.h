@@ -138,6 +138,8 @@ typedef struct SimulatedPlayer {
 	Player* Player;
 	 PlayerVTable* vtable;
 	int state;
+	float currTargetDist;
+	float prevTargetDist;
 	u32 TicksToRespawn;
 	u32 TicksToJump;
 	u32 TicksToJumpFor;
@@ -159,7 +161,7 @@ typedef struct SimulatedPlayer {
 	u32 TicksToTbag;
 	u32 TicksAimNearPlayer;
 	u32 TicksSinceSeenPlayer;
-	int SniperFireStopForTicks;
+	u32 TicksToWeaponSwitch;
 	int StrafeDir;
 	int Idx;
 	int CycleIdx;
@@ -181,6 +183,9 @@ typedef struct SimulatedPlayer {
     Moby* SwingshotOrb;
 	u32 jumpPadSearchCooldown;
 	Moby* targetJumpPad;	
+
+	float WanderAngle;
+	u32 TicksToWanderSwitch;
 } SimulatedPlayer_t;
 
 struct TrainingGameData {
