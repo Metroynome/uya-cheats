@@ -23,6 +23,7 @@
 #include <libuya/guber.h>
 #include <libuya/sound.h>
 #include <libuya/music.h>
+#include <libuya/hud.h>
 
 #define TestMoby	(*(Moby**)0x00091004)
 VECTOR position;
@@ -474,6 +475,84 @@ void scoreboard(int maxScore, int *scores)
     }
 }
 
+typedef struct rawr {
+    bool initialized;
+    char count;
+    short pad;
+    Moby *health[32];
+} rawr_t;
+
+rawr_t r = {0};
+u32 container_id = 0xdeadee00;
+u32 frame_id_base = 0xff0000;  // Renamed to avoid shadowing
+
+void hudtest_Init(void)
+{
+    int i;
+    
+    r.initialized = true;
+    
+    // Create container first
+    if (!hudCreateContainer(container_id)) {
+        printf("\nFailed to create container 0x%x", container_id);
+        return;
+    }
+    printf("\nCreated container 0x%x", container_id);
+    
+    // Add container to radar root (0x50000) so it renders
+    if (!hudAddToContainer(0x50000, container_id)) {
+        printf("\nFailed to add container to radar root");
+    }
+    
+    // Make container visible
+    hudSetFlags(container_id, 1, true);
+    
+    // Find all health orbs
+    r.count = 0;
+    Moby *moby = mobyListGetStart();
+    Moby *end = mobyListGetEnd();
+    
+    while (moby < end) {
+        if (moby->oClass == MOBY_ID_HEALTH_ORB_MP) {
+            if (r.count < 32) {
+                r.health[r.count] = moby;
+                ++r.count;
+            }
+        }
+        ++moby;
+    }    
+    // Create all widgets once
+    for (i = 0; i < r.count; ++i) {
+        u32 id = frame_id_base + i;  // Fixed: use base + i
+        float x, y;
+        gfxWStoMapSpace(r.health[i]->position, &x, &y);
+        if (hudCreateRectangle(x, y, 0.05, 0.062, id, 0x80ffffff, SPRITE_HUD_BOLT)) {
+			hudAddToContainer(container_id, id);
+            hudSetFlags(id, 1, true);   // Enable visibility
+            hudSetFlags(id, 0x40, true); // Enable drop shadow
+        }
+    }
+}
+
+void hudtest_Update(void)
+{
+    int i;
+    float x, y;
+    
+    // Update positions every frame
+    for (i = 0; i < r.count; ++i) {
+        u32 id = frame_id_base + i;
+        
+        // Check if moby still exists
+        if (r.health[i] == NULL || r.health[i]->pClass == NULL) {
+            hudSetFlags(id, 1, false);
+            continue;
+        }
+        gfxWStoMapSpace(r.health[i]->position, &x, &y);
+        hudSetPosition(x, y, id);
+        hudSetFlags(id, 1, true);
+    }
+}
 
 int main(void)
 {
@@ -557,11 +636,18 @@ int main(void)
 		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
     	// DebugInGame(p);
-    } else {
+    
+		if (!r.initialized)
+			hudtest_Init();
+		// else
+		// 	hudtest_Update();
+
+	
+	} else {
 		// DebugInMenus();
 	}
 
-	StartBots();
+	// StartBots();
 	// hud();
 	// secret();
 	// domination();
