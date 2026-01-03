@@ -24,8 +24,8 @@
 
 
 #define MAX_SPAWNED_TARGETS (3)
-#define TARGET_SPAWN_DISTANCE (5.0f)
-#define TARGET_HEALTH (1)
+#define TARGET_SPAWN_DISTANCE (6.0f)
+#define TARGET_HEALTH (15)
 #define TARGET_RESPAWN_DELAY (TIME_SECOND * 1)
 #define TARGET_POINTS_LIFETIME (TIME_SECOND * 20)
 #define TARGET_LIFETIME_TICKS (TPS * 60)
@@ -444,7 +444,7 @@ void modeInitTarget(SimulatedPlayer_t * sPlayer)
 
 	// set spawn distance
 	#ifdef TARGET_SPAWN_DISTANCE != 40.0f
-	setSpawnDistance(5);
+	setSpawnDistance(TARGET_SPAWN_DISTANCE);
 	#endif
 }
 
