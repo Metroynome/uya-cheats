@@ -109,6 +109,19 @@ void DebugInMenus(void)
 	}
 }
 
+void debugShowPosition(void) {
+    Player *p = playerGetFromSlot(0);
+    char buff[3][32];
+    float scale = 1;
+    float x = SCREEN_WIDTH * 0.15;
+    sprintf(buff[0], "X: %.04f", p->pMoby->position[0]);
+    sprintf(buff[1], "Z: %.04f", p->pMoby->position[1]);
+    sprintf(buff[2], "Y: %.04f", p->pMoby->position[2]);
+	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.85, scale, scale, 0x80FFFFFF, buff[0], -1, 4, FONT_BOLD);
+	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.90, scale, scale, 0x80FFFFFF, buff[1], -1, 4, FONT_BOLD);
+	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.95, scale, scale, 0x80FFFFFF, buff[2], -1, 4, FONT_BOLD);
+}
+
 void InfiniteChargeboot(void)
 {
 	Player *player = playerGetFromSlot(0);
@@ -475,6 +488,21 @@ void scoreboard(int maxScore, int *scores)
     }
 }
 
+float FastSubRots(float rot1, float rot2)
+{
+    float diff = rot1 - rot2;
+    bool bNegative = diff < -3.1415927f;
+    
+    if (diff >= 3.1415927f) {
+        diff = (diff - 3.1415927f) - 3.1415927f;
+    }
+    if (bNegative) {
+        diff = diff + 3.1415927f + 3.1415927f;
+    }
+    
+    return diff;
+}
+
 typedef struct rawr {
     bool initialized;
     char count;
@@ -502,11 +530,13 @@ void hudtest_Init(void)
     // Add container to radar root (0x50000) so it renders
     if (!hudAddToContainer(0x50000, container_id)) {
         printf("\nFailed to add container to radar root");
+    } else {
+        printf("\nAdded container to radar root");
     }
     
     // Make container visible
     hudSetFlags(container_id, 1, true);
-    
+
     // Find all health orbs
     r.count = 0;
     Moby *moby = mobyListGetStart();
@@ -521,15 +551,16 @@ void hudtest_Init(void)
         }
         ++moby;
     }    
+    
     // Create all widgets once
     for (i = 0; i < r.count; ++i) {
-        u32 id = frame_id_base + i;  // Fixed: use base + i
+        u32 id = frame_id_base + i;
+        // Make sure frame_id_base doesn't overlap with 0x10000001
         float x, y;
-        gfxWStoMapSpace(r.health[i]->position, &x, &y);
-        if (hudCreateRectangle(x, y, 0.05, 0.062, id, 0x80ffffff, SPRITE_HUD_BOLT)) {
-			hudAddToContainer(container_id, id);
-            hudSetFlags(id, 1, true);   // Enable visibility
-            hudSetFlags(id, 0x40, true); // Enable drop shadow
+        if (hudCreateRectangle(.5, .5, 0.05, 0.062, id, 0x80ffffff, SPRITE_HUD_BOLT)) {
+            hudAddToContainer(container_id, id);
+            hudSetFlags(id, 1, true);
+            hudSetFlags(id, 0x40, true);
         }
     }
 }
@@ -542,17 +573,67 @@ void hudtest_Update(void)
     // Update positions every frame
     for (i = 0; i < r.count; ++i) {
         u32 id = frame_id_base + i;
-        
-        // Check if moby still exists
-        if (r.health[i] == NULL || r.health[i]->pClass == NULL) {
-            hudSetFlags(id, 1, false);
-            continue;
-        }
         gfxWStoMapSpace(r.health[i]->position, &x, &y);
         hudSetPosition(x, y, id);
         hudSetFlags(id, 1, true);
     }
+	hudtest_ShowFrame();
 }
+
+static bool frame_initialized = false;
+
+void hudtest_CreateFrame(void)
+{
+    if (frame_initialized) {
+        return;
+    }
+    
+    printf("\nCreating simple test rectangle...");
+    
+    // Simple test - just one rectangle on radar root
+    float x = 0.8;
+    float y = 0.8;
+    float w = 0.1;
+    float h = 0.1;
+    
+    // Single red rectangle - use a completely different ID range
+    if (!hudCreateRectangle(x, y, w, h, 0xABCD00, 0x80FF0000, SPRITE_HUD_BOLT)) {
+        printf("\nFailed to create rectangle");
+        return;
+    }
+    
+    printf("\nRectangle created");
+    
+    // Add directly to radar root (no container, no canvas layer)
+    if (!hudAddToContainer(0x50000, 0xABCD00)) {
+        printf("\nFailed to add to radar root");
+        return;
+    }
+    
+    printf("\nAdded to radar root");
+    
+    hudSetFlags(0xABCD00, 1, true);
+    
+    frame_initialized = true;
+    printf("\nDone!");
+}
+
+void hudtest_ShowFrame(void)
+{
+    if (!frame_initialized) return;
+    
+    hudSetFlags(0x10000010, 1, true);
+    hudSetFlags(0x10000014, 1, true);
+}
+
+void hudtest_HideFrame(void)
+{
+    if (!frame_initialized) return;
+    
+    hudSetFlags(0x10000010, 1, false);
+    hudSetFlags(0x10000014, 1, false);
+}
+
 
 int main(void)
 {
@@ -637,12 +718,14 @@ int main(void)
 		InfiniteHealthMoonjump();
     	// DebugInGame(p);
     
-		if (!r.initialized)
-			hudtest_Init();
-		// else
+		// if (!r.initialized) {
+		// 	hudtest_Init();
+		// 	hudtest_CreateFrame();  // Create frame once during init
+		// } else {
 		// 	hudtest_Update();
+		// }
 
-	
+		debugShowPosition();
 	} else {
 		// DebugInMenus();
 	}
@@ -651,7 +734,7 @@ int main(void)
 	// hud();
 	// secret();
 	// domination();
-	// koth();
+	koth();
 	// runCTF();
 	// runSiege();
 

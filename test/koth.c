@@ -23,53 +23,7 @@
 #include <libuya/guber.h>
 #include <libuya/sound.h>
 #include <libuya/music.h>
-
-#define HILL_OCLASS (0x3000)
-#define MAX_SEGMENTS (64)
-#define MIN_SEGMENTS (4)
-#define TEXTURE_SCROLL_SPEED (0.007)
-#define EDGE_OPACITY (0x40)
-#define TEXTURE_EDGE_TRIM_U (0.0f)
-#define TEXTURE_EDGE_TRIM_V (0.25f)
-
-int spawned = 0;
-/* Prepare arrays for strip vertices */
-vec3 positions[2][(MAX_SEGMENTS + 1) * 2];
-int colors[2][(MAX_SEGMENTS + 1) * 2];
-UV_t uvs[2][(MAX_SEGMENTS + 1) * 2];
-int cachedSegments = -1;
-int cachedIsCircle = -1;
-float scrollQuad = 0;
-
-typedef struct kothInfo {
-    int gameState;
-    int foundMoby;
-    Moby *kothMoby;
-} kothInfo_t;
-kothInfo_t kothInfo;
-
-
-typedef struct hillPvar {
-    int cuboidIndex[32];
-    bool foundMoby;
-    bool isCircle;
-    short pad;
-    Player *playersIn[GAME_MAX_PLAYERS];
-    Cuboid *currentCuboid;
-    int teamTime[8];
-    u32 color;
-} hillPvar_t;
-
-Cuboid rawr = {
-    .matrix = {
-        {20, 0, 0, 0},
-        {0, 30, 0, 0},
-        {0, 0, 1, 0}
-    },
-    .pos = {519.58356, 398.7586, 201.38, 1},
-    .imatrix = 0,
-    .rot = {0, 0, 0, 0}
-};
+#include "koth.h"
 
 int hillCheckIfInside(Cuboid cube, VECTOR playerPos, char isCircle)
 {
@@ -122,7 +76,6 @@ void hillPlayerUpdates(Moby *this)
             continue;
 
         int in = hillCheckIfInside(*pvar->currentCuboid, player->playerPosition, pvar->isCircle);
-        printf("\ninside hill: %d", in);
         if (in) {
             pvar->color = TEAM_COLORS[player->mpTeam];
         } else {
@@ -160,13 +113,22 @@ void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
     output[3] = v[3];
 }
 
-void circleMeFinal_StripMe(Moby *this, Cuboid cube)
+
+    float scrollQuad = 0;
+void hill_drawShape(Moby *this, Cuboid cube)
 {
     hillPvar_t *pvar = (hillPvar_t*)this->pVar;
     int isCircle = pvar->isCircle;
     u32 baseColor = pvar->color;
     int i, edge, s;
     
+    /* Prepare arrays for strip vertices */
+    vec3 positions[2][(MAX_SEGMENTS + 1) * 2];
+    int colors[2][(MAX_SEGMENTS + 1) * 2];
+    UV_t uvs[2][(MAX_SEGMENTS + 1) * 2];
+    int cachedSegments = -1;
+    int cachedIsCircle = -1;
+
     /* Setup rotation matrix from cube */
     MATRIX rotMatrix;
     matrix_unit(rotMatrix);
@@ -438,22 +400,26 @@ void hill_postDraw(Moby *moby)
     if (!pvars)
         return;
 
-    if (vector_length(pvars->currentCuboid->matrix.v2) > 1.0001)
-        pvars->isCircle = 1;
+    // if (vector_length(pvars->currentCuboid->matrix.v2) > 1.0001)
+    //     pvars->isCircle = 1;
 
-    hill_drawShape(moby, *pvars->currentCuboid);
+    int i;
+    for (i = 0; i < 32; ++i) {
+        if (pvars->vanillaHills[i]) {
+            hill_drawShape(moby, *pvars->vanillaHills[i]);
+        }
+    }
 }
 
 void hill_update(Moby * moby)
 {
-    printf("\nhill_update: start");
     hillPvar_t *pvars = (hillPvar_t*)moby->pVar;
     if (!pvars)
         return;
 
     if (!pvars->currentCuboid) {
         if (!pvars->foundMoby) {
-            pvars->currentCuboid = &rawr;
+            // pvars->currentCuboid = &rawr;
         } else {
             Cuboid *cuboid = spawnPointGet(pvars->cuboidIndex[0]);
             vector_copy(moby->position, cuboid->pos);
@@ -461,9 +427,7 @@ void hill_update(Moby * moby)
         }
     }
 
-    printf("\ncuboid: %08x, pos: %d", pvars->currentCuboid, pvars->currentCuboid->pos[0]);
-
-    gfxRegistserDrawFunction(&hill_postDraw, moby);
+    gfxRegisterDrawFunction(&hill_postDraw, moby);
 
     // handle players
     hillPlayerUpdates(moby);
@@ -474,15 +438,21 @@ void hill_update(Moby * moby)
     // }
 }
 
+Moby *hill_SpawnCustomMoby(void)
+{
+    Moby *m = mobySpawn(HILL_OCLASS, sizeof(hillPvar_t));
+    hillPvar_t *pvar = (hillPvar_t *)m->pVar;
+    getVanillaHills(pvar);
+    return m;
+}
+
 void hill_setupMoby(void)
 {
     Moby *moby = getHillMoby();;
-    if (moby == 0) {
-        moby = mobySpawn(HILL_OCLASS, sizeof(hillPvar_t));
+    if (!moby) {
+        moby = hill_SpawnCustomMoby();
     }
     if (!moby) return;
-
-    printf("\nmoby: %08x", moby);
 
     hillPvar_t *pvars = (hillPvar_t*)moby->pVar;
     moby->pUpdate = &hill_update;
