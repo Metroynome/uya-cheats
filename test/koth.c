@@ -117,7 +117,14 @@ void vector_rodrigues(VECTOR output, VECTOR v, VECTOR axis, float angle)
     float scrollQuad = 0;
 void hill_drawShape(Moby *this, Cuboid cube)
 {
+    if (!vector_length(cube.pos)) return;
+
     hillPvar_t *pvar = (hillPvar_t*)this->pVar;
+    if (vector_length(cube.matrix.v2) > 1.0001)
+        pvar->isCircle = 1;
+    else
+        pvar->isCircle = 0;
+
     int isCircle = pvar->isCircle;
     u32 baseColor = pvar->color;
     int i, edge, s;
