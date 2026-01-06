@@ -10,9 +10,10 @@ EE_OBJS = functions.o main.o
 # EE_OBJS += ctf.o
 #EE_OBJS += hud.o
 #EE_OBJS += siege.o
-EE_OBJS += koth.o hills.o
+# EE_OBJS += koth.o hills.o
 # EE_OBJS += domination.o
 # EE_OBJS += secret.o
+EE_OBJS += jumppad.o
 
 EE_LIBS = -luyantsc
 #EE_LIBS = -luyapal

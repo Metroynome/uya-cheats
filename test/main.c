@@ -732,9 +732,10 @@ int main(void)
 
 	// StartBots();
 	// hud();
+	jumpPad();
 	// secret();
 	// domination();
-	koth();
+	// koth();
 	// runCTF();
 	// runSiege();
 
