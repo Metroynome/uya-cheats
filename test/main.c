@@ -35,12 +35,13 @@ int SOUND_ME = 0;
 int SOUND_ME_FLAG = 3;
 int first = 1;
 
-void patchCTFFlag(void);
-void hudInit(void);
-
 extern VariableAddress_t vaGiveWeaponFunc;
 extern VariableAddress_t vaPlayerRespawnFunc;
 extern VariableAddress_t vaSpawnPointsPtr;
+
+#ifdef DROIDS
+void droids(void);
+#endif
 
 void DebugInGame(Player* player)
 {
@@ -634,63 +635,6 @@ void hudtest_HideFrame(void)
     hudSetFlags(0x10000014, 1, false);
 }
 
-#define TROOPER_MAX_SPAWN (32)
-
-typedef struct TrooperLegsPvar { // 0x3e0
-/* 0x000 */ char unk_2b8[0x2b8];
-/* 0x2b8 */ int team;
-/* 0x2bc */ int unk_2bc;
-/* 0x2c0 */ float aggroDistance;
-/* 0x2c4 */ int unk_2c4;
-/* 0x2c8 */ void *spline;
-/* 0x2cc */ char unk_2cc[0x104];
-/* 0x3d0 */ float health;
-/* 0x3d4 */ float damage;
-/* 0x3d8 */ char unk_3d8[0x8];
-} TrooperLegsPvar_t;
-
-typedef struct TrooperData {
-    int health;
-} TrooperData_t;
-
-typedef struct TrooperInfo {
-    int init;
-    int count;
-    TrooperData_t *trooper[TROOPER_MAX_SPAWN];
-} TrooperInfo_t;
-TrooperInfo_t info;
-
-void trooperSpawn(void)
-{
-    Moby *m = mobySpawn(MOBY_ID_TROOPER_LEGS, 0x3e0);
-    if (m) {
-        TrooperLegsPvar_t *pvar = (TrooperLegsPvar_t*)m->pVar;
-        Player *player = playerGetFromSlot(0);
-        vector_copy(m->position, player->playerPosition);
-        m->pUpdate = (void*)0x00409e30;
-        m->state = 0;
-        m->modeBits = 0;
-        m->updateDist = -1;
-        m->collData = NULL;
-        pvar->spline = -1;
-		info.trooper[info.count] = (Moby*)m;
-        ++info.count;
-    }
-}
-
-void troopersRun(void)
-{
-	Player *player = playerGetFromSlot(0);
-    if (!info.init) {
-        POKE_U32(0x00409f34, 0x24020000);
-        info.init = 1;
-    }
-    
-    if (info.count < TROOPER_MAX_SPAWN && playerPadGetButtonDown(player, PAD_DOWN) > 0) {
-        trooperSpawn();
-    }
-}
-
 int main(void)
 {
 	((void (*)(void))0x00126780)();
@@ -709,8 +653,6 @@ int main(void)
 		Player * p = playerGetFromSlot(0);
 		if (!p)
 			return 0;
-
-		troopersRun();
 		
 		// scoreboard(50, raw_scores);
 
@@ -798,14 +740,33 @@ int main(void)
 		// DebugInMenus();
 	}
 
-	// StartBots();
-	// hud();
-	// jumpPad();
-	// secret();
-	// domination();
-	// koth();
-	// runCTF();
-	// runSiege();
+	#ifdef DROIDS
+	droids();
+	#endif
+	#ifdef BOTS
+	StartBots();
+	#endif
+	#ifdef HUD
+	hud();
+	#endif
+	#ifdef JUMPPAD
+	jumpPad();
+	#endif
+	#ifdef SECRET
+	secret();
+	#endif
+	#ifdef DOMINATION
+	domination();
+	#endif
+	#ifdef KOTH
+	koth();
+	#endif
+	#ifdef CTF
+	runCTF();
+	#endif
+	#ifdef SIEGE	
+	runSiege();
+	#endif
 
 	uyaPostUpdate();
 
