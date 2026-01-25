@@ -6,6 +6,7 @@
 #include <libuya/utils.h>
 #include <libuya/spawnpoint.h>>
 #include <libuya/sound.h>
+#include <libuya/player.h>
 
 #define SOUND_ID_JUMPPAD_LOOP (4)
 #define SOUND_ID_JUMPPAD_LAUNCH (1)
@@ -157,4 +158,12 @@ void jumpPad(void)
     
     if (jumpPadInfo.init == 0)
         jumpPadInfo.init = jumpPadInit();
+
+    // Player *p = playerGetFromSlot(0);
+    // if (!p) return;
+    // if (playerGetState(p) == PLAYER_STATE_MOON_JUMP) {
+    //     vector_add(p->playerPosition, p->playerPosition, p->stickInput);
+    // }
+
+    // printf("\npState: %d, pType: %d", playerGetState(p), playerDeobfuscate(&p->stateType, DEOBFUSCATE_MODE_STATE));
 }

@@ -23,7 +23,8 @@
 #include "training.h"
 
 
-#define MAX_SPAWNED_TARGETS (3)
+#define MAX_SPAWNED_TARGETS (5)
+#define TARGET_IDLE (true)
 #define TARGET_SPAWN_DISTANCE (6.0f)
 #define TARGET_HEALTH (15)
 #define TARGET_RESPAWN_DELAY (TIME_SECOND * 1)
@@ -99,7 +100,7 @@ void modeInitialize(void)
 
 void modeOnGadgetFired(int gadgetId)
 {
-	if (gadgetId == WEAPON_ID_FLUX) {
+	if (gadgetId == GADGET_ID_FLUX) {
 		State.ShotsFired += 1;
 		waiting_for_sniper_shot = 10;
 	}
@@ -330,6 +331,9 @@ void modeUpdateTarget(SimulatedPlayer_t *sPlayer)
     *(u8*)(0x001A5a34 + (sPlayer->Idx * 4)) = 1;
     sPlayer->state = playerGetState(sPlayer->Player);
 
+    if (TARGET_IDLE == true)
+        return;
+
     // Decrement timers
     if (sPlayer->TicksToJump > 0) sPlayer->TicksToJump--;
     if (sPlayer->TicksToJumpFor > 0) sPlayer->TicksToJumpFor--;
@@ -455,5 +459,17 @@ void modeProcessPlayer(int pIndex)
 
 void modeTick(void)
 {
-	// do tick stuff
+    static int didTheThing = 0;
+    // do hacky more than 3 bots thing
+    if (MAX_SPAWNED_TARGETS > 3 && !didTheThing) {
+        // remove timer check
+        POKE_U32(0x004422A4, 0xaf800084);
+        didTheThing = 1;
+    }
+        // set pendingGameMode to 0.
+    u32 pendingGameMode = 0x00242a90;
+    u32 currentGameMode = 0x002412a8;
+    if (*(u32*)pendingGameMode == -2 && *(u32*)currentGameMode == 11) {
+        ((void (*)(int, int, int, int, int))0x00441e70)(0, 2, 0, 0, 0);
+    }
 }

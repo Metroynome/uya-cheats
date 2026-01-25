@@ -634,6 +634,62 @@ void hudtest_HideFrame(void)
     hudSetFlags(0x10000014, 1, false);
 }
 
+#define TROOPER_MAX_SPAWN (32)
+
+typedef struct TrooperLegsPvar { // 0x3e0
+/* 0x000 */ char unk_2b8[0x2b8];
+/* 0x2b8 */ int team;
+/* 0x2bc */ int unk_2bc;
+/* 0x2c0 */ float aggroDistance;
+/* 0x2c4 */ int unk_2c4;
+/* 0x2c8 */ void *spline;
+/* 0x2cc */ char unk_2cc[0x104];
+/* 0x3d0 */ float health;
+/* 0x3d4 */ float damage;
+/* 0x3d8 */ char unk_3d8[0x8];
+} TrooperLegsPvar_t;
+
+typedef struct TrooperData {
+    int health;
+} TrooperData_t;
+
+typedef struct TrooperInfo {
+    int init;
+    int count;
+    TrooperData_t *trooper[TROOPER_MAX_SPAWN];
+} TrooperInfo_t;
+TrooperInfo_t info;
+
+void trooperSpawn(void)
+{
+    Moby *m = mobySpawn(MOBY_ID_TROOPER_LEGS, 0x3e0);
+    if (m) {
+        TrooperLegsPvar_t *pvar = (TrooperLegsPvar_t*)m->pVar;
+        Player *player = playerGetFromSlot(0);
+        vector_copy(m->position, player->playerPosition);
+        m->pUpdate = (void*)0x00409e30;
+        m->state = 0;
+        m->modeBits = 0;
+        m->updateDist = -1;
+        m->collData = NULL;
+        pvar->spline = -1;
+		info.trooper[info.count] = (Moby*)m;
+        ++info.count;
+    }
+}
+
+void troopersRun(void)
+{
+	Player *player = playerGetFromSlot(0);
+    if (!info.init) {
+        POKE_U32(0x00409f34, 0x24020000);
+        info.init = 1;
+    }
+    
+    if (info.count < TROOPER_MAX_SPAWN && playerPadGetButtonDown(player, PAD_DOWN) > 0) {
+        trooperSpawn();
+    }
+}
 
 int main(void)
 {
@@ -654,6 +710,8 @@ int main(void)
 		if (!p)
 			return 0;
 
+		troopersRun();
+		
 		// scoreboard(50, raw_scores);
 
 		// force lock-strafe (controller 1)
@@ -661,7 +719,7 @@ int main(void)
 		// Force Normal Up/Down Controls
 		*(u32*)0x001A5A70 = 0;
 		// gameGetLocalSettings()->Wide = 1;
-		
+
 		// cycle through sprite/effect textures
 		// debugTextures();
 
@@ -690,20 +748,30 @@ int main(void)
 		// 	printf("\n------------------");
 		// }
 
-		// if (playerPadGetButtonDown(p, PAD_DOWN) > 0) {
-			// printf("\n------------------");
-			// printf("\nPrevious State: %d", playerDeobfuscate(&p->previousState, 0, 0));
-			// printf("\nPrePrevious State: %d", playerDeobfuscate(&p->prePreviousState, 0, 0));
-			// printf("\nState Type: %d", playerDeobfuscate(&p->stateType, 0, 0));
-			// printf("\nPrevious Type: %d", playerDeobfuscate(&p->previousType, 0, 0));
-			// printf("\nPrePrevious Type: %d", playerDeobfuscate(&p->prePreviousType, 0, 0));
-			// printf("\nground: %08x", (u32)((u32)&p->ground - (u32)p));
-			// printf("\nhead: %08x", (u32)((u32)&p->head - (u32)p));
-			// printf("\nquickSelect: %08x", (u32)((u32)&p->quickSelect - (u32)p));
-			// printf("\nloopingSounds: %08x", (u32)((u32)&p->loopingSounds - (u32)p));
-			// printf("\nmtxFxActive: %08x", (u32)((u32)&p->mtxFxActive - (u32)p));
-			// printf("\npnetplayer: %08x", (u32)((u32)&p->pNetPlayer - (u32)p));
-			// printf("\n------------------");
+		// if (padGetButtonDown(0, PAD_DOWN) > 0) {
+		// 	printf("\n------------------");
+		// 	// printf("\nPrevious State: %d", playerDeobfuscate(&p->previousState, 0, 0));
+		// 	// printf("\nPrePrevious State: %d", playerDeobfuscate(&p->prePreviousState, 0, 0));
+		// 	// printf("\nState Type: %d", playerDeobfuscate(&p->stateType, 0, 0));
+		// 	// printf("\nPrevious Type: %d", playerDeobfuscate(&p->previousType, 0, 0));
+		// 	// printf("\nPrePrevious Type: %d", playerDeobfuscate(&p->prePreviousType, 0, 0));
+		// 	printf("\nground: %08x", (u32)((u32)&p->ground - (u32)p));
+		// 	printf("\nhead: %08x", (u32)((u32)&p->head - (u32)p));
+		// 	printf("\nunk_1100: %08x", (u32)((u32)&p->unk_1100 - (u32)p));
+		// 	printf("\nfps: %08x", (u32)((u32)&p->fps - (u32)p));
+		// 	printf("\nsurf: %08x", (u32)((u32)&p->surf - (u32)p));	
+		// 	printf("\nwalk: %08x", (u32)((u32)&p->walk - (u32)p));	
+		// 	printf("\njump: %08x", (u32)((u32)&p->jump - (u32)p));	
+		// 	printf("\nledge: %08x", (u32)((u32)&p->ledge - (u32)p));	
+		// 	printf("\ncharge: %08x", (u32)((u32)&p->charge - (u32)p));	
+		// 	printf("\nwind: %08x", (u32)((u32)&p->wind - (u32)p));	
+		// 	printf("\nhstate: %08x", (u32)((u32)&p->state - (u32)p));
+		// 	printf("\nfiring: %08x", (u32)((u32)&p->firing - (u32)p));
+		// 	printf("\nquickSelect: %08x", (u32)((u32)&p->quickSelect - (u32)p));
+		// 	printf("\nloopingSounds: %08x", (u32)((u32)&p->loopingSounds - (u32)p));
+		// 	printf("\nmtxFxActive: %08x", (u32)((u32)&p->mtxFxActive - (u32)p));
+		// 	printf("\npnetplayer: %08x", (u32)((u32)&p->pNetPlayer - (u32)p));
+		// 	printf("\n------------------");
 		// }
 
 		// float x = SCREEN_WIDTH * 0.3;
@@ -732,7 +800,7 @@ int main(void)
 
 	// StartBots();
 	// hud();
-	jumpPad();
+	// jumpPad();
 	// secret();
 	// domination();
 	// koth();
