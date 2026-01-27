@@ -88,7 +88,7 @@ SimulatedPlayer_t SimPlayers[MAX_SPAWNED_TARGETS];
 
 void setSpawnDistance(float distance)
 {
-	short s = (short)distance;
+	u16 s = (u16)(distance >> 0x16);
 	POKE_U16(GetAddress(&vaResurrectSpawnDistance), s);
 }
 
@@ -466,7 +466,7 @@ void modeTick(void)
         POKE_U32(0x004422A4, 0xaf800084);
         didTheThing = 1;
     }
-        // set pendingGameMode to 0.
+     // set pendingGameMode to 0.
     u32 pendingGameMode = 0x00242a90;
     u32 currentGameMode = 0x002412a8;
     if (*(u32*)pendingGameMode == -2 && *(u32*)currentGameMode == 11) {
