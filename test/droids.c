@@ -70,11 +70,18 @@ typedef struct M6683_ShockDroidPVar { // 0x310
 typedef struct M6646_BallBotSpawnerPVar { // 0x1f0
 /* 0x000 */ char unk_000[0x1a0];
 /* 0x1a0 */ int team;
-/* 0x1a4 */ char unk_1a4[0x20];
+/* 0x1a4 */ char unk_1a4[0xc];
+/* 0x1b0 */ int mode;
+/* 0x1b4 */ int spawnState;
+/* 0x1b8 */ char unk_1b8[0x8];
+/* 0x1c0 */ int counter;
 /* 0x1c4 */ float health;
 /* 0x1c8 */ float spawnProximity;
+/* 0x1cc */ int unk_1cc;
 /* 0x1d0 */ int mobyIndex;
-/* 0x1d4 */ char unk_1d4[0x1c];
+/* 0x1d4 */ char unk_1d4[0x4];
+/* 0x1d8 */ int playerCountFlag;
+/* 0x1dc */ char unk_1dc[0x14];
 } M6646_BallBotSpawnerPVar_t;
 
 typedef struct M4250_BallBotPVar { // 0x2e0
@@ -141,6 +148,9 @@ void droidSpawn(u16 oClass, int size)
             struct ShockDroidSpawnerData *bot = (struct ShockDroidSpawnerData*)info.data.shockDroidSpawner;
             pvar->spline = -1;
             pvar->health = 15;
+            pvar->team = 2;
+            pvar->maxSpawnLimit = 10;
+            pvar->spawnProximity = 10;
             bot->moby[bot->count] = (Moby*)m;
             ++bot->count;
         } break;
@@ -154,7 +164,13 @@ void droidSpawn(u16 oClass, int size)
             M6646_BallBotSpawnerPVar_t *pvar = (M6646_BallBotSpawnerPVar_t*)m->pVar;
             struct BallBotSpawnerData *bot = (struct BallBotSpawnerData*)info.data.ballBotSpawner;
             bot->moby[bot->count] = (Moby*)m;
-            pvar->health = 15;
+            *(u32*)((u32)pvar + 0x00) = ((u32)pvar + 0x30);
+            *(u32*)((u32)pvar + 0x10) = ((u32)pvar + 0xe0);
+            pvar->health = 3;
+            pvar->team = 0;
+            pvar->mobyIndex = 16;
+            pvar->spawnProximity = 10;
+            m->state = 2; // state 2 makes it able to be destroyed
             ++bot->count;
         } break;
         case BALL_BOT_OCLASS: {
@@ -166,11 +182,9 @@ void droidSpawn(u16 oClass, int size)
     }
     Player *player = playerGetFromSlot(0);
     vector_copy(m->position, player->playerPosition);
-    m->state = 0;
     m->modeBits = 0;
     m->triggers = m->triggers & 0xe7;
     m->updateDist = -1;
-    m->collData = NULL;
     ++info.count;
 }
 
