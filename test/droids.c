@@ -81,49 +81,114 @@ typedef struct M4250_BallBotPVar { // 0x2e0
 /* 0x000 */ char unk_000[0x2e0];
 } M4250_BallBotPVar_t;
 
-typedef struct TrooperData {
-    int health;
-} TrooperData_t;
+struct TrooperData {
+    int count;
+    Moby *moby[TROOPER_MAX_SPAWN];
+};
 
-typedef struct TrooperInfo {
+struct ShockDroidSpawnerData {
+    int count;
+    Moby *moby[SHOCK_DROID_SPAWNER_MAX_SPAWN];
+};
+
+struct ShockDroidData {
+    int count;
+    Moby *moby[SHOCK_DROID_MAX_SPAWN];
+};
+
+struct BallBotSpawnerData {
+    int count;
+    Moby *moby[BALL_BOT_SPAWNER_MAX_SPAWN];
+};
+
+struct BallBotData {
+    int count;
+    Moby *moby[BALL_BOT_MAX_SPAWN];
+};
+
+struct DroidData {
+    struct TrooperData *trooper;
+    struct ShockDroidSpawnerData *shockDroidSpawner;
+    struct shockDroidData *shockDroid;
+    struct BallBotSpawnerData *ballBotSpawner;
+    struct BallBotData *ballBot;
+};
+
+typedef struct DroidInfo {
     int init;
     int count;
-    TrooperData_t *trooper[TROOPER_MAX_SPAWN];
-} TrooperInfo_t;
-TrooperInfo_t info;
+    struct DroidData data;
+} DroidInfo_t;
+DroidInfo_t info;
 
-void trooperSpawn(u32 oclass, int size)
+void droidSpawn(u16 oClass, int size)
 {
-    Moby *m = mobySpawn(oclass, size);
-    if (m) {
-        M4255_TrooperLegsPvar_t *pvar = (M4255_TrooperLegsPvar_t*)m->pVar;
-        Player *player = playerGetFromSlot(0);
-        vector_copy(m->position, player->playerPosition);
-        // m->pUpdate = (void*)0x00409e30;
-        m->state = 0;
-        m->modeBits = 0;
-        m->updateDist = -1;
-        m->collData = NULL;
-        pvar->spline = -1;
-		info.trooper[info.count] = (Moby*)m;
-        ++info.count;
+    Moby *m = mobySpawn(oClass, size);
+    if (!m) return;
+
+    switch(oClass) {
+        case TROOPER_OCLASS: {
+            M4255_TrooperLegsPvar_t *pvar = (M4255_TrooperLegsPvar_t*)m->pVar;
+            struct TrooperData *bot = (struct TrooperData*)info.data.trooper;
+            pvar->spline = -1;
+            pvar->team = 2;
+            pvar->aggroDistance = 30;
+            bot->moby[bot->count] = (Moby*)m;
+            ++bot->count;
+        } break;
+        case SHOCK_DROID_SPAWNER_OCLASS: {
+            M6801_ShockDroidSpawnerPVar_t *pvar = (M6801_ShockDroidSpawnerPVar_t*)m->pVar;
+            struct ShockDroidSpawnerData *bot = (struct ShockDroidSpawnerData*)info.data.shockDroidSpawner;
+            pvar->spline = -1;
+            pvar->health = 15;
+            bot->moby[bot->count] = (Moby*)m;
+            ++bot->count;
+        } break;
+        case SHOCK_DROID_OCLASS: {
+            M6683_ShockDroidPVar_t *pvar = (M6683_ShockDroidPVar_t*)m->pVar;
+            struct ShockDroidData *bot = (struct ShockDroidData*)info.data.shockDroid;
+            bot->moby[bot->count] = (Moby*)m;
+            ++bot->count;
+        } break;
+        case BALL_BOT_SPAWNER_OCLASS: {
+            M6646_BallBotSpawnerPVar_t *pvar = (M6646_BallBotSpawnerPVar_t*)m->pVar;
+            struct BallBotSpawnerData *bot = (struct BallBotSpawnerData*)info.data.ballBotSpawner;
+            bot->moby[bot->count] = (Moby*)m;
+            pvar->health = 15;
+            ++bot->count;
+        } break;
+        case BALL_BOT_OCLASS: {
+            M6646_BallBotSpawnerPVar_t *pvar = (M6646_BallBotSpawnerPVar_t*)m->pVar;
+            struct BallBotData *bot = (struct BallBotData*)info.data.ballBot;
+            bot->moby[bot->count] = (Moby*)m;
+            ++bot->count;
+        } break;
     }
+    Player *player = playerGetFromSlot(0);
+    vector_copy(m->position, player->playerPosition);
+    m->state = 0;
+    m->modeBits = 0;
+    m->triggers = m->triggers & 0xe7;
+    m->updateDist = -1;
+    m->collData = NULL;
+    ++info.count;
 }
 
 void droids_run(void)
 {
 	Player *player = playerGetFromSlot(0);
     if (!info.init) {
+        // troopers only gamerule skip
         // POKE_U32(0x00409f34, 0x24020000);
         info.init = 1;
     }
     
-    if (info.count < TROOPER_MAX_SPAWN && playerPadGetButtonDown(player, PAD_DOWN) > 0)
-        trooperSpawn(TROOPER_OCLASS, TROOPER_PVAR_SIZE);
-	if (info.count < TROOPER_MAX_SPAWN && playerPadGetButtonDown(player, PAD_UP) > 0)
-        trooperSpawn(MOBY_ID_SHOCK_DROID_SPAWNER, 0x1f0);
-	if (info.count < TROOPER_MAX_SPAWN && playerPadGetButtonDown(player, PAD_LEFT) > 0)
-        trooperSpawn(0x19f6, 0x1f0);
+    if (info.data.trooper->count < TROOPER_MAX_SPAWN && playerPadGetButtonDown(player, PAD_DOWN) > 0)
+        droidSpawn(TROOPER_OCLASS, TROOPER_PVAR_SIZE);
+	if (info.data.shockDroidSpawner->count < TROOPER_MAX_SPAWN && playerPadGetButtonDown(player, PAD_UP) > 0)
+        droidSpawn(MOBY_ID_SHOCK_DROID_SPAWNER, 0x1f0);
+	if (info.data.ballBotSpawner->count < BALL_BOT_SPAWNER_MAX_SPAWN && playerPadGetButtonDown(player, PAD_LEFT) > 0)
+        droidSpawn(BALL_BOT_SPAWNER_OCLASS, 0x1f0);
 }
 
 void droids(void)
