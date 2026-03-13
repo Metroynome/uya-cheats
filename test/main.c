@@ -635,6 +635,39 @@ void hudtest_HideFrame(void)
     hudSetFlags(0x10000014, 1, false);
 }
 
+typedef struct M4246_FluxRiflePVar {
+/* 0x00 */ short isZoomed;
+/* 0x02 */ short pad_02;
+/* 0x04 */ short cooldownTimer;
+/* 0x06 */ short pad_06;
+/* 0x08 */ float maxFOV;
+/* 0x0c */ float currentFOV;
+/* 0x10 */ int zoomSoundChannel;
+/* 0x14 */ int muzzleLightTimer;
+/* 0x18 */ int muzzleLightId;
+/* 0x1c */ short pad_1c;
+/* 0x1e */ short pad_1e;
+/* 0x20 */ int pad_20;
+/* 0x24 */ int actuatorWaveId;
+/* 0x28 */ short pad_28;
+/* 0x2a */ short pad_2a;
+/* 0x2c */ short hasTargetLock;
+/* 0x2e */ short redTargetCounter;
+/* 0x30 */ Moby* targetMoby;
+/* 0x34 */ short pad_34;
+/* 0x36 */ short pad_36;
+/* 0x38 */ short pad_38;
+/* 0x3a */ short pad_3a;
+/* 0x3c */ Player* owner;
+/* 0x40 */ VECTOR aimDirection;
+/* 0x50 */ float savedCameraSettings[4];
+} M4246_FluxRiflePVar_t;
+
+void flux(void)
+{
+
+}
+
 int main(void)
 {
 	((void (*)(void))0x00126780)();
@@ -655,6 +688,7 @@ int main(void)
 			return 0;
 		
 		// scoreboard(50, raw_scores);
+		flux();
 
 		// force lock-strafe (controller 1)
 		// *(u8*)0x001A5a34 = 1;

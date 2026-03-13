@@ -28,7 +28,7 @@
 
 // Ball Bot Definitions
 #define BALL_BOT_OCLASS (MOBY_ID_BALL_BOT)
-#define BALL_BOT_PVAR_SIZE (sizeof(M6646_BallBotPVar_t))
+#define BALL_BOT_PVAR_SIZE (sizeof(M4250_BallBotPVar_t))
 #define BALL_BOT_MAX_SPAWN (32)
 
 typedef struct M4255_TrooperLegsPvar { // 0x3e0
@@ -151,6 +151,7 @@ void droidSpawn(u16 oClass, int size)
             pvar->team = 2;
             pvar->maxSpawnLimit = 10;
             pvar->spawnProximity = 10;
+            m->state = 1;
             bot->moby[bot->count] = (Moby*)m;
             ++bot->count;
         } break;
@@ -174,7 +175,8 @@ void droidSpawn(u16 oClass, int size)
             ++bot->count;
         } break;
         case BALL_BOT_OCLASS: {
-            M6646_BallBotSpawnerPVar_t *pvar = (M6646_BallBotSpawnerPVar_t*)m->pVar;
+            M4250_BallBotPVar_t *pvar = (M4250_BallBotPVar_t*)m->pVar;
+            m->state = 1;
             struct BallBotData *bot = (struct BallBotData*)info.data.ballBot;
             bot->moby[bot->count] = (Moby*)m;
             ++bot->count;
@@ -197,10 +199,10 @@ void droids_run(void)
         info.init = 1;
     }
     
-    if (info.data.trooper->count < TROOPER_MAX_SPAWN && playerPadGetButtonDown(player, PAD_DOWN) > 0)
-        droidSpawn(TROOPER_OCLASS, TROOPER_PVAR_SIZE);
+    if (info.data.ballBot->count < BALL_BOT_MAX_SPAWN && playerPadGetButtonDown(player, PAD_DOWN) > 0)
+        droidSpawn(BALL_BOT_OCLASS, BALL_BOT_PVAR_SIZE);
 	if (info.data.shockDroidSpawner->count < TROOPER_MAX_SPAWN && playerPadGetButtonDown(player, PAD_UP) > 0)
-        droidSpawn(MOBY_ID_SHOCK_DROID_SPAWNER, 0x1f0);
+        droidSpawn(SHOCK_DROID_SPAWNER_OCLASS, SHOCK_DROID_SPAWNER_PVAR_SIZE);
 	if (info.data.ballBotSpawner->count < BALL_BOT_SPAWNER_MAX_SPAWN && playerPadGetButtonDown(player, PAD_LEFT) > 0)
         droidSpawn(BALL_BOT_SPAWNER_OCLASS, 0x1f0);
 }
