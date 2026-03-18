@@ -1,0 +1,5 @@
+EE_REGION = pal
+EE_LIBS = -luyapal
+EE_DEFS = -DUYA_PAL -DRAC3_PAL -DPAL
+
+include ${CURDIR}/Makefile.defs

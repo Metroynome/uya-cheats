@@ -1,0 +1,5 @@
+EE_REGION = ntscu
+EE_LIBS = -lrac3ntscu
+EE_DEFS = -DUYA_NTSCU -DRAC3_NTSCU -DUYA_NTSC -DRAC3_NTSC -DNTSCU -DNTSC
+
+include ${CURDIR}/Makefile.defs

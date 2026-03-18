@@ -1,0 +1,58 @@
+EE_FILE_NAME = spleef
+EE_OBJS = main.o
+ADDRESS = 000b000
+
+EE_OBJS_DIR = obj/
+EE_BIN_DIR = bin/
+EE_ELF = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).elf
+EE_BIN = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).bin
+
+# Debug: Print what we have before transformation
+$(info Before transform: EE_OBJS = $(EE_OBJS))
+
+# NOW add the obj/ prefix to ALL objects
+EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%)
+
+# Debug: Print what we have after transformation
+$(info After transform: EE_OBJS = $(EE_OBJS))
+
+# Set other variables
+EE_INCS := -I../../include -I$(PS2SDK)/ports/include
+EE_LDFLAGS = -fno-builtin -nostdlib -nostartfiles -L. -L../../lib -L$(PS2SDK)/ports/lib
+EE_CFLAGS := -D_PROGRAM_ENTRY=0x$(ADDRESS) -DDEBUG
+
+# Add debug flag if debug target
+ifeq ($(filter debug,$(MAKECMDGOALS)),debug)
+    EE_CFLAGS := $(EE_CFLAGS) -DDEBUG
+endif
+
+all: linker $(EE_OBJS_DIR) $(EE_BIN_DIR) $(EE_BIN) code
+
+$(EE_OBJS_DIR):
+	mkdir -p $(EE_OBJS_DIR)
+
+$(EE_BIN_DIR):
+	mkdir -p $(EE_BIN_DIR)
+
+$(EE_OBJS_DIR)%.o : $(EE_SRC_DIR)%.c
+	$(EE_C_COMPILE) -c $< -o $@
+
+$(EE_OBJS_DIR)%.o : $(EE_SRC_DIR)%.S
+	$(EE_C_COMPILE) -c $< -o $@
+
+linker:
+	$(EE_CC) -E -x c $(EE_CFLAGS) ../../linkfile.template | grep -v '^#' > linkfile
+
+code:
+	bin2code $(EE_BIN) $(ADDRESS) $(EE_BIN).raw raw
+	cat template/footer.$(EE_REGION).raw >> $(EE_BIN).raw
+	bin2code $(EE_BIN) $(ADDRESS) $(EE_BIN).pnach pnach
+	cat template/footer.$(EE_REGION).pnach >> $(EE_BIN).pnach
+
+clean:
+	rm -rf linkfile
+	rm -f -r $(EE_OBJS_DIR)
+	rm -f -r $(EE_BIN_DIR)
+
+include $(CURDIR)/../../Makefile.pref
+include $(CURDIR)/../../Makefile.eeglobal

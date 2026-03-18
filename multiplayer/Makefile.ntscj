@@ -1,0 +1,5 @@
+EE_REGION = ntscj
+EE_LIBS = -luyantscj
+EE_DEFS = -DUYA_NTSCJ -DRAC3_NTSCJ -DNTSCJ
+
+include ${CURDIR}/Makefile.defs
