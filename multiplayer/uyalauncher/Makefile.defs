@@ -1,55 +1,11 @@
-EE_FILE_NAME = test
-EE_OBJS = functions.o main.o
-ADDRESS = 000b0000
+EE_FILE_NAME = uyalauncher
+EE_OBJS = main.o
+ADDRESS = 00080000
 
 EE_OBJS_DIR = obj/
 EE_BIN_DIR = bin/
 EE_ELF = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).elf
 EE_BIN = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).bin
-
-# Define EE_DEFS first
-# EE_DEFS += -DDROIDS
-# EE_DEFS += -DBOTS
-# EE_DEFS += -DCTF
-# EE_DEFS += -DSIEGE
-# EE_DEFS += -DHUD
-# EE_DEFS += -DSCAVENGERHUNT
-# EE_DEFS += -DSECRET
-# EE_DEFS += -DKOTH
-# EE_DEFS += -DJUMPPAD
-# EE_DEFS += -DDOMINATION
-
-# Add conditional object files BEFORE the directory prefix transformation
-ifneq (,$(findstring -DDROIDS,$(EE_DEFS)))
-    EE_OBJS += droids.o
-endif
-ifneq (,$(findstring -DBOTS,$(EE_DEFS)))
-    EE_OBJS += bots.o trainingmode.o
-endif
-ifneq (,$(findstring -DCTF,$(EE_DEFS)))
-    EE_OBJS += ctf.o
-endif
-ifneq (,$(findstring -DSIEGE,$(EE_DEFS)))
-    EE_OBJS += siege.o
-endif
-ifneq (,$(findstring -DKOTH,$(EE_DEFS)))
-    EE_OBJS += koth.o
-endif
-ifneq (,$(findstring -DSECRET,$(EE_DEFS)))
-    EE_OBJS += secret.o
-endif
-ifneq (,$(findstring -DHUD,$(EE_DEFS)))
-    EE_OBJS += hud.o
-endif
-ifneq (,$(findstring -DSCAVENGERHUNT,$(EE_DEFS)))
-    EE_OBJS += scavengerhunt.o
-endif
-ifneq (,$(findstring -DJUMPPAD,$(EE_DEFS)))
-    EE_OBJS += jumppad.o
-endif
-ifneq (,$(findstring -DDOMINATION,$(EE_DEFS)))
-    EE_OBJS += domination.o
-endif
 
 # Debug: Print what we have before transformation
 $(info Before transform: EE_OBJS = $(EE_OBJS))
