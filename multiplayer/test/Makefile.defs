@@ -1,6 +1,6 @@
 EE_FILE_NAME = test
 EE_OBJS = functions.o main.o
-ADDRESS = 000b0000
+ADDRESS = 00080000
 
 EE_OBJS_DIR = obj/
 EE_BIN_DIR = bin/
@@ -8,6 +8,7 @@ EE_ELF = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).elf
 EE_BIN = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).bin
 
 # Define EE_DEFS first
+# EE_DEFS += -DDEBUG
 # EE_DEFS += -DDROIDS
 # EE_DEFS += -DBOTS
 # EE_DEFS += -DCTF
@@ -18,8 +19,12 @@ EE_BIN = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).bin
 # EE_DEFS += -DKOTH
 # EE_DEFS += -DJUMPPAD
 # EE_DEFS += -DDOMINATION
+EE_DEFS += -DAPRIL
 
 # Add conditional object files BEFORE the directory prefix transformation
+ifneq (,$(findstring -DAPRIL,$(EE_DEFS)))
+    EE_OBJS += april.o
+endif
 ifneq (,$(findstring -DDROIDS,$(EE_DEFS)))
     EE_OBJS += droids.o
 endif
