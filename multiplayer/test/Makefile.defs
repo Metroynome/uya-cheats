@@ -22,9 +22,6 @@ EE_BIN = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).bin
 EE_DEFS += -DAPRIL
 
 # Add conditional object files BEFORE the directory prefix transformation
-ifneq (,$(findstring -DAPRIL,$(EE_DEFS)))
-    EE_OBJS += april.o
-endif
 ifneq (,$(findstring -DDROIDS,$(EE_DEFS)))
     EE_OBJS += droids.o
 endif
@@ -55,6 +52,9 @@ endif
 ifneq (,$(findstring -DDOMINATION,$(EE_DEFS)))
     EE_OBJS += domination.o
 endif
+ifneq (,$(findstring -DAPRIL,$(EE_DEFS)))
+    EE_OBJS += april.o
+endif
 
 # Debug: Print what we have before transformation
 $(info Before transform: EE_OBJS = $(EE_OBJS))
@@ -68,7 +68,7 @@ $(info After transform: EE_OBJS = $(EE_OBJS))
 # Set other variables
 EE_INCS := -I../../include -I$(PS2SDK)/ports/include
 EE_LDFLAGS = -fno-builtin -nostdlib -nostartfiles -L. -L../../lib -L$(PS2SDK)/ports/lib
-EE_CFLAGS := -D_PROGRAM_ENTRY=0x$(ADDRESS) -DDEBUG
+EE_CFLAGS := -D_PROGRAM_ENTRY=0x$(ADDRESS) $(EE_DEFS)
 
 # Add debug flag if debug target
 ifeq ($(filter debug,$(MAKECMDGOALS)),debug)

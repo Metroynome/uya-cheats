@@ -10,15 +10,6 @@
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
-typedef struct {
-	u32 callsite;
-	const u32 (*table)[2];
-    int count;
-} ColorHookMap;
-
-static ColorHookMap gColorHooks[4];
-static int gColorHookCount = 0;
-
 const u32 widget3d_2d_colors[][2] = {
 	{0x331465b7, 0x60070b54}, // background
 	{0x802299de, 0x80070b54}, // line details
@@ -41,93 +32,77 @@ const u32 widgetTextarea_colors[][2] = {
     {0, 0},
 };
 
-
-
-static inline u32 get_ra(void)
+bool uiColor_widget3d_2d_setColor(HANDLE_ID handle, u32 color)
 {
-	u32 ra;
-	__asm__ volatile("move %0, $ra" : "=r"(ra));
-	return ra;
-}
+	int i;
+	const int widgetsColorSize = sizeof(widget3d_2d_colors) / sizeof(widget3d_2d_colors[0]);
 
-bool uiColor_dispatch(HANDLE_ID handle, u32 color)
-{
-	u32 ra = get_ra();
-
-    int i, j;
-	for (i = 0; i < gColorHookCount; ++i) {
-		if (ra == gColorHooks[i].callsite + 8) {
-			const u32 (*table)[2] = gColorHooks[i].table;
-			int count = gColorHooks[i].count;
-
-			for (j = 0; j < count; ++j)
-				if (color == table[j][0])
-					return hudSetColor(handle, table[j][1]);
-
-			break;
+	for (i = 0; i < widgetsColorSize; ++i) {
+		if (color == widget3d_2d_colors[i][0]) {
+			return hudSetColor(handle, widget3d_2d_colors[i][1]);
 		}
 	}
 
 	return hudSetColor(handle, color);
 }
 
-void uiColor(void)
+bool uiColor_widgetRectangle_setColor(HANDLE_ID handle, u32 color)
 {
-	struct Def {
-		u32 *va;
-		u32 offset;
-		const u32 (*table)[2];
-		int count;
-	};
-
-	static struct Def defs[4];
-
 	int i;
-	u32 addr;
+	const int widgetsColorSize = sizeof(widgetRectangle_colors) / sizeof(widgetRectangle_colors[0]);
 
-	/* initialize once (C89-safe style, no fancy init blocks inside function logic) */
-	defs[0].va = &vaCreateWidget3d_2D;
-	defs[0].offset = 0x74;
-	defs[0].table = widget3d_2d_colors;
-	defs[0].count = ARRAY_SIZE(widget3d_2d_colors);
-
-	defs[1].va = &vaCreateWidgetRectangle;
-	defs[1].offset = 0x6c;
-	defs[1].table = widgetRectangle_colors;
-	defs[1].count = ARRAY_SIZE(widgetRectangle_colors);
-
-	defs[2].va = &vaCreateWidgetText;
-	defs[2].offset = 0x64;
-	defs[2].table = widgetText_colors;
-	defs[2].count = ARRAY_SIZE(widgetText_colors);
-
-	defs[3].va = &vaCreateWidgetTextArea;
-	defs[3].offset = 0x74;
-	defs[3].table = widgetTextarea_colors;
-	defs[3].count = ARRAY_SIZE(widgetTextarea_colors);
-
-	gColorHookCount = 0;
-
-	for (i = 0; i < 4; ++i) {
-		addr = GetAddressImmediate(defs[i].va);
-		if (!addr)
-			continue;
-
-		addr += defs[i].offset;
-
-		HOOK_JAL(addr, &uiColor_dispatch);
-
-		{
-			ColorHookMap *hook = &gColorHooks[gColorHookCount++];
-			hook->callsite = addr;
-			hook->table = defs[i].table;
-			hook->count = defs[i].count;
+	for (i = 0; i < widgetsColorSize; ++i) {
+		if (color == widgetRectangle_colors[i][0]) {
+			return hudSetColor(handle, widgetRectangle_colors[i][1]);
 		}
 	}
+
+	return hudSetColor(handle, color);
+}
+
+bool uiColor_widgetText_setColor(HANDLE_ID handle, u32 color)
+{
+	int i;
+	const int widgetsColorSize = sizeof(widgetText_colors) / sizeof(widgetText_colors[0]);
+
+	for (i = 0; i < widgetsColorSize; ++i) {
+		if (color == widgetText_colors[i][0]) {
+			return hudSetColor(handle, widgetText_colors[i][1]);
+		}
+	}
+
+	return hudSetColor(handle, color);
+}
+
+bool uiColor_widgetTextarea_setColor(HANDLE_ID handle, u32 color)
+{
+	int i;
+	const int widgetsColorSize = sizeof(widgetTextarea_colors) / sizeof(widgetTextarea_colors[0]);
+
+	for (i = 0; i < widgetsColorSize; ++i) {
+		if (color == widgetTextarea_colors[i][0]) {
+			return hudSetColor(handle, widgetTextarea_colors[i][1]);
+		}
+	}
+
+	return hudSetColor(handle, color);
+}
+
+inline void hookWidget(u32 base, u32 offset, void *func)
+{
+	if (base)
+		HOOK_JAL(base + offset, func);
+}
+
+void uiColor(void)
+{
+	hookWidget(GetAddressImmediate(&vaCreateWidget3d_2D), 0x74, &uiColor_widget3d_2d_setColor);
+	hookWidget(GetAddressImmediate(&vaCreateWidgetRectangle), 0x6c, &uiColor_widgetRectangle_setColor);
+	hookWidget(GetAddressImmediate(&vaCreateWidgetText), 0x64, &uiColor_widgetText_setColor);
+	hookWidget(GetAddressImmediate(&vaCreateWidgetTextArea), 0x74, &uiColor_widgetTextarea_setColor);
 }
 
 void runApril(void)
 {
-    printf("rawr\n");
     uiColor();
 }
