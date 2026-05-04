@@ -10,6 +10,8 @@
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
+extern VariableAddress_t vaFontPrintFunc;
+
 const u32 widget3d_2d_colors[][2] = {
 	{0x331465b7, 0x60070b54}, // background
 	{0x802299de, 0x80070b54}, // line details
@@ -88,6 +90,16 @@ bool uiColor_widgetTextarea_setColor(HANDLE_ID handle, u32 color)
 	return hudSetColor(handle, color);
 }
 
+void uiColor_FontPrint_SetRegister(int r, u64 value)
+{
+	register u32 color1 asm("t1");
+	register u32 color2 asm("t2");
+	color1 = 0x800000ff;
+	color2 = 0x80ff0000;
+	// call base
+	gfxAddRegister(r, value);
+}
+
 inline void hookWidget(u32 base, u32 offset, void *func)
 {
 	if (base)
@@ -100,6 +112,7 @@ void uiColor(void)
 	hookWidget(GetAddressImmediate(&vaCreateWidgetRectangle), 0x6c, &uiColor_widgetRectangle_setColor);
 	hookWidget(GetAddressImmediate(&vaCreateWidgetText), 0x64, &uiColor_widgetText_setColor);
 	hookWidget(GetAddressImmediate(&vaCreateWidgetTextArea), 0x74, &uiColor_widgetTextarea_setColor);
+	hookWidget(GetAddressImmediate(&vaFontPrintFunc), 0xf4, &uiColor_FontPrint_SetRegister);
 }
 
 void runApril(void)

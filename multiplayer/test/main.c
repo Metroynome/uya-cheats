@@ -121,9 +121,9 @@ void debugShowPosition(void) {
     sprintf(buff[0], "X: %.04f", p->pMoby->position[0]);
     sprintf(buff[1], "Z: %.04f", p->pMoby->position[1]);
     sprintf(buff[2], "Y: %.04f", p->pMoby->position[2]);
-	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.85, scale, scale, 0x80FFFFFF, buff[0], -1, 4, FONT_BOLD);
-	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.90, scale, scale, 0x80FFFFFF, buff[1], -1, 4, FONT_BOLD);
-	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.95, scale, scale, 0x80FFFFFF, buff[2], -1, 4, FONT_BOLD);
+	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.85, scale, scale, 0x80FFFFFF, buff[0], -1, 1, FONT_BOLD);
+	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.90, scale, scale, 0x80FFFFFF, buff[1], -1, 1, FONT_BOLD);
+	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.95, scale, scale, 0x80FFFFFF, buff[2], -1, 1, FONT_BOLD);
 }
 
 void InfiniteChargeboot(void)
@@ -693,17 +693,6 @@ int main(void)
 		// 	printf("\n------------------");
 		// }
 
-		// Only print state if it's diferent from last state.
-		static int nowCol = -1;
-		int data = CollHotspot();
-		int currentCol = data;
-		if (currentCol != nowCol) {
-			nowCol = currentCol;
-			// printf("\n------------------");
-			printf("\nCollision: %d", data);
-			// printf("\n------------------");
-		}
-
 		// if (padGetButtonDown(0, PAD_DOWN) > 0) {
 		// 	printf("\n------------------");
 		// 	// printf("\nPrevious State: %d", playerDeobfuscate(&p->previousState, 0, 0));
@@ -730,12 +719,6 @@ int main(void)
 		// 	printf("\n------------------");
 		// }
 
-		// float x = SCREEN_WIDTH * 0.3;
-		// float y = SCREEN_HEIGHT * 0.85;
-		// gfxScreenSpaceText(x, y, 1, 1, 0x80FFFFFF, "TEST YOUR MOM FOR HUGS", -1, TEXT_ALIGN_MIDDLECENTER, FONT_BOLD);
-		
-		// printf("Collision: %d\n", CollHotspot());
-        
 		// betterHealthBoxes_Move();
 
 		InfiniteChargeboot();

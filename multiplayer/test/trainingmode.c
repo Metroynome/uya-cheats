@@ -86,12 +86,6 @@ int waiting_for_sniper_shot = 0;
 const int SimPlayerCount = MAX_SPAWNED_TARGETS;
 SimulatedPlayer_t SimPlayers[MAX_SPAWNED_TARGETS];
 
-void setSpawnDistance(float distance)
-{
-	u16 s = (u16)(distance >> 0x16);
-	POKE_U16(GetAddress(&vaResurrectSpawnDistance), s);
-}
-
 void modeInitialize(void)
 {
 	// cheatsApplyNoPacks();
@@ -448,7 +442,7 @@ void modeInitTarget(SimulatedPlayer_t * sPlayer)
 
 	// set spawn distance
 	#ifdef TARGET_SPAWN_DISTANCE != 40.0f
-	setSpawnDistance(TARGET_SPAWN_DISTANCE);
+	POKE_U16(GetAddress(&vaResurrectSpawnDistance), FLOAT_TO_U16(TARGET_BUFFER_SPAWN_DISTANCE));
 	#endif
 }
 

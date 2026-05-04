@@ -514,24 +514,51 @@ const int MAP_CUBOID_COUNTS[10] = {
     ARRAY_SIZE(marcadia)
 };
 
-void getVanillaHills(hillPvar_t *this)
+#include <malloc.h> // or stdlib depending on your PS2 SDK
+
+Cuboid *createCuboid(VECTOR pos, int num)
 {
-    int mapId = GAME_MAP_ID - 40;  // Fixed based on your comment
-    int numCuboids = MAP_CUBOID_COUNTS[mapId];
-    Cuboid* cuboids = vanillaMapCuboids[mapId];
+    Cuboid *c = (Cuboid*)malloc(sizeof(Cuboid));
+    if (!c)
+        return NULL;
 
-    printf("\n=================");
-    printf("\npvar %08x", this);
-    printf("\ncuboidList %08x", cuboids);
+    // Initialize
+    vector_copy(c->matrix.v0, (VECTOR){HILL_VANILLA_SCALE, 0, 0, 0});
+    vector_copy(c->matrix.v1, (VECTOR){0, HILL_VANILLA_SCALE, 0, 0});
+    vector_copy(c->matrix.v2, (VECTOR){0, 0, 2, 0});
+    memcpy(c->pos, pos, sizeof(VECTOR));
+    return c;
+}
 
-    // Initialize all to NULL first
-    memset(&this->vanillaHills, -1, sizeof(int) * 32);
-
-    // Fill in the valid ones
-    int i;
-    for (i = 0; i < numCuboids; i++) {
-        this->vanillaHills[i] = &cuboids[i];
-        printf("\nhill %i : %08x", i, &this->vanillaHills[i]);
+void getHillCuboids(hillPvar_t *this, bool isCustomMap)
+{
+    if (!isCustomMap) {
+        // get custom vanilla hills
+        int mapId = GAME_MAP_ID - 40;
+        int numCuboids = MAP_CUBOID_COUNTS[mapId];
+        Cuboid* cuboids = vanillaMapCuboids[mapId];
+        // Fill in the valid ones
+        int i;
+        for (i = 0; i < numCuboids; i++) {
+            this->hillCuboids[i] = &cuboids[i];
+        }
+    } else {
+        Moby* moby = mobyListGetStart();
+        Moby* mobyEnd = mobyListGetEnd();
+        int i = 0;
+        while (moby < mobyEnd) {
+            if (moby->oClass == MOBY_ID_SIEGE_NODE) {
+                // grab associated bolt crank from bridge peice
+                int boltCrankInstanceNum = *(int*)(moby->pVar + 0x3c);
+                Moby* list = mobyListGetStart();
+                Moby* boltCrank = list + boltCrankInstanceNum;
+                if (boltCrank->oClass == MOBY_ID_BOLT_CRANK) {
+                    this->hillCuboids[i] = createCuboid(boltCrank->position, i);
+                }
+                ++i;
+            }
+            ++moby;
+        }
+        kothInfo.lastGameUsedMalloc = true;
     }
-    printf("\n=================");
 }
