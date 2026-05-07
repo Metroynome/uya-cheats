@@ -39,22 +39,27 @@ typedef struct kothInfo {
     bool init;
     bool lastGameUsedMalloc;
     bool radar;
-    bool foundMoby;
+    bool foundCustomMoby;
     int hillScoreLimit;
     Moby *hillMoby;
 } kothInfo_t;
 
 typedef struct hillPvar { // 0x200
-/* 0x000 */ Cuboid *hillCuboids[32];
-/* 0x100 */ bool isCircle;
-/* 0x101 */ char pad[0x3];
-/* 0x104 */ Player *playersIn[GAME_MAX_PLAYERS];
-/* 0x124 */ Cuboid *currentCuboid;
-/* 0x144 */ int teamTime[8];
-/* 0x164 */ u32 color;
-/* 0x108 */ char empty[0x98];
+/* 0x000 */ int hillCuboidIndex[32];
+/* 0x080 */ Cuboid *hillCuboidPtrs[32];
+/* 0x100 */ Cuboid *currentCuboid;
+/* 0x104 */ int teamTime[8];
+/* 0x124 */ Player *playersIn[GAME_MAX_PLAYERS];
+/* 0x144 */ bool isCircle;
+/* 0x145 */ char pad_145;
+/* 0x146 */ char pad_146;
+/* 0x147 */ char pad_147;
+/* 0x148 */ float opacityFactor;
+/* 0x14c */ u32 color;
+/* 0x150 */ float scrollTex;
+/* 0x154 */ char empty[0xac];
 } hillPvar_t;
 
 kothInfo_t kothInfo;
 
-void getHillCuboids(hillPvar_t *this, bool isCustomMap);
+void getHillCuboids(hillPvar_t *this, bool isCustomMap, bool foundCustomMoby);

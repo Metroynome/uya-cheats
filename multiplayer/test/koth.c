@@ -126,26 +126,35 @@ static VariableAddress_t vaGameTimerEndHookDmNoTeams = {
 #endif
 };
 
-int hillCheckIfInside(Cuboid cube, VECTOR playerPos, char isCircle)
+void hillMovementUpdates(Moby *this)
+{
+    if (!this->pVar)
+        return;
+    
+        hillPvar_t *pvars = (hillPvar_t*)this->pVar;
+    pvars->opacityFactor = 1.0f;
+}
+
+int hillCheckIfInside(Cuboid *cube, VECTOR playerPos, char isCircle)
 {
     MATRIX rotMatrix;
     matrix_unit(rotMatrix);
-    matrix_rotate_x(rotMatrix, rotMatrix, cube.rot[0]);
-    matrix_rotate_y(rotMatrix, rotMatrix, cube.rot[1]);
-    matrix_rotate_z(rotMatrix, rotMatrix, cube.rot[2]);
+    matrix_rotate_x(rotMatrix, rotMatrix, cube->rot[0]);
+    matrix_rotate_y(rotMatrix, rotMatrix, cube->rot[1]);
+    matrix_rotate_z(rotMatrix, rotMatrix, cube->rot[2]);
     
     // get imatrix
     MATRIX invMatrix;
     matrix_unit(invMatrix);
     matrix_inverse(invMatrix, rotMatrix);
-    memcpy(&cube.imatrix, invMatrix, sizeof(mtx3));
+    memcpy(&cube->imatrix, invMatrix, sizeof(mtx3));
 
     VECTOR delta;
-    vector_subtract(delta, playerPos, (VECTOR){cube.pos[0], cube.pos[1], cube.pos[2], 0});
+    vector_subtract(delta, playerPos, (VECTOR){cube->pos[0], cube->pos[1], cube->pos[2], 0});
     vector_apply(delta, delta, invMatrix);
-    VECTOR xAxis = {cube.matrix.v0[0], cube.matrix.v1[0], cube.matrix.v2[0], 0};
-    VECTOR zAxis = {cube.matrix.v0[1], cube.matrix.v1[1], cube.matrix.v2[1], 0};
-    VECTOR yAxis = {cube.matrix.v0[2], cube.matrix.v1[2], cube.matrix.v2[2], 0};
+    VECTOR xAxis = {cube->matrix.v0[0], cube->matrix.v1[0], cube->matrix.v2[0], 0};
+    VECTOR zAxis = {cube->matrix.v0[1], cube->matrix.v1[1], cube->matrix.v2[1], 0};
+    VECTOR yAxis = {cube->matrix.v0[2], cube->matrix.v1[2], cube->matrix.v2[2], 0};
 
     float halfWidth = vector_length(xAxis) * .5;
     float halfDepth = vector_length(zAxis) * .5;
@@ -167,6 +176,9 @@ int hillCheckIfInside(Cuboid cube, VECTOR playerPos, char isCircle)
 
 void hillPlayerUpdates(Moby *this)
 {
+    if (!this->pVar)
+        return;
+
     hillPvar_t *pvar = (hillPvar_t*)this->pVar;
     GameSettings *gs = gameGetSettings();
     int playerCount = gs->PlayerCount;
@@ -176,7 +188,7 @@ void hillPlayerUpdates(Moby *this)
         if (!player || playerIsDead(player))
             continue;
 
-        int in = hillCheckIfInside(*pvar->currentCuboid, player->playerPosition, pvar->isCircle);
+        int in = hillCheckIfInside(pvar->currentCuboid, player->playerPosition, pvar->isCircle);
         if (in) {
             pvar->color = TEAM_COLORS[player->mpTeam];
         } else {
@@ -186,13 +198,14 @@ void hillPlayerUpdates(Moby *this)
     }
 }
 
-    float scrollQuad = 0;
-void hill_drawShape(Moby *this, Cuboid cube)
+void hill_drawShape(Moby *this)
 {
-    if (!vector_length(cube.pos)) return;
-
     hillPvar_t *pvar = (hillPvar_t*)this->pVar;
-    if (vector_length(cube.matrix.v2) > 1.0001)
+    if (!pvar->currentCuboid) return;
+    Cuboid *cube = (Cuboid*)pvar->currentCuboid;
+    if (!vector_length(cube->pos)) return;
+
+    if (vector_length(cube->matrix.v2) > 1.0001)
         pvar->isCircle = 1;
     else
         pvar->isCircle = 0;
@@ -211,16 +224,16 @@ void hill_drawShape(Moby *this, Cuboid cube)
     /* Setup rotation matrix from cube */
     MATRIX rotMatrix;
     matrix_unit(rotMatrix);
-    matrix_rotate_x(rotMatrix, rotMatrix, cube.rot[0]);
-    matrix_rotate_y(rotMatrix, rotMatrix, cube.rot[1]);
-    matrix_rotate_z(rotMatrix, rotMatrix, cube.rot[2]);
+    matrix_rotate_x(rotMatrix, rotMatrix, cube->rot[0]);
+    matrix_rotate_y(rotMatrix, rotMatrix, cube->rot[1]);
+    matrix_rotate_z(rotMatrix, rotMatrix, cube->rot[2]);
     
     /* Extract axes from cube matrix */
     VECTOR center, xAxis, zAxis, yAxis, halfX, halfZ;
-    vector_copy(center, cube.pos);
-    vector_copy(xAxis, (VECTOR){cube.matrix.v0[0], cube.matrix.v1[0], cube.matrix.v2[0], 0});
-    vector_copy(zAxis, (VECTOR){cube.matrix.v0[1], cube.matrix.v1[1], cube.matrix.v2[1], 0});
-    vector_copy(yAxis, (VECTOR){cube.matrix.v0[2], cube.matrix.v1[2], cube.matrix.v2[2], 0});
+    vector_copy(center, cube->pos);
+    vector_copy(xAxis, (VECTOR){cube->matrix.v0[0], cube->matrix.v1[0], cube->matrix.v2[0], 0});
+    vector_copy(zAxis, (VECTOR){cube->matrix.v0[1], cube->matrix.v1[1], cube->matrix.v2[1], 0});
+    vector_copy(yAxis, (VECTOR){cube->matrix.v0[2], cube->matrix.v1[2], cube->matrix.v2[2], 0});
     
     /* Apply rotation to axes */
     vector_apply(xAxis, xAxis, rotMatrix);
@@ -381,13 +394,13 @@ void hill_drawShape(Moby *this, Cuboid cube)
     vector_subtract(delta, center, player->playerPosition);
     float distance = vector_length(delta);
     
-    float opacityFactor = 1.0f;
+    float opacityFactor = pvar->opacityFactor;
     // if (distance > 52.0f) {
     //     opacityFactor = 1.0f - clamp((distance - 52.0f) / 12.0f, 0.0f, 1.0f);
     // }
     
     /* === Update colors and UVs every frame === */
-    float trimmedU = uMin + (scrollQuad - floorf(scrollQuad)) * uRange;
+    float trimmedU = uMin + (pvar->scrollTex - floorf(pvar->scrollTex)) * uRange;
     
     for (i = 0; i <= segments; i++) {
         float trimmedV = vMin + (((float)i / segmentSize) - floorf((float)i / segmentSize)) * vRange;
@@ -416,8 +429,8 @@ void hill_drawShape(Moby *this, Cuboid cube)
     gfxDrawStrip(numSegments, positions[1], colors[1], uvs[1], 1);
     
     /* Animate texture scroll */
-    scrollQuad += HILL_RING_SCROLL_SPEED;
-    if (scrollQuad >= 1.0f) scrollQuad -= 1.0f;
+    pvar->scrollTex += HILL_RING_SCROLL_SPEED;
+    if (pvar->scrollTex >= 1.0f) pvar->scrollTex -= 1.0f;
     
     /* ===== Draw floor quad ===== */
     QuadDef floorQuad;
@@ -473,37 +486,37 @@ void hill_drawShape(Moby *this, Cuboid cube)
     gfxDrawQuad(floorQuad, NULL);
 }
 
-void hill_postDraw(Moby *moby)
-{
-    hillPvar_t* pvars = (hillPvar_t*)moby->pVar;
-    if (!pvars)
-        return;
 
-    if (vector_length(pvars->currentCuboid->matrix.v2) > 1.0001)
-        pvars->isCircle = 1;
+// void hill_postDraw(Moby *moby)
+// {
+//     hillPvar_t* pvars = (hillPvar_t*)moby->pVar;
+//     if (!pvars) return;
+//     if (!pvars->currentCuboid) return;
 
-    int i;
-    for (i = 0; i < 32; ++i) {
-        if (pvars->hillCuboids[i]) {
-            hill_drawShape(moby, *pvars->hillCuboids[i]);
-        }
-    }
-}
+//     if (vector_length(pvars->currentCuboid->matrix.v2) > 1.0001)
+//         pvars->isCircle = 1;
 
-void hill_update(Moby * moby)
+//     hill_drawShape(moby, *pvars->currentCuboid)
+// }
+
+void hill_update(Moby *moby)
 {
     hillPvar_t *pvars = (hillPvar_t*)moby->pVar;
-    if (!pvars)
+    if (!pvars) return;
+    if (!pvars->hillCuboidPtrs[0] && !pvars->hillCuboidIndex[0]) {
         return;
-
-    if (!pvars->hillCuboids) {
-        Cuboid *cuboid = spawnPointGet(pvars->hillCuboids[0]);
-        // move hill moby to cuboid position
-        vector_copy(moby->position, cuboid->pos);
-        pvars->currentCuboid = cuboid;
     }
 
-    gfxRegisterDrawFunction(&hill_postDraw, moby);
+    // this is where the random hill part goes.
+    if (!pvars->currentCuboid) {
+        pvars->currentCuboid = pvars->hillCuboidPtrs[0];
+        vector_copy(moby->position, pvars->currentCuboid->pos);
+    }
+    
+    gfxRegisterDrawFunction(&hill_drawShape, moby);
+
+    // handle hill movement
+    hillMovementUpdates(moby);
 
     // handle players
     hillPlayerUpdates(moby);
@@ -518,38 +531,31 @@ Moby *getHillMoby(void)
 {
 	Moby* moby = mobyListGetStart();
 	Moby* mobyEnd = mobyListGetEnd();
-    int i = 0;
 	while (moby < mobyEnd) {
 		if (moby->oClass == HILL_MOBY_OCLASS) {
+            kothInfo.foundCustomMoby = true;
             return moby;
 		}
 		++moby;
 	}
-    return 0;
-}
-
-Moby *hill_SpawnCustomMoby(void)
-{
-    Moby *m = mobySpawn(HILL_MOBY_OCLASS, HILL_MOBY_SIZE);
-    hillPvar_t *pvar = (hillPvar_t *)m->pVar;
-    getHillCuboids(pvar, isCustomMap);
-    return m;
+    moby = mobySpawn(HILL_MOBY_OCLASS, HILL_MOBY_SIZE);
+    return !moby ? 0 : moby;
 }
 
 void hill_setupMoby(void)
 {
-    Moby *moby = getHillMoby();;
-    if (!moby) {
-        moby = hill_SpawnCustomMoby();
-    }
-    if (!moby) return;
+    Moby *moby = getHillMoby();
+    if (!moby)
+        return;
 
     hillPvar_t *pvars = (hillPvar_t*)moby->pVar;
+    // setup hill cuboid list.
+    getHillCuboids(pvars, isCustomMap, kothInfo.foundCustomMoby);
+
     moby->pUpdate = &hill_update;
-    moby->modeBits = 0;
+    // moby->modeBits = 0;
     moby->updateDist = -1;
 
-    soundPlayByOClass(1, 0, moby, MOBY_ID_OMNI_SHIELD);
     kothInfo.hillMoby = moby;
 }
 
@@ -700,6 +706,23 @@ int kothSetWinnerFields(int winnerIdx, int reason, int endGame)
     return 1;
 }
 
+void kothClearMalloc(void)
+{
+    // check if malloc was used last game.  if so, free before anything else.
+    Moby *m = (Moby*)kothInfo.hillMoby;
+    if (kothInfo.lastGameUsedMalloc == 1 && m != 0) {
+        hillPvar_t *n = (hillPvar_t*)m->pVar;
+        if (!n)
+            return;
+
+        int i;
+        for (i = 0; i < sizeof(n->hillCuboidPtrs); i++) {
+            if (n->hillCuboidPtrs[i])
+                free(n->hillCuboidPtrs[i]);
+        }
+    }
+}
+
 void kothDeclareWinner(int winnerIdx, int reason)
 {
     if (!kothSetWinnerFields(winnerIdx, reason, 1))
@@ -723,6 +746,8 @@ void runGameEnd(int reason)
             }
         }
     }
+    // clear hills if malloc.  this must be done before loading back into staging.
+    kothClearMalloc();
     // Forward to original gameEnd.
     gameEnd(forwardReason);
 }
@@ -829,18 +854,8 @@ void scoreboardRun(void)
 
 void kothInit(void)
 {
-    // check if malloc was used last game.  if so, free before anything else.
-    hillPvar_t *m = (hillPvar_t*)kothInfo.hillMoby->pVar;
-    if (kothInfo.lastGameUsedMalloc && m != 0) {
-        int i;
-        for (i = 0; i < sizeof(m->hillCuboids); i++) {
-            if (m->hillCuboids[i])
-                free(m->hillCuboids[i]);
-        }
-    }
     // set data to zero
-    // memset(&hillPvar, 0, sizeof(hillPvar_t));
-    memset(&kothInfo, 0, sizeof(kothInfo_t));
+    // memset(&kothInfo, 0, sizeof(kothInfo_t));
     // koth score limit needs to be -1 on new games.
     kothInfo.hillScoreLimit = -1;
 
@@ -852,12 +867,12 @@ void kothInit(void)
     // }
 
     // Disable base-game frag limit so KOTH doesn't end on kills.
-    GameOptions *go = gameGetOptions();
-    if (go)
-        go->GameFlags.MultiplayerGameFlags.FragLimit = 0;
+    // GameOptions *go = gameGetOptions();
+    // if (go)
+    //     go->GameFlags.MultiplayerGameFlags.FragLimit = 0;
 
     // init hooks
-    kothHooksInit();
+    // kothHooksInit();
 
     // setup hill
     if (!kothInfo.hillMoby) {
@@ -869,24 +884,24 @@ void kothInit(void)
 
 void koth(void)
 {
-    if (isInGame()) return;
+    if (!isInGame()) return;
+
     GameSettings *gs = gameGetSettings();
     GameData *gd = gameGetData();
 
     // only continue if enabled and in game
-    if (!isInGame() || !gs || !gd) {
+    if (!gs || !gd) {
         return;
     }
 
     // init and setup
     if (!kothInfo.init) {
         kothInit();
-        return;
     }
     // create and run radar icon.
     // radarRun();
     // run scoreboard
-    scoreboardRun();
+    // scoreboardRun();
 
     // if (kothRespawnDistanceIsCustom())
     //     kothUpdateRespawnDistanceForLocals();

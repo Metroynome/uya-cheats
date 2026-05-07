@@ -39,12 +39,29 @@ extern VariableAddress_t vaGiveWeaponFunc;
 extern VariableAddress_t vaPlayerRespawnFunc;
 extern VariableAddress_t vaSpawnPointsPtr;
 
+
+#ifdef KOTH
+void koth(void);
+#endif
 #ifdef DROIDS
 void droids(void);
 #endif
 #ifdef APRIL
 void runApril(void);
 #endif
+
+void debugShowPosition(void) {
+    Player *p = playerGetFromSlot(0);
+    char buff[3][32];
+    float scale = 1;
+    float x = SCREEN_WIDTH * 0.15;
+    sprintf(buff[0], "X: %.04f", p->pMoby->position[0]);
+    sprintf(buff[1], "Z: %.04f", p->pMoby->position[1]);
+    sprintf(buff[2], "Y: %.04f", p->pMoby->position[2]);
+	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.85, scale, scale, 0x80FFFFFF, buff[0], -1, 1, FONT_BOLD);
+	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.90, scale, scale, 0x80FFFFFF, buff[1], -1, 1, FONT_BOLD);
+	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.95, scale, scale, 0x80FFFFFF, buff[2], -1, 1, FONT_BOLD);
+}
 
 void DebugInGame(Player* player)
 {
@@ -112,20 +129,6 @@ void DebugInMenus(void)
 		// Nothing Yet!
 	}
 }
-
-void debugShowPosition(void) {
-    Player *p = playerGetFromSlot(0);
-    char buff[3][32];
-    float scale = 1;
-    float x = SCREEN_WIDTH * 0.15;
-    sprintf(buff[0], "X: %.04f", p->pMoby->position[0]);
-    sprintf(buff[1], "Z: %.04f", p->pMoby->position[1]);
-    sprintf(buff[2], "Y: %.04f", p->pMoby->position[2]);
-	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.85, scale, scale, 0x80FFFFFF, buff[0], -1, 1, FONT_BOLD);
-	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.90, scale, scale, 0x80FFFFFF, buff[1], -1, 1, FONT_BOLD);
-	gfxScreenSpaceText(x, SCREEN_HEIGHT * 0.95, scale, scale, 0x80FFFFFF, buff[2], -1, 1, FONT_BOLD);
-}
-
 void InfiniteChargeboot(void)
 {
 	Player *player = playerGetFromSlot(0);
@@ -721,10 +724,6 @@ int main(void)
 
 		// betterHealthBoxes_Move();
 
-		InfiniteChargeboot();
-		InfiniteHealthMoonjump();
-    	// DebugInGame(p);
-    
 		// if (!r.initialized) {
 		// 	hudtest_Init();
 		// 	hudtest_CreateFrame();  // Create frame once during init
@@ -733,6 +732,9 @@ int main(void)
 		// }
 
 		debugShowPosition();
+		// InfiniteChargeboot();
+		// InfiniteHealthMoonjump();
+    	// DebugInGame(p);
 	} else {
 		// DebugInMenus();
 	}

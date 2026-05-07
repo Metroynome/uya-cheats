@@ -530,9 +530,16 @@ Cuboid *createCuboid(VECTOR pos, int num)
     return c;
 }
 
-void getHillCuboids(hillPvar_t *this, bool isCustomMap)
+void getHillCuboids(hillPvar_t *this, bool isCustomMap, bool foundCustomMoby)
 {
-    if (!isCustomMap) {
+    if (foundCustomMoby) {
+        // get cuboid pointers from custom cuboid index.
+        int i = 0;
+        for (i; i < sizeof(this->hillCuboidIndex); ++i) {
+            if (this->hillCuboidIndex[i] > 0)
+                this->hillCuboidPtrs[i] = spawnPointGet(this->hillCuboidIndex[i]);
+        }
+    } else if (!isCustomMap) {
         // get custom vanilla hills
         int mapId = GAME_MAP_ID - 40;
         int numCuboids = MAP_CUBOID_COUNTS[mapId];
@@ -540,9 +547,10 @@ void getHillCuboids(hillPvar_t *this, bool isCustomMap)
         // Fill in the valid ones
         int i;
         for (i = 0; i < numCuboids; i++) {
-            this->hillCuboids[i] = &cuboids[i];
+            this->hillCuboidPtrs[i] = &cuboids[i];
         }
     } else {
+        // get siege nodes for hills
         Moby* moby = mobyListGetStart();
         Moby* mobyEnd = mobyListGetEnd();
         int i = 0;
@@ -553,7 +561,7 @@ void getHillCuboids(hillPvar_t *this, bool isCustomMap)
                 Moby* list = mobyListGetStart();
                 Moby* boltCrank = list + boltCrankInstanceNum;
                 if (boltCrank->oClass == MOBY_ID_BOLT_CRANK) {
-                    this->hillCuboids[i] = createCuboid(boltCrank->position, i);
+                    this->hillCuboidPtrs[i] = createCuboid(boltCrank->position, i);
                 }
                 ++i;
             }
