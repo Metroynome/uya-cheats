@@ -1,6 +1,6 @@
 EE_FILE_NAME = test
 EE_OBJS = functions.o main.o
-ADDRESS = 00080000
+ADDRESS = 000a0000
 
 EE_OBJS_DIR = obj/
 EE_BIN_DIR = bin/
