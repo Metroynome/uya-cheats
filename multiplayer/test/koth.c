@@ -242,7 +242,7 @@ void hill_drawShape(Moby *this)
     
     vector_scale(halfX, xAxis, 0.5f);
     vector_scale(halfZ, zAxis, 0.5f);
-    vector_normalize(yAxis, yAxis);
+    // vector_normalize(yAxis, yAxis);
     
     float fRadius = vector_length(halfX);
     
@@ -362,23 +362,23 @@ void hill_drawShape(Moby *this)
             
             int idx = i * 2;
             
-            /* === Upper ring positions === */
+            /* === Lower Ring Bottom === */
             positions[0][idx][0] = pos[0] + tempRight[0] - tempUp[0];
             positions[0][idx][1] = pos[1] + tempRight[1] - tempUp[1];
-            positions[0][idx][2] = pos[2] + tempRight[2] - tempUp[2] - 1;
-            
+            positions[0][idx][2] = pos[2] + tempRight[2] - tempUp[2];
+            /* === Lower Ring Top === */
             positions[0][idx + 1][0] = pos[0] + tempRight[0] + tempUp[0];
             positions[0][idx + 1][1] = pos[1] + tempRight[1] + tempUp[1];
             positions[0][idx + 1][2] = pos[2] + tempRight[2] + tempUp[2] + 1;
             
-            /* === Lower ring positions === */
             VECTOR offsetPos;
+            // offset upper ring by Y + 2
             vector_add(offsetPos, pos, (VECTOR){0, 0, 2, 0});
-            
+            /* === Upper Ring Botton === */
             positions[1][idx][0] = offsetPos[0] + tempRight[0] + tempUp[0];
             positions[1][idx][1] = offsetPos[1] + tempRight[1] + tempUp[1];
             positions[1][idx][2] = offsetPos[2] + tempRight[2] + tempUp[2] + 1;
-
+            /* === Upper Ring Top === */
             positions[1][idx + 1][0] = offsetPos[0] + tempRight[0] - tempUp[0];
             positions[1][idx + 1][1] = offsetPos[1] + tempRight[1] - tempUp[1];
             positions[1][idx + 1][2] = offsetPos[2] + tempRight[2] - tempUp[2] - 1;
@@ -415,8 +415,8 @@ void hill_drawShape(Moby *this)
         */
         colors[1][idx] = ((0x10 * (int)opacityFactor) << 24) | baseColor;
         colors[1][idx + 1] = ((0x30 * (int)opacityFactor) << 24) | baseColor;
-        colors[0][idx + 1] = ((0x50 * (int)opacityFactor) << 24) | baseColor;
-        colors[0][idx] = ((0x10 * (int)opacityFactor) << 24) | baseColor;
+        colors[0][idx + 1] = ((0x00 * (int)opacityFactor) << 24) | baseColor;
+        colors[0][idx] = ((0x80 * (int)opacityFactor) << 24) | baseColor;
 
         uvs[0][idx].x = uvs[1][idx].x = trimmedU;
         uvs[0][idx].y = uvs[0][idx + 1].y = uvs[1][idx].y = uvs[1][idx + 1].y = trimmedV;
@@ -426,7 +426,7 @@ void hill_drawShape(Moby *this)
     
     /* === Draw both rings === */
     gfxDrawStrip(numSegments, positions[0], colors[0], uvs[0], 1);
-    gfxDrawStrip(numSegments, positions[1], colors[1], uvs[1], 1);
+    // gfxDrawStrip(numSegments, positions[1], colors[1], uvs[1], 1);
     
     /* Animate texture scroll */
     pvar->scrollTex += HILL_RING_SCROLL_SPEED;
@@ -437,7 +437,7 @@ void hill_drawShape(Moby *this)
     gfxSetupEffectTex(&floorQuad, floorTex, DRAW_TYPE_NORMAL, 0x30);
     
     /* Offset floor down slightly */
-    VECTOR offset = {0, 0, -1, 0};
+    VECTOR offset = {0, 0, 0, 0};
     VECTOR rotatedOffset;
     vector_apply(rotatedOffset, offset, rotMatrix);
     
@@ -449,10 +449,10 @@ void hill_drawShape(Moby *this)
         vector_copy(floorCorners[2], (VECTOR){center[0] + fRadius, center[1] + fRadius, center[2], 0});
         vector_copy(floorCorners[3], (VECTOR){center[0] - fRadius, center[1] + fRadius, center[2], 0});
     } else {
-        vector_copy(floorCorners[0], (VECTOR){center[0]-halfX[0]-halfZ[0], center[1]-halfX[1]-halfZ[1], center[2]-halfX[2]-halfZ[2], 0});
-        vector_copy(floorCorners[1], (VECTOR){center[0]+halfX[0]-halfZ[0], center[1]+halfX[1]-halfZ[1], center[2]+halfX[2]-halfZ[2], 0});
-        vector_copy(floorCorners[2], (VECTOR){center[0]+halfX[0]+halfZ[0], center[1]+halfX[1]+halfZ[1], center[2]+halfX[2]+halfZ[2], 0});
-        vector_copy(floorCorners[3], (VECTOR){center[0]-halfX[0]+halfZ[0], center[1]-halfX[1]+halfZ[1], center[2]-halfX[2]+halfZ[2], 0});
+        vector_copy(floorCorners[0], (VECTOR){center[0] - halfX[0] - halfZ[0], center[1] - halfX[1] - halfZ[1], center[2] - halfX[2] - halfZ[2], 0});
+        vector_copy(floorCorners[1], (VECTOR){center[0] + halfX[0] - halfZ[0], center[1] + halfX[1] - halfZ[1], center[2] + halfX[2] - halfZ[2], 0});
+        vector_copy(floorCorners[2], (VECTOR){center[0] + halfX[0] + halfZ[0], center[1] + halfX[1] + halfZ[1], center[2] + halfX[2] + halfZ[2], 0});
+        vector_copy(floorCorners[3], (VECTOR){center[0] - halfX[0] + halfZ[0], center[1] - halfX[1] + halfZ[1], center[2] - halfX[2] + halfZ[2], 0});
     }
     
     /* Apply offset to all corners */
@@ -461,7 +461,7 @@ void hill_drawShape(Moby *this)
     }
     
     /* Setup floor quad vertices */
-    u32 floorColor = (0x30 << 24) | baseColor;
+    u32 floorColor = (0x30 * (int)opacityFactor << 24) | baseColor;
     
     vector_copy(floorQuad.point[0], floorCorners[1]);
     vector_copy(floorQuad.point[1], floorCorners[0]);
@@ -485,19 +485,6 @@ void hill_drawShape(Moby *this)
     
     gfxDrawQuad(floorQuad, NULL);
 }
-
-
-// void hill_postDraw(Moby *moby)
-// {
-//     hillPvar_t* pvars = (hillPvar_t*)moby->pVar;
-//     if (!pvars) return;
-//     if (!pvars->currentCuboid) return;
-
-//     if (vector_length(pvars->currentCuboid->matrix.v2) > 1.0001)
-//         pvars->isCircle = 1;
-
-//     hill_drawShape(moby, *pvars->currentCuboid)
-// }
 
 void hill_update(Moby *moby)
 {
