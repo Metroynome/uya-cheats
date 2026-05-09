@@ -135,7 +135,7 @@ void hillMovementUpdates(Moby *this)
     pvars->opacityFactor = 1.0f;
 }
 
-int hillCheckIfInside(Cuboid *cube, VECTOR playerPos, char isCircle)
+int hillCheckIfInside(Cuboid *cube, VECTOR playerPos, char bIsCircle)
 {
     MATRIX rotMatrix;
     matrix_unit(rotMatrix);
@@ -163,7 +163,7 @@ int hillCheckIfInside(Cuboid *cube, VECTOR playerPos, char isCircle)
     if (delta[2] < -1.25 || delta[2] > yHeight + 6) {
         return 0;
     }
-    if (isCircle) {
+    if (bIsCircle) {
         float radius = halfWidth;
         float distSq = delta[0] * delta[0] + delta[1] * delta[1];
         return (distSq <= radius * radius);
@@ -205,19 +205,15 @@ void hill_drawShape(Moby *this)
     Cuboid *cube = (Cuboid*)pvar->currentCuboid;
     if (!vector_length(cube->pos)) return;
 
-    if (vector_length(cube->matrix.v2) > 1.0001)
-        pvar->isCircle = 1;
-    else
-        pvar->isCircle = 0;
-
-    int isCircle = pvar->isCircle;
+    pvar->isCircle = (vector_length(cube->matrix.v2) > 1.0001) ? true : false;
+    bool isCircle = pvar->isCircle;
     u32 baseColor = pvar->color;
     int i, edge, s;
     
     /* Prepare arrays for strip vertices */
-    vec3 positions[2][(HILL_RING_MAX_SEGMENTS + 1) * 2];
-    int colors[2][(HILL_RING_MAX_SEGMENTS + 1) * 2];
-    UV_t uvs[2][(HILL_RING_MAX_SEGMENTS + 1) * 2];
+    vec3 positions[2][(pvar->globalRing.max_segments + 1) * 2];
+    int colors[2][(pvar->globalRing.max_segments + 1) * 2];
+    UV_t uvs[2][(pvar->globalRing.max_segments + 1) * 2];
     int cachedSegments = -1;
     int cachedIsCircle = -1;
 
@@ -251,24 +247,24 @@ void hill_drawShape(Moby *this)
     int segments;
     
     if (isCircle) {
-        segments = clamp((2 * MATH_PI * fRadius) / segmentSize, HILL_RING_MIN_SEGMENTS, HILL_RING_MAX_SEGMENTS);
+        segments = clamp((2 * MATH_PI * fRadius) / segmentSize, pvar->globalRing.min_segments, pvar->globalRing.max_segments);
     } else {
         /* For square, calculate total segments around perimeter */
         float sideLenX = vector_length(xAxis);
         float sideLenZ = vector_length(zAxis);
         float perimeter = (sideLenX + sideLenZ) * 2.0f;
-        segments = clamp((int)(perimeter / segmentSize), HILL_RING_MIN_SEGMENTS, HILL_RING_MAX_SEGMENTS);
+        segments = clamp((int)(perimeter / segmentSize), pvar->globalRing.min_segments, pvar->globalRing.max_segments);
     }
     
     /* ===== Setup rendering ===== */
-    int floorTex = isCircle ? FX_CIRLCE_NO_FADED_EDGE : FX_SQUARE_FLAT_1;
-    int ringTex = HILL_RING_TEXTURE;
+    int floorTex = isCircle ? pvar->floor.circleTex : pvar->floor.squareTex;
+    int ringTex = pvar->globalRing.texture;
     
     /* UV trimming to remove transparent edges */
-    float uMin = HILL_RING_TRIM_U;
-    float uMax = 1.0f - HILL_RING_TRIM_U;
-    float vMin = HILL_RING_TRIM_V;
-    float vMax = 1.0f - HILL_RING_TRIM_V;
+    float uMin = pvar->globalRing.trim_u;
+    float uMax = 1.0f - pvar->globalRing.trim_u;
+    float vMin = pvar->globalRing.trim_v;
+    float vMax = 1.0f - pvar->globalRing.trim_v;
     float uRange = uMax - uMin;
     float vRange = vMax - vMin;
     
@@ -362,26 +358,28 @@ void hill_drawShape(Moby *this)
             
             int idx = i * 2;
             
+            VECTOR offsetPos;
+            // offset upper ring
+            vector_add(offsetPos, pos, (VECTOR){0, 0, pvar->lowerRing.height_offset, 0});
             /* === Lower Ring Bottom === */
             positions[0][idx][0] = pos[0] + tempRight[0] - tempUp[0];
             positions[0][idx][1] = pos[1] + tempRight[1] - tempUp[1];
-            positions[0][idx][2] = pos[2] + tempRight[2] - tempUp[2];
+            positions[0][idx][2] = pos[2] + tempRight[2] - tempUp[2] + pvar->lowerRing.bottom_stretch;
             /* === Lower Ring Top === */
             positions[0][idx + 1][0] = pos[0] + tempRight[0] + tempUp[0];
             positions[0][idx + 1][1] = pos[1] + tempRight[1] + tempUp[1];
-            positions[0][idx + 1][2] = pos[2] + tempRight[2] + tempUp[2] + 1;
+            positions[0][idx + 1][2] = pos[2] + tempRight[2] + tempUp[2] + pvar->lowerRing.top_stretch;
             
-            VECTOR offsetPos;
-            // offset upper ring by Y + 2
-            vector_add(offsetPos, pos, (VECTOR){0, 0, 2, 0});
+            // offset upper ring
+            vector_add(offsetPos, pos, (VECTOR){0, 0, pvar->upperRing.height_offset, 0});
             /* === Upper Ring Botton === */
             positions[1][idx][0] = offsetPos[0] + tempRight[0] + tempUp[0];
             positions[1][idx][1] = offsetPos[1] + tempRight[1] + tempUp[1];
-            positions[1][idx][2] = offsetPos[2] + tempRight[2] + tempUp[2] + 1;
+            positions[1][idx][2] = offsetPos[2] + tempRight[2] + tempUp[2] + pvar->upperRing.bottom_stretch;
             /* === Upper Ring Top === */
             positions[1][idx + 1][0] = offsetPos[0] + tempRight[0] - tempUp[0];
             positions[1][idx + 1][1] = offsetPos[1] + tempRight[1] - tempUp[1];
-            positions[1][idx + 1][2] = offsetPos[2] + tempRight[2] - tempUp[2] - 1;
+            positions[1][idx + 1][2] = offsetPos[2] + tempRight[2] - tempUp[2] + pvar->upperRing.top_stretch;
         }
         
         cachedSegments = segments;
@@ -413,10 +411,10 @@ void hill_drawShape(Moby *this)
          - top of lower strip
          - bottom oflower strip
         */
-        colors[1][idx] = ((0x10 * (int)opacityFactor) << 24) | baseColor;
-        colors[1][idx + 1] = ((0x30 * (int)opacityFactor) << 24) | baseColor;
-        colors[0][idx + 1] = ((0x00 * (int)opacityFactor) << 24) | baseColor;
-        colors[0][idx] = ((0x80 * (int)opacityFactor) << 24) | baseColor;
+        colors[1][idx] = ((pvar->upperRing.top_opacity * (int)opacityFactor) << 24) | baseColor;
+        colors[1][idx + 1] = ((pvar->upperRing.bottom_opacity * (int)opacityFactor) << 24) | baseColor;
+        colors[0][idx + 1] = ((pvar->lowerRing.top_opacity * (int)opacityFactor) << 24) | baseColor;
+        colors[0][idx] = ((pvar->lowerRing.bottom_opacity * (int)opacityFactor) << 24) | baseColor;
 
         uvs[0][idx].x = uvs[1][idx].x = trimmedU;
         uvs[0][idx].y = uvs[0][idx + 1].y = uvs[1][idx].y = uvs[1][idx + 1].y = trimmedV;
@@ -424,26 +422,31 @@ void hill_drawShape(Moby *this)
         uvs[1][idx + 1].x = trimmedU + 0.3f;
     }
     
-    /* === Draw both rings === */
-    gfxDrawStrip(numSegments, positions[0], colors[0], uvs[0], 1);
-    // gfxDrawStrip(numSegments, positions[1], colors[1], uvs[1], 1);
+    /* === Draw lower, then upper ring === */
+    if (pvar->lowerRing.draw)
+        gfxDrawStrip(numSegments, positions[0], colors[0], uvs[0], 1);
+    if (pvar->upperRing.draw)
+        gfxDrawStrip(numSegments, positions[1], colors[1], uvs[1], 1);
     
     /* Animate texture scroll */
-    pvar->scrollTex += HILL_RING_SCROLL_SPEED;
+    pvar->scrollTex += pvar->globalRing.scrollSpeed;
     if (pvar->scrollTex >= 1.0f) pvar->scrollTex -= 1.0f;
     
     /* ===== Draw floor quad ===== */
+    if (!pvar->floor.draw)
+        return;
+
     QuadDef floorQuad;
-    gfxSetupEffectTex(&floorQuad, floorTex, DRAW_TYPE_NORMAL, 0x30);
+    gfxSetupEffectTex(&floorQuad, floorTex, DRAW_TYPE_NORMAL, pvar->floor.opacity);
     
     /* Offset floor down slightly */
-    VECTOR offset = {0, 0, 0, 0};
+    VECTOR offset = {0, 0, pvar->floor.height_offset, 0};
     VECTOR rotatedOffset;
     vector_apply(rotatedOffset, offset, rotMatrix);
     
     /* Create floor corners */
     VECTOR floorCorners[4];
-    if (isCircle) {
+    if (pvar->isCircle) {
         vector_copy(floorCorners[0], (VECTOR){center[0] - fRadius, center[1] - fRadius, center[2], 0});
         vector_copy(floorCorners[1], (VECTOR){center[0] + fRadius, center[1] - fRadius, center[2], 0});
         vector_copy(floorCorners[2], (VECTOR){center[0] + fRadius, center[1] + fRadius, center[2], 0});
@@ -461,23 +464,17 @@ void hill_drawShape(Moby *this)
     }
     
     /* Setup floor quad vertices */
-    u32 floorColor = (0x30 * (int)opacityFactor << 24) | baseColor;
+    u32 floorColor = (pvar->floor.opacity * (int)opacityFactor << 24) | baseColor;
     
     vector_copy(floorQuad.point[0], floorCorners[1]);
     vector_copy(floorQuad.point[1], floorCorners[0]);
     vector_copy(floorQuad.point[2], floorCorners[2]);
     vector_copy(floorQuad.point[3], floorCorners[3]);
     
-    floorQuad.point[0][3] = 1.0f;
-    floorQuad.point[1][3] = 1.0f;
-    floorQuad.point[2][3] = 1.0f;
-    floorQuad.point[3][3] = 1.0f;
+    floorQuad.point[0][3] = floorQuad.point[1][3] = floorQuad.point[2][3] = floorQuad.point[3][3] = 1.0f;
     
-    floorQuad.rgba[0] = floorColor;
-    floorQuad.rgba[1] = floorColor;
-    floorQuad.rgba[2] = floorColor;
-    floorQuad.rgba[3] = floorColor;
-    
+    floorQuad.rgba[0] = floorQuad.rgba[1] = floorQuad.rgba[2] = floorQuad.rgba[3] = floorColor;
+
     floorQuad.uv[0] = (UV_t){0, 0};
     floorQuad.uv[1] = (UV_t){0, 1};
     floorQuad.uv[2] = (UV_t){1, 0};
@@ -540,8 +537,35 @@ void hill_setupMoby(void)
     getHillCuboids(pvars, isCustomMap, kothInfo.foundCustomMoby);
 
     moby->pUpdate = &hill_update;
-    // moby->modeBits = 0;
     moby->updateDist = -1;
+
+    // update hill pvar with our things
+    pvars->globalRing.max_segments = HILL_RING_GLOBAL_MAX_SEGMENTS;
+    pvars->globalRing.min_segments = HILL_RING_GLOBAL_MIN_SEGMENTS;
+    pvars->globalRing.rotateTex = HILL_RING_GLOBAL_ROTATE_TEXTURE;
+    pvars->globalRing.scrollSpeed = HILL_RING_GLOBAL_SCROLL_SPEED;
+    pvars->globalRing.texture = HILL_RING_GLOBAL_TEXTURE;
+    pvars->globalRing.trim_u = HILL_RING_GLOBAL_TRIM_U;
+    pvars->globalRing.trim_v = HILL_RING_GLOBAL_TRIM_V;
+
+    pvars->floor.draw = HILL_FLOOR_DRAW;
+    pvars->floor.circleTex = HILL_FLOOR_TEXTURE_CIRCLE;
+    pvars->floor.squareTex = HILL_FLOOR_TEXTURE_SQUARE;
+    pvars->floor.opacity = HILL_FLOOR_OPACITY;
+
+    pvars->lowerRing.draw = HILL_RING_LOWER_DRAW;
+    pvars->lowerRing.height_offset = HILL_RING_LOWER_HEIGHT_OFFSET;
+    pvars->lowerRing.top_opacity = HILL_RING_LOWER_TOP_OPACITY;
+    pvars->lowerRing.bottom_opacity = HILL_RING_LOWER_BOTTOM_OPACITY;
+    pvars->lowerRing.top_stretch = HILL_RING_LOWER_TOP_STRETCH;
+    pvars->lowerRing.bottom_stretch = HILL_RING_LOWER_BOTTOM_STRETCH;
+
+    pvars->upperRing.draw = HILL_RING_UPPER_DRAW;
+    pvars->upperRing.height_offset = HILL_RING_UPPER_HEIGHT_OFFSET;
+    pvars->upperRing.top_opacity = HILL_RING_UPPER_TOP_OPACITY;
+    pvars->upperRing.bottom_opacity = HILL_RING_UPPER_BOTTOM_OPACITY;
+    pvars->upperRing.top_stretch = HILL_RING_UPPER_TOP_STRETCH;
+    pvars->upperRing.bottom_stretch = HILL_RING_UPPER_BOTTOM_STRETCH;
 
     kothInfo.hillMoby = moby;
 }
