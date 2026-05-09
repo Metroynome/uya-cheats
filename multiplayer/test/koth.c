@@ -205,15 +205,23 @@ void hill_drawShape(Moby *this)
     Cuboid *cube = (Cuboid*)pvar->currentCuboid;
     if (!vector_length(cube->pos)) return;
 
+    int arraySize = (pvar->globalRing.max_segments + 1) * 2;
+    if (!pvar->positions || !pvar->colors || !pvar->uvs) {
+        pvar->positions = malloc(sizeof(vec3[2][arraySize]));
+        pvar->colors = malloc(sizeof(int[2][arraySize]));
+        pvar->uvs = malloc(sizeof(UV_t[2][arraySize]));
+    }
+
+    vec3 (*positions)[arraySize] = pvar->positions;
+    int (*colors)[arraySize] = pvar->colors;
+    UV_t (*uvs)[arraySize] = pvar->uvs;
+
     pvar->isCircle = (vector_length(cube->matrix.v2) > 1.0001) ? true : false;
     bool isCircle = pvar->isCircle;
     u32 baseColor = pvar->color;
     int i, edge, s;
     
     /* Prepare arrays for strip vertices */
-    vec3 positions[2][(pvar->globalRing.max_segments + 1) * 2];
-    int colors[2][(pvar->globalRing.max_segments + 1) * 2];
-    UV_t uvs[2][(pvar->globalRing.max_segments + 1) * 2];
     int cachedSegments = -1;
     int cachedIsCircle = -1;
 
@@ -404,13 +412,6 @@ void hill_drawShape(Moby *this)
         float trimmedV = vMin + (((float)i / segmentSize) - floorf((float)i / segmentSize)) * vRange;
         int idx = i * 2;
 
-        /*
-         === Order of colors:
-         - top of upper strip
-         - bottom of upper strip
-         - top of lower strip
-         - bottom oflower strip
-        */
         colors[1][idx] = ((pvar->upperRing.top_opacity * (int)opacityFactor) << 24) | baseColor;
         colors[1][idx + 1] = ((pvar->upperRing.bottom_opacity * (int)opacityFactor) << 24) | baseColor;
         colors[0][idx + 1] = ((pvar->lowerRing.top_opacity * (int)opacityFactor) << 24) | baseColor;

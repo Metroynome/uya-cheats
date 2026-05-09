@@ -3,6 +3,9 @@
 #include <libuya/spawnpoint.h>
 #include <libuya/moby.h>
 #include <libuya/common.h>
+#include <libuya/graphics.h>
+#include <libuya/math.h>
+#include <libuya/math3d.h>
 
 #define HILL_MOBY_OCLASS (0x3000)
 #define HILL_MOBY_SIZE (0x200)
@@ -106,9 +109,9 @@ typedef struct hillPvar { // 0x200
 /* 0x145 */ char pad_145;
 /* 0x146 */ char pad_146;
 /* 0x147 */ char pad_147;
-/* 0x148 */ void *positionsPtr;
-/* 0x14c */ void *colorsPtr;
-/* 0x150 */ void *uvsPtr;
+/* 0x148 */ vec3 *positions;
+/* 0x14c */ u32 *colors;
+/* 0x150 */ UV_t *uvs;
 /* 0x154 */ float opacityFactor;
 /* 0x158 */ u32 color;
 /* 0x15c */ float scrollTex;
