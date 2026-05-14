@@ -33,7 +33,7 @@
 
 #define HILL_RING_LOWER_DRAW (true)
 #define HILL_RING_LOWER_HEIGHT_OFFSET (0.0f)
-#define HILL_RING_LOWER_TOP_OPACITY (0x38)
+#define HILL_RING_LOWER_TOP_OPACITY (0x88)
 #define HILL_RING_LOWER_BOTTOM_OPACITY (0x10)
 #define HILL_RING_LOWER_TOP_STRETCH (0.0f)
 #define HILL_RING_LOWER_BOTTOM_STRETCH (0.0f)
@@ -41,7 +41,7 @@
 #define HILL_RING_UPPER_DRAW (true)
 #define HILL_RING_UPPER_HEIGHT_OFFSET (4.0f)
 #define HILL_RING_UPPER_TOP_OPACITY (0x00)
-#define HILL_RING_UPPER_BOTTOM_OPACITY (0x38)
+#define HILL_RING_UPPER_BOTTOM_OPACITY (0x88)
 #define HILL_RING_UPPER_TOP_STRETCH (0.0f)
 #define HILL_RING_UPPER_BOTTOM_STRETCH (0.0f)
 
@@ -122,6 +122,12 @@ typedef struct hillPvar { // 0x200
 /* 0x1b0 */ char empty[0x50];
 } hillPvar_t;
 
-kothInfo_t kothInfo;
+struct KothState {
+    int Initialized;
+    int GameOver;
+    int IsHost;
+    int LastConfigSeed;
+};
 
-void getHillCuboids(hillPvar_t *this, bool isCustomMap, bool foundCustomMoby);
+struct KothState State;
+kothInfo_t kothInfo;

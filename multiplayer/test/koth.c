@@ -24,9 +24,13 @@
 #include <libuya/sound.h>
 #include <libuya/music.h>
 #include <libuya/hud.h>
-#include "koth.h"
+#include "include/koth.h"
+#include "module.h"
+#include "config.h"
+#include "messageid.h"
 
-int isCustomMap = 0;
+void getHillCuboids(hillPvar_t *this, bool isCustomMap, bool foundCustomMoby);
+extern int isCustomMap;
 
 config_t kothConfig = {
     .grKothScoreLimit = 1, // 30s
@@ -203,18 +207,22 @@ void hill_drawShape(Moby *this)
     hillPvar_t *pvar = (hillPvar_t*)this->pVar;
     if (!pvar->currentCuboid) return;
     Cuboid *cube = (Cuboid*)pvar->currentCuboid;
-    if (!vector_length(cube->pos)) return;
+    vector_copy(this->position, cube->pos);
 
     int arraySize = (pvar->globalRing.max_segments + 1) * 2;
-    if (!pvar->positions || !pvar->colors || !pvar->uvs) {
-        pvar->positions = malloc(sizeof(vec3[2][arraySize]));
-        pvar->colors = malloc(sizeof(int[2][arraySize]));
-        pvar->uvs = malloc(sizeof(UV_t[2][arraySize]));
-    }
+    // if (!pvar->positions || !pvar->colors || !pvar->uvs) {
+    //     pvar->positions = malloc(sizeof(vec3[2][arraySize]));
+    //     pvar->colors = malloc(sizeof(int[2][arraySize]));
+    //     pvar->uvs = malloc(sizeof(UV_t[2][arraySize]));
+    // }
 
-    vec3 (*positions)[arraySize] = pvar->positions;
-    int (*colors)[arraySize] = pvar->colors;
-    UV_t (*uvs)[arraySize] = pvar->uvs;
+    // vec3 (*positions)[arraySize] = pvar->positions;
+    // int (*colors)[arraySize] = pvar->colors;
+    // UV_t (*uvs)[arraySize] = pvar->uvs;
+
+    vec3 positions[2][arraySize];
+    int colors[2][arraySize];
+    UV_t uvs[2][arraySize];
 
     pvar->isCircle = (vector_length(cube->matrix.v2) > 1.0001) ? true : false;
     bool isCircle = pvar->isCircle;
@@ -407,15 +415,14 @@ void hill_drawShape(Moby *this)
     
     /* === Update colors and UVs every frame === */
     float trimmedU = uMin + (pvar->scrollTex - floorf(pvar->scrollTex)) * uRange;
-    
     for (i = 0; i <= segments; i++) {
         float trimmedV = vMin + (((float)i / segmentSize) - floorf((float)i / segmentSize)) * vRange;
         int idx = i * 2;
 
-        colors[1][idx] = ((pvar->upperRing.top_opacity * (int)opacityFactor) << 24) | baseColor;
-        colors[1][idx + 1] = ((pvar->upperRing.bottom_opacity * (int)opacityFactor) << 24) | baseColor;
-        colors[0][idx + 1] = ((pvar->lowerRing.top_opacity * (int)opacityFactor) << 24) | baseColor;
-        colors[0][idx] = ((pvar->lowerRing.bottom_opacity * (int)opacityFactor) << 24) | baseColor;
+        colors[1][idx] = (((int)(pvar->upperRing.top_opacity * opacityFactor)) << 24) | baseColor;
+        colors[1][idx + 1] = (((int)(pvar->upperRing.bottom_opacity * opacityFactor)) << 24) | baseColor;
+        colors[0][idx + 1] = (((int)(pvar->lowerRing.top_opacity * opacityFactor)) << 24) | baseColor;
+        colors[0][idx] = (((int)(pvar->lowerRing.bottom_opacity * opacityFactor)) << 24) | baseColor;
 
         uvs[0][idx].x = uvs[1][idx].x = trimmedU;
         uvs[0][idx].y = uvs[0][idx + 1].y = uvs[1][idx].y = uvs[1][idx + 1].y = trimmedV;
@@ -495,8 +502,14 @@ void hill_update(Moby *moby)
     // this is where the random hill part goes.
     if (!pvars->currentCuboid) {
         pvars->currentCuboid = pvars->hillCuboidPtrs[0];
-        vector_copy(moby->position, pvars->currentCuboid->pos);
     }
+
+    // move hill if vectors don't match.
+    // float dX = moby->position[0] == pvars->currentCuboid->pos[0];
+    // float dZ = moby->position[1] == pvars->currentCuboid->pos[1];
+    // float dY = moby->position[2] == pvars->currentCuboid->pos[2];
+    // if (!dX || !dY || !dZ)
+    //     vector_copy(moby->position, pvars->currentCuboid->pos);
     
     gfxRegisterDrawFunction(&hill_drawShape, moby);
 
@@ -519,7 +532,9 @@ Moby *getHillMoby(void)
 	while (moby < mobyEnd) {
 		if (moby->oClass == HILL_MOBY_OCLASS) {
             kothInfo.foundCustomMoby = true;
-            return moby;
+            kothInfo.hillMoby = moby;
+            // return moby;
+            break;
 		}
 		++moby;
 	}
@@ -538,7 +553,12 @@ void hill_setupMoby(void)
     getHillCuboids(pvars, isCustomMap, kothInfo.foundCustomMoby);
 
     moby->pUpdate = &hill_update;
-    moby->updateDist = -1;
+    moby->modeBits = 5;
+    moby->group = 0xff;
+    moby->updateDist = 0xff;
+    moby->drawn = 1;
+    moby->drawDist = 0x7fff;
+
 
     // update hill pvar with our things
     pvars->globalRing.max_segments = HILL_RING_GLOBAL_MAX_SEGMENTS;
@@ -864,11 +884,30 @@ void scoreboardRun(void)
     scoreboard(kothInfo.hillScoreLimit, pvars->teamTime);
 }
 
-void kothInit(void)
+void koth(void)
 {
-    // set data to zero
-    // memset(&kothInfo, 0, sizeof(kothInfo_t));
-    // koth score limit needs to be -1 on new games.
+    // setup hill
+    if (!kothInfo.hillMoby) {
+        hill_setupMoby();
+    }
+
+    // create and run radar icon.
+    // radarRun();
+    // run scoreboard
+    // scoreboardRun();
+
+    // if (kothRespawnDistanceIsCustom())
+    //     kothUpdateRespawnDistanceForLocals();
+
+    
+}
+
+void kothInit(PatchGameConfig_t* gameConfig)
+{
+	// hook messages
+	// netHookMessages();
+
+	memset(&kothInfo, 0, sizeof(kothInfo_t));
     kothInfo.hillScoreLimit = -1;
 
 	void * connection = netGetLobbyServerConnection();
@@ -886,37 +925,15 @@ void kothInit(void)
     // init hooks
     // kothHooksInit();
 
-    // setup hill
-    if (!kothInfo.hillMoby) {
-        hill_setupMoby();
-    }
 
-    kothInfo.init = 1;
-}
+	// give a 1 second delay before finalizing the initialization.
+	// this helps prevent the slow loaders from desyncing
+	static int startDelay = 60 * 2;
+	if (startDelay > 0) {
+		--startDelay;
+		return;
+	}
 
-void koth(void)
-{
-    if (!isInGame()) return;
-
-    GameSettings *gs = gameGetSettings();
-    GameData *gd = gameGetData();
-
-    // only continue if enabled and in game
-    if (!gs || !gd) {
-        return;
-    }
-
-    // init and setup
-    if (!kothInfo.init) {
-        kothInit();
-    }
-    // create and run radar icon.
-    // radarRun();
-    // run scoreboard
-    // scoreboardRun();
-
-    // if (kothRespawnDistanceIsCustom())
-    //     kothUpdateRespawnDistanceForLocals();
-
-    
+	// finalize initialization
+	State.Initialized = 1;
 }

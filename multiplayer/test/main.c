@@ -643,7 +643,7 @@ void hudtest_HideFrame(void)
 
 int main(void)
 {
-	((void (*)(void))0x00126780)();
+	// ((void (*)(void))0x00126780)();
 
 	uyaPreUpdate();
 
