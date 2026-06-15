@@ -641,9 +641,110 @@ void hudtest_HideFrame(void)
     hudSetFlags(0x10000014, 1, false);
 }
 
+
+VariableAddress_t vaPostHitInvinc = {
+#if UYA_PAL
+    .Lobby = 0,
+    .Bakisi = 0x005274b4,
+    .Hoven = 0x005295cc,
+    .OutpostX12 = 0x0051eea4,
+    .KorgonOutpost = 0x0051c63c,
+    .Metropolis = 0x0051b98c,
+    .BlackwaterCity = 0x00519224,
+    .CommandCenter = 0x00518fe4,
+    .BlackwaterDocks = 0x0051b864,
+    .AquatosSewers = 0x0051ab64,
+    .MarcadiaPalace = 0x0051a4e4,
+#else
+    .Lobby = 0,
+    .Bakisi = 0x00524c34,
+    .Hoven = 0x00526c8c,
+    .OutpostX12 = 0x0051c5a4,
+    .KorgonOutpost = 0x00519dbc,
+    .Metropolis = 0x0051910c,
+    .BlackwaterCity = 0x00516924,
+    .CommandCenter = 0x005168a4,
+    .BlackwaterDocks = 0x005190e4,
+    .AquatosSewers = 0x00518424,
+    .MarcadiaPalace = 0x00517d64,
+#endif
+};
+
+VariableAddress_t vaM6870_Gatlin_JumpTable_Start = {
+#ifdef UYA_PAL
+    .Lobby = 0,
+    .Bakisi = 0x003a7930,
+    .Hoven = 0x003a6f70,
+    .OutpostX12 = 0x0039ee70,
+    .KorgonOutpost = 0x0039ec30,
+    .Metropolis = 0x0039e9b0,
+    .BlackwaterCity = 0x0039eb30,
+    .CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#else
+    .Lobby = 0,
+    .Bakisi = 0x003a7a70,
+    .Hoven = 0x003A70b0,
+    .OutpostX12 = 0x0039efb0,
+    .KorgonOutpost = 0x0039ed70,
+    .Metropolis = 0x0039eac0,
+    .BlackwaterCity = 0x0039ec70,
+    .CommandCenter = 0,
+    .BlackwaterDocks = 0,
+    .AquatosSewers = 0,
+    .MarcadiaPalace = 0,
+#endif
+};
+
+int patchedGatlinCooldown = 0;
+u32 originalFireAddr = 0;
+int damageCooldown = -1;
+void GatlinFiring_Hook(void)
+{
+#if UYA_PAL
+    int DEFAULT_TIMER = 0x27;
+#else
+    int DEFAULT_TIMER = 0x2f;
+#endif
+    // register int pvar asm("s3");
+    // register Moby* pMoby asm("s4");
+
+    if (damageCooldown > 0) {
+        damageCooldown--;
+        // pMoby->triggers &= ~0x2;
+    } else {
+		damageCooldown = DEFAULT_TIMER;
+		((void (*)(void))originalFireAddr)();
+    }
+}
+
+void EnablePostHitInvinc_GatlinTurrets(void)
+{
+    u32* jumpTable = (u32*)GetAddress(&vaM6870_Gatlin_JumpTable_Start);
+    if (!jumpTable)
+        return;
+
+    originalFireAddr = jumpTable[3];
+    jumpTable[3] = (u32)&GatlinFiring_Hook;
+}
+
+void noPostHitInvinc(void)
+{
+    if (patchedGatlinCooldown)
+        return;
+
+    EnablePostHitInvinc_GatlinTurrets();
+
+    // Zero out the post-hit invincibility timer for players
+    POKE_U16(GetAddress(&vaPostHitInvinc) + 0x2, 0);
+    patchedGatlinCooldown = 1;
+}
+
 int main(void)
 {
-	// ((void (*)(void))0x00126780)();
+	((void (*)(void))0x00126780)();
 
 	uyaPreUpdate();
 
@@ -660,6 +761,8 @@ int main(void)
 		if (!p)
 			return 0;
 		
+
+		noPostHitInvinc();
 		// scoreboard(50, raw_scores);
 
 		// force lock-strafe (controller 1)
@@ -732,8 +835,8 @@ int main(void)
 		// }
 
 		debugShowPosition();
-		// InfiniteChargeboot();
-		// InfiniteHealthMoonjump();
+		InfiniteChargeboot();
+		InfiniteHealthMoonjump();
     	// DebugInGame(p);
 	} else {
 		// DebugInMenus();
