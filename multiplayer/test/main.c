@@ -129,6 +129,7 @@ void DebugInMenus(void)
 		// Nothing Yet!
 	}
 }
+
 void InfiniteChargeboot(void)
 {
 	Player *player = playerGetFromSlot(0);
@@ -141,22 +142,25 @@ void InfiniteChargeboot(void)
 
 void InfiniteHealthMoonjump(void)
 {
-    static int _InfiniteHealthMoonjump_Init = 0;
-    int Joker = *(u16*)0x00225982;
-    if (Joker == 0xFDFB)
-        _InfiniteHealthMoonjump_Init = 1;
-    else if (Joker == 0xFFFD)
-        _InfiniteHealthMoonjump_Init = 0;
+	static int enabled = 0;
+    Player * player = playerGetFromSlot(0);
+    if (!player)
+        return;
 
-    if (_InfiniteHealthMoonjump_Init)
-    {
-        Player * player = playerGetFromSlot(0);
-		if (playerGetHealth(player) < 15)
-        	playerSetHealth(player, 15);
+	printf("\nenabled: %d", enabled);
+    if (playerPadGetButton(player, PAD_R2 | PAD_R3) > 0)
+        enabled = 1;
+    if (playerPadGetButton(player, PAD_L3) > 0)
+        enabled = 0;
 
-        if (Joker == 0xBFFF)
-            (float)player->move.behavior[2] = 0.125;
-    }
+    if (!enabled)
+        return;
+
+    if (playerGetHealth(player) < 15)
+        playerSetHealth(player, 15);
+
+    if (playerPadGetButton(player, PAD_CROSS) > 0)
+        *(float*)&player->move.behavior[2] = 0.125f;
 }
 
 void DEBUGsetGattlingTurretHealth(void)
@@ -760,9 +764,8 @@ int main(void)
 		Player * p = playerGetFromSlot(0);
 		if (!p)
 			return 0;
-		
 
-		noPostHitInvinc();
+		// noPostHitInvinc();
 		// scoreboard(50, raw_scores);
 
 		// force lock-strafe (controller 1)
@@ -834,10 +837,10 @@ int main(void)
 		// 	hudtest_Update();
 		// }
 
-		debugShowPosition();
-		InfiniteChargeboot();
 		InfiniteHealthMoonjump();
-    	// DebugInGame(p);
+		InfiniteChargeboot();
+		debugShowPosition();
+    	DebugInGame(p);
 	} else {
 		// DebugInMenus();
 	}
