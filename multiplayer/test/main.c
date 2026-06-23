@@ -742,24 +742,22 @@ void noPostHitInvinc(void)
     patchedGatlinCooldown = 1;
 }
 
-
-void patchSiegeGuberMobies(void)
+void patchSmallBaseTurrets(void)
 {
-	if (!isInGame())
-		return;
-
-	// currently bakisi only
 	u32* siegeGuberMobes = (u32*)0x0028eba0;
-    int i;
-    Moby *start = mobyListGetStart();
-    for (i = 0; i < 17; ++i) {
-        u32 addr = siegeGuberMobes[i];
-        u16 index = *(u16*)addr;
-        Moby *m = &start[index];
-		if (m && m->oClass == MOBY_ID_NODE_TURRET) {
-			m->position[2] = 1;
-		}
-        // printf("\ni: %02d; addr: 0x%08x; idx: 0x%04x; m: 0x%04x", i, addr, index, m->oClass);
+	Moby *start = mobyListGetStart();
+	Moby *mobyEnd = mobyListGetEnd();
+	Moby *moby = start;
+	for (moby; moby < mobyEnd; ++moby) {
+        if (moby->oClass == MOBY_ID_BASE_LIGHT && moby->pVar) {
+			int guberIndex = *(int*)((u32)moby->pVar + 0xac);
+        	int mobyIndex = *(short*)siegeGuberMobes[guberIndex];
+        	Moby *m = &start[mobyIndex];
+			if (m->oClass == MOBY_ID_NODE_TURRET) {
+				m[0].state = 6;
+				m[1].state = 6;
+			}
+        }
     }
 }
 
@@ -782,7 +780,7 @@ int main(void)
 		if (!p)
 			return 0;
 
-		patchSiegeGuberMobies();
+		patchSmallBaseTurrets();
 
 		// noPostHitInvinc();
 		// scoreboard(50, raw_scores);
