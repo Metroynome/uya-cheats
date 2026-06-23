@@ -34,6 +34,7 @@ int EFFECT_ME = 1;
 int SOUND_ME = 0;
 int SOUND_ME_FLAG = 3;
 int first = 1;
+int enabled = 0;
 
 extern VariableAddress_t vaGiveWeaponFunc;
 extern VariableAddress_t vaPlayerRespawnFunc;
@@ -84,10 +85,7 @@ void DebugInGame(Player* player)
 		// Set Gattling Turret Health to 1.
 		DEBUGsetGattlingTurretHealth();
 	} else if (playerPadGetButtonDown(player, PAD_L3) > 0) {
-		// Nothing Yet!
-		int id = 0x6b;
-		void * cuboid = (void*)(*(u32*)GetAddress(&vaSpawnPointsPtr) + id * 0x80 + 0x30);
-		((void (*)(u8, void*))0x0043bd98)(player->isLocal2, cuboid);
+		DEBUGsetGattlingTurretHealth();
 	} else if (playerPadGetButtonDown(player, PAD_R3) > 0) {
 		// printf("\npZ: %f", player->cheatZ);
 		// printf("\npY: %f", player->cheatY);
@@ -142,12 +140,10 @@ void InfiniteChargeboot(void)
 
 void InfiniteHealthMoonjump(void)
 {
-	static int enabled = 0;
     Player * player = playerGetFromSlot(0);
     if (!player)
         return;
 
-	printf("\nenabled: %d", enabled);
     if (playerPadGetButton(player, PAD_R2 | PAD_R3) > 0)
         enabled = 1;
     if (playerPadGetButton(player, PAD_L3) > 0)
@@ -746,24 +742,47 @@ void noPostHitInvinc(void)
     patchedGatlinCooldown = 1;
 }
 
+
+void patchSiegeGuberMobies(void)
+{
+	if (!isInGame())
+		return;
+
+	// currently bakisi only
+	u32* siegeGuberMobes = (u32*)0x0028eba0;
+    int i;
+    Moby *start = mobyListGetStart();
+    for (i = 0; i < 17; ++i) {
+        u32 addr = siegeGuberMobes[i];
+        u16 index = *(u16*)addr;
+        Moby *m = &start[index];
+		if (m && m->oClass == MOBY_ID_NODE_TURRET) {
+			m->position[2] = 1;
+		}
+        // printf("\ni: %02d; addr: 0x%08x; idx: 0x%04x; m: 0x%04x", i, addr, index, m->oClass);
+    }
+}
+
 int main(void)
 {
 	((void (*)(void))0x00126780)();
 
 	uyaPreUpdate();
 
-	// GameSettings * gameSettings = gameGetSettings();
-	// GameOptions * gameOptions = gameGetOptions();
-	// if (gameSettings->GameLoadStartTime > 0) {
-	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 0;
-	// 	gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 1;
-	// 	// gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 1;
-	// }
+	GameSettings * gameSettings = gameGetSettings();
+	GameOptions * gameOptions = gameGetOptions();
+	if (gameSettings && gameSettings->GameLoadStartTime < 0) {
+		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_Bots = 0;
+		gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_GatlinTurrets = 1;
+		// gameOptions->GameFlags.MultiplayerGameFlags.BaseDefense_SmallTurrets = 0;
+	}
 
     if (isInGame()) {
 		Player * p = playerGetFromSlot(0);
 		if (!p)
 			return 0;
+
+		patchSiegeGuberMobies();
 
 		// noPostHitInvinc();
 		// scoreboard(50, raw_scores);
