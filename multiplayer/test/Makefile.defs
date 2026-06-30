@@ -111,7 +111,7 @@ code:
 	cat template/footer.$(EE_REGION).pnach >> $(EE_PNACH)
 
 release: all $(EE_RELEASE_DIR)
-	if [ -z "$(RELEASE_NAME)" ]; then echo "RELEASE_NAME must be set in Makefile.defs"; exit 1; fi; printf '[%s]\n' "$(RELEASE_NAME)" > $(EE_RELEASE_PNACH); if [ -n "$(AUTHOR)" ]; then printf 'author=%s\n' "$(AUTHOR)" >> $(EE_RELEASE_PNACH); fi; printf '\n' >> $(EE_RELEASE_PNACH); cat $(EE_PNACH) >> $(EE_RELEASE_PNACH)
+	if [ -z "$(RELEASE_NAME)" ]; then echo "RELEASE_NAME must be set in Makefile.defs"; exit 1; fi; printf '[%s]\n' "$(RELEASE_NAME)" > $(EE_RELEASE_PNACH); if [ -n "$(AUTHOR)" ]; then printf 'author=%s\n' "$(AUTHOR)" >> $(EE_RELEASE_PNACH); fi; cat $(EE_PNACH) >> $(EE_RELEASE_PNACH)
 
 clean:
 	rm -rf linkfile
