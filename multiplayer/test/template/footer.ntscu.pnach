@@ -1,4 +1,7 @@
-patch=1,EE,20139e68,extended,0c028000
+// Install only over the multiplayer sceGsSyncPath call.
+patch=1,EE,e00299e0,extended,00139e68
+patch=1,EE,e0010c04,extended,00139e6a
+patch=1,EE,20139e68,extended,0c03c000
 
 
 
