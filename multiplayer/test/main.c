@@ -25,6 +25,13 @@
 #include <libuya/music.h>
 #include <libuya/hud.h>
 
+#ifdef BOTS
+void startBots(void);
+#endif
+#ifdef SPECTATE
+void runSpectate(void);
+#endif
+
 #define TestMoby	(*(Moby**)0x00091004)
 VECTOR position;
 VECTOR rotation;
@@ -767,6 +774,7 @@ int main(void)
 
 	uyaPreUpdate();
 
+#ifndef SPECTATE
 	GameSettings * gameSettings = gameGetSettings();
 	GameOptions * gameOptions = gameGetOptions();
 	if (gameSettings && gameSettings->GameLoadStartTime < 0) {
@@ -862,11 +870,15 @@ int main(void)
 		// DebugInMenus();
 	}
 
+#endif
 	#ifdef DROIDS
 	droids();
 	#endif
 	#ifdef BOTS
-	StartBots();
+	startBots();
+	#endif
+	#ifdef SPECTATE
+	runSpectate();
 	#endif
 	#ifdef HUD
 	hud();

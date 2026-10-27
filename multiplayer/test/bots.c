@@ -1,4 +1,5 @@
 #include <tamtypes.h>
+#include <stddef.h>
 #include <string.h>
 
 #include <libuya/time.h>
@@ -21,10 +22,29 @@
 
 #define BOT_PAD_LOCATION ((u32)PAD_POINTER + 0xc)
 
+typedef enum botTestMode {
+	BOT_TEST_IDLE,
+	BOT_TEST_PATROL,
+	BOT_TEST_VEHICLES
+} botTestMode_e;
+
+typedef char botVehicleMobyOffsetCheck[(offsetof(Vehicle, pMoby) == 0x2d0) ? 1 : -1];
+typedef char botVehicleDriverOffsetCheck[(offsetof(Vehicle, pDriver) == 0x2d8) ? 1 : -1];
+typedef char botVehiclePassengerOffsetCheck[(offsetof(Vehicle, pPassenger) == 0x2dc) ? 1 : -1];
+typedef char botVehicleHealthOffsetCheck[(offsetof(Vehicle, hitPoints) == 0x308) ? 1 : -1];
+typedef char botVehicleSizeCheck[(sizeof(Vehicle) == 0x340) ? 1 : -1];
+
+void FlushCache(int mode);
+void modeInitialize(void);
+Player **playerGetAll(void);
+PlayerVTable *playerGetVTable(Player *player);
 void modeProcessPlayer(int pIndex);
 void modeTick(void);
 void modeInitTarget(SimulatedPlayer_t *sPlayer);
 void modeUpdateTarget(SimulatedPlayer_t *sPlayer);
+void modeUpdateSpectatePatrol(SimulatedPlayer_t *sPlayer);
+static void updateBotTestMode(void);
+static void setBotLockStrafe(Player *player);
 
 VariableAddress_t vaInit_RunUpdateFunctions = {
 #if UYA_PAL
@@ -222,7 +242,38 @@ VariableAddress_t vaPadProcessValue = {
 #endif
 };
 
-int Initialized = 0;
+/* PNACH reapplies .data every frame; mutable state must live in BSS. */
+int Initialized;
+static int botsStartTicks;
+static botTestMode_e botTestMode;
+
+/* Vehicle-seat setup is verified only for NTSC-U Bakisi. Other overlays
+ * retain the patrol test instead of calling unverified native addresses. */
+static VariableAddress_t botGetVehicle = {
+#ifndef UYA_PAL
+	.Bakisi = 0x00536808,
+#endif
+};
+static VariableAddress_t botAssignDriver = {
+#ifndef UYA_PAL
+	.Bakisi = 0x00536dc0,
+#endif
+};
+static VariableAddress_t botAssignPassenger = {
+#ifndef UYA_PAL
+	.Bakisi = 0x00536b40,
+#endif
+};
+static VariableAddress_t botExitDriver = {
+#ifndef UYA_PAL
+	.Bakisi = 0x00536f80,
+#endif
+};
+static VariableAddress_t botExitPassenger = {
+#ifndef UYA_PAL
+	.Bakisi = 0x00536c68,
+#endif
+};
 
 extern int TargetTeam;
 extern const int SimPlayerCount;
@@ -235,6 +286,194 @@ const char* TRAINING_AGGRO_NAMES[] = {
 	[TRAINING_AGGRESSION_IDLE] "IDLE",
 };
 
+static int botVehicleFunctionsReady(void)
+{
+	u32 get = GetAddress(&botGetVehicle);
+	u32 driver = GetAddress(&botAssignDriver);
+	u32 passenger = GetAddress(&botAssignPassenger);
+	u32 exitDriver = GetAddress(&botExitDriver);
+	u32 exitPassenger = GetAddress(&botExitPassenger);
+	return get && driver && passenger && exitDriver && exitPassenger &&
+		*(u32 *)get == 0x8f82e238 && *(u32 *)(get + 0x10) == 0x24030340 &&
+		*(u32 *)driver == 0x27bdffe0 && *(u32 *)passenger == 0x27bdffe0 &&
+		*(u32 *)exitDriver == 0x27bdffc0 && *(u32 *)exitPassenger == 0x27bdffc0;
+}
+
+static void setBotLockStrafe(Player *player)
+{
+	u32 create = GetAddress(&vaCreateHero);
+	u32 modes;
+	if (!player || player->mpIndex < 1 || player->mpIndex >= GAME_MAX_PLAYERS || !create)
+		return;
+	/* CreateHero initializes the native requested-camera-mode array here.
+	 * Changing only the bot's requested mode lets UYA perform its own FPS
+	 * camera transition; the real player's control profile is untouched. */
+	if ((*(u32 *)(create + 0x268) & 0xffff0000) != 0x3c060000 ||
+		(*(u32 *)(create + 0x26c) & 0xffff0000) != 0x24c60000 ||
+		*(u32 *)(create + 0x280) != 0x904400a4 ||
+		*(u32 *)(create + 0x290) != 0xac640000)
+		return;
+	modes = (*(u32 *)(create + 0x268) << 16) + *(s16 *)(create + 0x26c);
+	if (modes >= 0x00100000 && modes < 0x01ffffe0 && !(modes & 3))
+		((int *)modes)[player->mpIndex] = CAMERA_TYPE_LOCK_STRAFE;
+}
+
+static void botLeaveVehicle(Player *player)
+{
+	Vehicle *vehicle = player->vehicle;
+	u32 exit;
+	if (!vehicle || !botVehicleFunctionsReady())
+		return;
+	if ((Player *)vehicle->pDriver == player)
+		exit = GetAddress(&botExitDriver);
+	else if ((Player *)vehicle->pPassenger == player)
+		exit = GetAddress(&botExitPassenger);
+	else
+		return;
+	((void (*)(Vehicle *, Player *, int))exit)(vehicle, player, 1);
+}
+
+static VariableAddress_t botCameraUpdateHook = {
+#if UYA_PAL
+	.Lobby = 0,
+	.Bakisi = 0x005361a8,
+	.Hoven = 0x005382c0,
+	.OutpostX12 = 0x0052db98,
+	.KorgonOutpost = 0x0052b330,
+	.Metropolis = 0x0052a680,
+	.BlackwaterCity = 0x00527f18,
+	.CommandCenter = 0x00527cd8,
+	.BlackwaterDocks = 0x0052a558,
+	.AquatosSewers = 0x00529858,
+	.MarcadiaPalace = 0x005291d8,
+#else
+	.Lobby = 0,
+	.Bakisi = 0x00533928,
+	.Hoven = 0x00535980,
+	.OutpostX12 = 0x0052b298,
+	.KorgonOutpost = 0x00528ab0,
+	.Metropolis = 0x00527e00,
+	.BlackwaterCity = 0x00525618,
+	.CommandCenter = 0x00525598,
+	.BlackwaterDocks = 0x00527dd8,
+	.AquatosSewers = 0x00527118,
+	.MarcadiaPalace = 0x00526a58,
+#endif
+};
+
+static u32 botCameraHookAddress;
+static u32 botCameraOriginalCall;
+
+/* Remote hero updates normally decode camera state from network packets.
+ * Simulated heroes instead use their own native FPS aim state. */
+static void updateBotCamera(Player *player)
+{
+	int i;
+	for (i = 0; i < SimPlayerCount; ++i) {
+		if (SimPlayers[i].Player == player) {
+			MATRIX matrix;
+			player->camRot[0] = 0;
+			player->camRot[1] = player->fps.vars.cameraY.rotation;
+			player->camRot[2] = player->fps.vars.cameraZ.rotation;
+			player->camRot[3] = 0;
+			matrix_unit(matrix);
+			matrix_rotate_y(matrix, matrix, player->camRot[1]);
+			matrix_rotate_z(matrix, matrix, player->camRot[2]);
+			memcpy(player->camUMtx, matrix, sizeof(VECTOR) * 3);
+			vector_copy(player->camPos, player->fps.cameraPos);
+			return;
+		}
+	}
+	((void (*)(Player *))((botCameraOriginalCall & 0x03ffffff) << 2))(player);
+}
+
+static void restoreBotCameraHook(void)
+{
+	if (botCameraHookAddress && *(u32 *)botCameraHookAddress ==
+		(0x0c000000 | ((u32)updateBotCamera >> 2))) {
+		*(u32 *)botCameraHookAddress = botCameraOriginalCall;
+		FlushCache(0);
+		FlushCache(2);
+	}
+	botCameraHookAddress = 0;
+	botCameraOriginalCall = 0;
+}
+
+static int installBotCameraHook(void)
+{
+	u32 address = GetAddress(&botCameraUpdateHook);
+	u32 target;
+	if (!address || *(u32 *)address >> 26 != 3 ||
+		*(u32 *)(address + 4) != 0x0200202d)
+		return 0;
+	target = (*(u32 *)address & 0x03ffffff) << 2;
+	if (*(u32 *)target != 0x27bdffc0 || *(u32 *)(target + 0x1c) != 0x8e042558)
+		return 0;
+	botCameraHookAddress = address;
+	botCameraOriginalCall = *(u32 *)address;
+	*(u32 *)address = 0x0c000000 | ((u32)updateBotCamera >> 2);
+	FlushCache(0);
+	FlushCache(2);
+	return 1;
+}
+static void botEnterTestVehicle(SimulatedPlayer_t *bot)
+{
+	Vehicle *vehicle;
+	int i;
+	int oClass = bot->Idx == 2 ? MOBY_ID_HOVERSHIP : MOBY_ID_TURBOSLIDER;
+	if (bot->Player->vehicle || !botVehicleFunctionsReady())
+		return;
+	if (bot->Idx == 1) {
+		vehicle = SimPlayers[0].Player ? SimPlayers[0].Player->vehicle : 0;
+		if (vehicle && !vehicle->pPassenger && (Player *)vehicle->pDriver == SimPlayers[0].Player)
+			((void (*)(Vehicle *, Player *))GetAddress(&botAssignPassenger))(vehicle, bot->Player);
+		return;
+	}
+	for (i = 0; i < 32; ++i) {
+		vehicle = ((Vehicle *(*)(int))GetAddress(&botGetVehicle))(i);
+		if (!vehicle)
+			break;
+		if (!vehicle->pMoby || mobyIsDestroyed(vehicle->pMoby) ||
+			vehicle->pMoby->oClass != oClass || vehicle->pDriver ||
+			vehicle->pPassenger || vehicle->hitPoints <= 0 || vehicle->resurrectTimer)
+			continue;
+		((void (*)(Vehicle *, Player *))GetAddress(&botAssignDriver))(vehicle, bot->Player);
+		/* Simulated heroes are not split-screen canvases. The native vehicle
+		 * update accepts flags 0x06 as locally simulated even when its driver
+		 * is outside CheckLocalPlayers; do not use remote extrapolation. */
+		vehicle->flags = (vehicle->flags & ~0x20) | 6;
+		break;
+	}
+}
+
+static void updateBotTestMode(void)
+{
+	Player *local = playerGetFromSlot(0);
+	botTestMode_e next = botTestMode;
+	int i;
+	if (!local || !local->pPad)
+		return;
+	if (playerPadGetButtonDown(local, PAD_LEFT) > 0)
+		next = BOT_TEST_IDLE;
+	else if (playerPadGetButtonDown(local, PAD_RIGHT) > 0)
+		next = BOT_TEST_PATROL;
+	else if (playerPadGetButtonDown(local, PAD_UP) > 0 && botVehicleFunctionsReady())
+		next = BOT_TEST_VEHICLES;
+	if (next == botTestMode)
+		return;
+	for (i = 0; i < SimPlayerCount; ++i) {
+		SimulatedPlayer_t *bot = &SimPlayers[i];
+		if (!bot->Player)
+			continue;
+		botLeaveVehicle(bot->Player);
+		if (botTestMode == BOT_TEST_VEHICLES) {
+			playerRespawn(bot->Player);
+			modeInitTarget(bot);
+		}
+	}
+	botTestMode = next;
+}
+
 void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 {
 	int id = idx + 1;
@@ -243,18 +482,22 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 	
 	// HOOK_JAL(0x00610e38, &fixSimPlayerNetPlayerPtr);
 
-	// reset
+	// Keep the requested slot even when creation must wait for a free player slot.
 	memset(sPlayer, 0, sizeof(SimulatedPlayer_t));
+	sPlayer->Idx = idx;
 	
+	if (!players[0] || !players[0]->pPad || players[id])
+		return;
+
 	// spawn player
 	memcpy(&sPlayer->Pad, players[0]->pPad, sizeof(struct PAD));
 	
-	sPlayer->Pad.rdata[7] = 0x7F;
-	sPlayer->Pad.rdata[6] = 0x7F;
-	sPlayer->Pad.rdata[5] = 0x7F;
-	sPlayer->Pad.rdata[4] = 0x7F;
-	sPlayer->Pad.rdata[3] = 0xFF;
-	sPlayer->Pad.rdata[2] = 0xFF;
+	sPlayer->Pad.rdata[7] = 0x7f;
+	sPlayer->Pad.rdata[6] = 0x7f;
+	sPlayer->Pad.rdata[5] = 0x7f;
+	sPlayer->Pad.rdata[4] = 0x7f;
+	sPlayer->Pad.rdata[3] = 0xff;
+	sPlayer->Pad.rdata[2] = 0xff;
 	sPlayer->Pad.port = 10;
 	sPlayer->Pad.slot = 10;
 	sPlayer->Pad.id = id;
@@ -264,12 +507,16 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 	gameSettings->PlayerSkins[id] = 0;
 	gameSettings->PlayerTeams[id] = TargetTeam;
 
-	POKE_U32(BOT_PAD_LOCATION + (4 * id), (void*)&sPlayer->Pad);
+	POKE_U32(BOT_PAD_LOCATION + (4 * id), (u32)&sPlayer->Pad);
 
 	// local hero
 	((void (*)(int))GetAddress(&vaCreateHero))(id);
 
 	Player * newPlayer = players[id];
+	if (!newPlayer) {
+		POKE_U32(BOT_PAD_LOCATION + (4 * id), 0);
+		return;
+	}
 	sPlayer->Player = newPlayer;
 	sPlayer->vtable = playerGetVTable(sPlayer->Player);
 
@@ -282,7 +529,8 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 	sPlayer->Player->mpIndex = id;
 	sPlayer->Player->mpTeam = TargetTeam;
 	sPlayer->Idx = idx;
-	POKE_U32(sPlayer->Player->fps.vars.pHero, (u32)sPlayer->Player);
+	sPlayer->Player->fps.vars.pHero = sPlayer->Player;
+	setBotLockStrafe(sPlayer->Player);
 
 	// if (sPlayer->Player->pMoby) {
 	// 	sPlayer->Player->pMoby->NetObject = sPlayer->Player;
@@ -296,16 +544,15 @@ void createSimPlayer(SimulatedPlayer_t* sPlayer, int idx)
 void targetUpdate(SimulatedPlayer_t *sPlayer)
 {
 	Player* player = playerGetFromSlot(0);
-	int isOwner = gameAmIHost();
 	if (!sPlayer || !player || !sPlayer->Active)
 		return;
 
-	Player* target = sPlayer->Player;
-	Moby* targetMoby = target->pMoby;
 
 	// reset pad
 	struct padButtonStatus* pad = (struct padButtonStatus*)sPlayer->Pad.rdata;
-	pad->btns = 0xFFFF;
+	pad->btns = 0xffff;
+	pad->rjoy_h = 0x7f;
+	pad->rjoy_v = 0x7f;
 	pad->ljoy_h = 0x7f;
 	pad->ljoy_v = 0x7f;
 	pad->circle_p = 0;
@@ -322,7 +569,27 @@ void targetUpdate(SimulatedPlayer_t *sPlayer)
 	pad->r2_p = 0;
 
 	// send to mode for custom logic
+	#ifndef SPECTATE
 	modeUpdateTarget(sPlayer);
+	#else
+	if (botTestMode == BOT_TEST_PATROL)
+		modeUpdateSpectatePatrol(sPlayer);
+	else if (botTestMode == BOT_TEST_VEHICLES) {
+		botEnterTestVehicle(sPlayer);
+		/* Short, gentle steering pulses exercise moving vehicle cameras.
+		 * The passenger remains unarmed and does not switch seats. */
+		if (sPlayer->Player->vehicle && sPlayer->Idx != 1 &&
+			(gameGetTime() / 1000) % 8 < 2) {
+			pad->ljoy_h = 0x9f;
+			pad->ljoy_v = 0x5f;
+			if (sPlayer->Idx == 0) {
+				/* Turboslider accelerates with Cross, not the left stick. */
+				pad->btns &= ~PAD_CROSS;
+				pad->cross_p = 0xff;
+			}
+		}
+	}
+	#endif
 }
 
 void spawnTarget(SimulatedPlayer_t* sPlayer)
@@ -337,6 +604,9 @@ void spawnTarget(SimulatedPlayer_t* sPlayer)
 	// destroy existing
 	if (sPlayer->Active)
 		playerSetHealth(sPlayer->Player, 0);
+
+	if (!sPlayer->Created || !sPlayer->Player)
+		return;
 
 	playerRespawn(sPlayer->Player);
 	modeInitTarget(sPlayer);
@@ -357,7 +627,6 @@ void onSimulateHeros(void)
 	// update remote clients
 	for (i = 0; i < SimPlayerCount; ++i) {
 		if (SimPlayers[i].Player) {
-			PlayerVTable * pVTable = playerGetVTable(SimPlayers[i].Player);
 
 			targetUpdate(&SimPlayers[i]);
 
@@ -365,7 +634,7 @@ void onSimulateHeros(void)
 			// ((void (*)(u32))GetAddress(&vaPadProcessInput))(&SimPlayers[i].Pad);
 
 			// update pad (THIS IS CORRECT! :D)
-			((void (*)(int, int, int))GetAddress(&vaPAD_PadUpdate))(&SimPlayers[i].Pad, &SimPlayers[i].Pad.rdata, 0x14);
+			((void (*)(struct PAD *, void *, int))GetAddress(&vaPAD_PadUpdate))(&SimPlayers[i].Pad, &SimPlayers[i].Pad.rdata, 0x14);
 
 			// run game's hero update
 			// pVTable->Update(SimPlayers[i].Player);
@@ -373,7 +642,7 @@ void onSimulateHeros(void)
 	}
 }
 
-void InitBots(void)
+void initBots(void)
 {
 	int i;
 
@@ -389,20 +658,27 @@ void InitBots(void)
 
 	// give a small delay before finalizing the initialization.
 	// this helps prevent the slow loaders from desyncing
-	static int startDelay = 15;
-	if (startDelay > 0) {
-		--startDelay;
+	if (botsStartTicks < 15) {
+		++botsStartTicks;
 		return;
 	}
+
+	#ifdef SPECTATE
+	if (!installBotCameraHook())
+		return;
+	#endif
 
 	memset(SimPlayers, 0, sizeof(SimulatedPlayer_t) * SimPlayerCount);
 	memset(&State, 0, sizeof(State));
 
 	State.TimeLastKill = timerGetSystemTime();
 	State.InitializedTime = gameGetTime();
+	botTestMode = BOT_TEST_PATROL;
 
 	// run update functions for SimHeroes
-	HOOK_J(GetAddressImmediate(&vaInit_RunUpdateFunctions), onSimulateHeros); // This one seems to work well.
+	#ifndef SPECTATE
+	HOOK_J(GetAddressImmediate(&vaInit_RunUpdateFunctions), onSimulateHeros);
+	#endif
 	// HOOK_JAL(0x003D29F0, onSimulateHeros); // This one removes hud and such.
 
 	for (i = 0; i < SimPlayerCount; ++i) {
@@ -415,10 +691,6 @@ void InitBots(void)
 void frameTick(void)
 {
 	int i = 0;
-	char buf[32];
-	int nowTime = gameGetTime();
-	GameData* gameData = gameGetData();
-	GameOptions* gameOptions = gameGetOptions();
 
 	// 
 	for (i = 0; i < GAME_MAX_PLAYERS; ++i) {
@@ -461,21 +733,32 @@ void gameTick(void)
 	}
 }
 
-void StartBots(void) // gameStart
+void startBots(void) // gameStart
 {
 	// How Many Local Players
 	// *(u32*)0x001a5e5c = 3;
 
 	// Ensure in game
 	GameSettings * gameSettings = gameGetSettings();
-	if (!gameSettings || !isInGame())
-		return;
-
-	if (!Initialized) {
-		InitBots(); // initialize()
+	if (!gameSettings || !isInGame()) {
+		#ifdef SPECTATE
+		restoreBotCameraHook();
+		#endif
+		Initialized = 0;
+		botsStartTicks = 0;
 		return;
 	}
 
+	if (!Initialized) {
+		initBots(); // initialize()
+		return;
+	}
+
+	#ifndef SPECTATE
 	frameTick();
+	#else
+	updateBotTestMode();
+	onSimulateHeros();
+	#endif
 	gameTick();
 }

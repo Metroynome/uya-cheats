@@ -1,23 +1,25 @@
-EE_FILE_NAME = test
-RELEASE_NAME = 
+EE_FILE_NAME = test
+RELEASE_NAME =
 AUTHOR =
 EE_OBJS = functions.o main.o
-ADDRESS = 000a0000
+# Keep the PNACH separate from the loader at 0x000a0000.
+# Loader coexistence requires expanded RAM (modules above 0x02000000).
+ADDRESS = 000f0000
 
 EE_OBJS_DIR = obj/$(EE_REGION)/
-EE_BIN_DIR = bin/
+EE_BIN_DIR = bin/
 EE_RELEASE_DIR = release/
 EE_RELEASE_PNACH = $(EE_RELEASE_DIR)$(PNACH_NAME).pnach
 EE_ELF = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).elf
 EE_BIN = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).bin
-
+
 EE_PNACH = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).pnach
 EE_RAW = $(EE_BIN_DIR)$(EE_FILE_NAME).$(EE_REGION).raw
 PNACH_NAME ?= $(EE_FILE_NAME).$(EE_REGION)
 # Define EE_DEFS first
 # EE_DEFS += -DDEBUG
 # EE_DEFS += -DDROIDS
-# EE_DEFS += -DBOTS
+EE_DEFS += -DBOTS -DSPECTATE
 # EE_DEFS += -DCTF
 # EE_DEFS += -DSIEGE
 # EE_DEFS += -DHUD
@@ -34,6 +36,9 @@ ifneq (,$(findstring -DDROIDS,$(EE_DEFS)))
 endif
 ifneq (,$(findstring -DBOTS,$(EE_DEFS)))
     EE_OBJS += bots.o trainingmode.o
+endif
+ifneq (,$(findstring -DSPECTATE,$(EE_DEFS)))
+	EE_OBJS += spectate.o
 endif
 ifneq (,$(findstring -DCTF,$(EE_DEFS)))
     EE_OBJS += ctf.o
@@ -105,6 +110,7 @@ linker:
 	$(EE_CC) -E -x c $(EE_CFLAGS) ../../linkfile.template | grep -v '^#' > linkfile
 
 code:
+	@end=$$($(EE_PREFIX)nm $(EE_ELF) | awk '$$3 == "_end" { print $$1 }'); test -n "$$end" && test $$((0x$$end)) -le $$((0x00100000)) || { echo "test exceeds reserved low-memory space"; exit 1; }
 	bin2code $(EE_BIN) $(ADDRESS) $(EE_RAW) raw
 	cat template/footer.$(EE_REGION).raw >> $(EE_RAW)
 	bin2code $(EE_BIN) $(ADDRESS) $(EE_PNACH) pnach

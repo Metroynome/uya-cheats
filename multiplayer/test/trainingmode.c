@@ -23,7 +23,11 @@
 #include "training.h"
 
 
+#ifdef SPECTATE
+#define MAX_SPAWNED_TARGETS (3)
+#else
 #define MAX_SPAWNED_TARGETS (5)
+#endif
 #define TARGET_IDLE (true)
 #define TARGET_SPAWN_DISTANCE (6.0f)
 #define TARGET_HEALTH (15)
@@ -294,6 +298,48 @@ void modeUpdateTarget_ApplyInput(struct padButtonStatus* pad, float forwardInput
     pad->ljoy_v = (u8)(((clamp(-input[0], -1, 1) + 1) / 2) * 255);
 }
 
+/* A non-combat patrol for watching native walking and jumping animations.
+ * SpawnPos is refreshed by modeInitTarget after every native respawn. */
+void modeUpdateSpectatePatrol(SimulatedPlayer_t *sPlayer)
+{
+	Player *player = sPlayer->Player;
+	struct padButtonStatus *pad = (struct padButtonStatus *)sPlayer->Pad.rdata;
+	VECTOR delta;
+	float distance;
+	float radius = 4;
+
+	if (!player || playerIsDead(player) || player->vehicle)
+		return;
+	vector_subtract(delta, sPlayer->Vars.SpawnPos, player->playerPosition);
+	/* Return toward the center if terrain pushed the bot outside its patrol. */
+	if (delta[0] * delta[0] + delta[1] * delta[1] > 64)
+		radius = 0;
+	delta[0] += cosf(sPlayer->WanderAngle) * radius;
+	delta[1] += sinf(sPlayer->WanderAngle) * radius;
+	distance = sqrtf(delta[0] * delta[0] + delta[1] * delta[1]);
+	if (sPlayer->TicksToWanderSwitch)
+		--sPlayer->TicksToWanderSwitch;
+	if (distance < 1 || !sPlayer->TicksToWanderSwitch) {
+		sPlayer->WanderAngle = clampAngle(sPlayer->WanderAngle + MATH_PI * 0.5);
+		sPlayer->TicksToWanderSwitch = TPS * 4;
+	}
+	if (distance > 0.5) {
+		modeUpdateTarget_ApplyInput(pad, delta[0] * 0.55 / distance,
+			delta[1] * 0.55 / distance, player->fps.vars.cameraZ.rotation);
+	}
+	if (sPlayer->TicksToJump)
+		--sPlayer->TicksToJump;
+	if (!sPlayer->TicksToJump) {
+		sPlayer->TicksToJump = TPS * (2 + sPlayer->Idx);
+		sPlayer->TicksToJumpFor = 3;
+	}
+	if (sPlayer->TicksToJumpFor) {
+		--sPlayer->TicksToJumpFor;
+		pad->btns &= ~PAD_CROSS;
+		pad->cross_p = 0xff;
+	}
+}
+
 void modeUpdateTarget_Firing(SimulatedPlayer_t *sPlayer, struct padButtonStatus* pad)
 {
     pad->btns &= ~PAD_R1;
@@ -435,13 +481,16 @@ void modeInitTarget(SimulatedPlayer_t * sPlayer)
 	sPlayer->TicksToJump = modeGetJumpTicks();
 	playerSetHealth(sPlayer->Player, TARGET_HEALTH);
 	vector_copy(pvar->SpawnPos, sPlayer->Player->playerPosition);
+	sPlayer->WanderAngle = sPlayer->Idx * (MATH_PI * 0.5);
+	sPlayer->TicksToWanderSwitch = TPS * 4;
+	sPlayer->TicksToJumpFor = 0;
 	sPlayer->Points = 0;
 	
 	// set player name
 	sprintf(gs->PlayerNames[sPlayer->Player->mpIndex], "Fake %d", sPlayer->Idx);
 
 	// set spawn distance
-	#ifdef TARGET_SPAWN_DISTANCE != 40.0f
+	#ifndef SPECTATE
 	POKE_U16(GetAddress(&vaResurrectSpawnDistance), FLOAT_TO_U16(TARGET_BUFFER_SPAWN_DISTANCE));
 	#endif
 }
